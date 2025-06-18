@@ -3,10 +3,39 @@ import { SimpleVerificationService } from '@/services/simpleVerificationService'
 
 const verificationService = new SimpleVerificationService();
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const deaRecords = await verificationService.getDeaRecordsForVerification();
-    return NextResponse.json(deaRecords);
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '12');
+    const statusFilter = searchParams.get('statusFilter') as 'all' | 'needs_review' | 'invalid' | 'problematic' | null;
+
+    // Validar parámetros
+    if (page < 1 || limit < 1 || limit > 50) {
+      return NextResponse.json(
+        { error: 'Parámetros de paginación inválidos' }, 
+        { status: 400 }
+      );
+    }
+
+    // Validar filtro de estado
+    if (statusFilter && !['all', 'needs_review', 'invalid', 'problematic'].includes(statusFilter)) {
+      return NextResponse.json(
+        { error: 'Filtro de estado inválido' }, 
+        { status: 400 }
+      );
+    }
+
+    let result;
+    if (statusFilter && statusFilter !== 'all') {
+      // Usar el método con filtros
+      result = await verificationService.getDeaRecordsForVerificationWithFilters(page, limit, statusFilter);
+    } else {
+      // Usar el método original
+      result = await verificationService.getDeaRecordsForVerificationPaginated(page, limit);
+    }
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching DEA records for verification:', error);
     return NextResponse.json(

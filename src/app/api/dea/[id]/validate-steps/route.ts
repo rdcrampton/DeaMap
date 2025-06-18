@@ -32,8 +32,8 @@ export async function GET(
       );
     }
 
-    // Si es el paso 1, buscar datos pre-procesados primero
-    if (result.progress.currentStep === 1) {
+    // Si es el paso 1 O 3 (cuando saltamos pasos), buscar datos pre-procesados primero
+    if (result.progress.currentStep === 1 || result.progress.currentStep === 3) {
       console.log(`🔍 DEBUG: Iniciando validación para DEA ${deaRecordId}`);
       
       const record = await prisma.deaRecord.findUnique({
@@ -114,7 +114,58 @@ export async function GET(
         const preCalc = preCalculated[0];
         console.log(`⚡ Usando datos pre-calculados para DEA ${deaRecordId} (${preCalc.processing_duration_ms}ms)`);
         
-        // Mapear resultados pre-calculados al formato esperado
+        // 🚀 NUEVA LÓGICA: Si overall_status es 'valid', verificar si debemos saltar pasos
+        if (preCalc.overall_status === 'valid') {
+          console.log(`✅ DEBUG: Dirección pre-validada como VÁLIDA para DEA ${deaRecordId} - verificando si saltar pasos`);
+          
+          // Re-inicializar validación con la nueva lógica que salta pasos
+          const validationResult = await stepValidationService.initializeStepValidation(deaRecordId);
+          
+          if (validationResult.success && validationResult.progress.currentStep === 3) {
+            // Si saltamos al paso 3, devolver respuesta apropiada
+            const searchResults = Array.isArray(preCalc.search_results) ? preCalc.search_results : [];
+            
+            const mapAddressForFrontend = (address: AddressSearchResult) => ({
+              tipoVia: address.claseVia,
+              nombreVia: address.nombreViaAcentos,
+              numeroVia: address.numero,
+              codigoPostal: address.codigoPostal,
+              distrito: address.distrito,
+              latitud: address.latitud,
+              longitud: address.longitud,
+              confidence: address.confidence
+            });
+
+            return NextResponse.json({
+              success: true,
+              source: 'preprocessed_valid', // Indicar que viene de pre-procesamiento válido
+              data: {
+                progress: validationResult.progress,
+                step1Data: {
+                  searchResult: {
+                    found: searchResults.length > 0,
+                    officialData: searchResults.length > 0 ? mapAddressForFrontend(searchResults[0]) : null,
+                    alternatives: searchResults.slice(1).map(mapAddressForFrontend),
+                    exactMatch: searchResults.length > 0 && searchResults[0].matchType === 'exact'
+                  },
+                  originalRecord: {
+                    tipoVia: record.tipoVia,
+                    nombreVia: record.nombreVia,
+                    numeroVia: record.numeroVia,
+                    complementoDireccion: record.complementoDireccion,
+                    codigoPostal: record.codigoPostal,
+                    distrito: record.distrito,
+                    latitud: record.latitud,
+                    longitud: record.longitud
+                  },
+                  message: `✅ Dirección previamente validada como correcta. Saltando al paso 3 (verificación de distrito).`
+                }
+              }
+            });
+          }
+        }
+        
+        // Lógica original para casos no válidos o sin salto de pasos
         const mapAddressForFrontend = (address: AddressSearchResult) => ({
           tipoVia: address.claseVia,
           nombreVia: address.nombreViaAcentos,

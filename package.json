@@ -11,6 +11,8 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "load-madrid-data": "tsx scripts/load-madrid-data-optimized.ts",
+    "import-deas": "tsx scripts/run-dea-import.ts",
+    "check-deas": "tsx scripts/check-dea-records.ts",
     "preprocess-validations": "tsx scripts/preprocess-address-validations.ts",
     "test": "npx tsx tests/run-all-tests.ts",
     "test:validation": "tsx tests/validation-system.test.ts",
@@ -24,7 +26,9 @@
     "db:format": "prisma format"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.828.0",
     "@prisma/client": "^6.9.0",
+    "@types/uuid": "^10.0.0",
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "lucide-react": "^0.513.0",
@@ -33,7 +37,8 @@
     "proj4": "^2.17.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "sharp": "^0.34.2"
+    "sharp": "^0.34.2",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.3.1",

@@ -2,7 +2,11 @@
 
 /**
  * Script para ejecutar el pre-procesamiento de validaciones de direcciones
- * Uso: npm run preprocess-validations
+ * Uso: 
+ *   npx tsx scripts/preprocess-address-validations.ts                    # 100 registros (por defecto)
+ *   npx tsx scripts/preprocess-address-validations.ts --no-limit        # Todos los registros
+ *   npx tsx scripts/preprocess-address-validations.ts --limit=500       # 500 registros
+ *   npx tsx scripts/preprocess-address-validations.ts --batch-size=10   # Lotes de 10
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -10,17 +14,50 @@ import { newMadridValidationService } from '../src/services/newMadridValidationS
 
 const prisma = new PrismaClient();
 
-interface ProcessingStats {
-  totalRecords: number;
-  processed: number;
-  errors: number;
-  duration: number;
-  averageTime: number;
+// Type assertion to access deaAddressValidation model
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const deaAddressValidation = (prisma as any).deaAddressValidation;
+
+interface ScriptOptions {
+  limit?: number;
+  batchSize: number;
+  maxRetries: number;
+  noLimit: boolean;
+}
+
+function parseArgs(): ScriptOptions {
+  const args = process.argv.slice(2);
+  const options: ScriptOptions = {
+    limit: 100, // Límite por defecto
+    batchSize: 5,
+    maxRetries: 3,
+    noLimit: false
+  };
+
+  for (const arg of args) {
+    if (arg === '--no-limit') {
+      options.noLimit = true;
+      options.limit = undefined;
+    } else if (arg.startsWith('--limit=')) {
+      options.limit = parseInt(arg.split('=')[1]);
+      options.noLimit = false;
+    } else if (arg.startsWith('--batch-size=')) {
+      options.batchSize = parseInt(arg.split('=')[1]);
+    }
+  }
+
+  return options;
 }
 
 async function main() {
-  console.log('🌙 === INICIO PRE-PROCESAMIENTO MANUAL ===');
+  const options = parseArgs();
+  
+  console.log('🌙 === INICIO PRE-PROCESAMIENTO DE VALIDACIONES ===');
   console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  console.log(`⚙️  Configuración:`);
+  console.log(`   Límite: ${options.noLimit ? 'Sin límite' : options.limit + ' registros'}`);
+  console.log(`   Tamaño de lote: ${options.batchSize}`);
+  console.log(`   Máximo reintentos: ${options.maxRetries}`);
   
   const startTime = Date.now();
   let processedCount = 0;
@@ -29,12 +66,65 @@ async function main() {
 
   try {
     // 1. Obtener registros que necesitan procesamiento
-    const pendingRecords = await prisma.deaRecord.findMany({
-      take: 100, // Limitar para pruebas
-      orderBy: { createdAt: 'asc' }
+    console.log('\n🔍 Analizando registros pendientes...');
+    
+    const existingValidations = await deaAddressValidation.findMany({
+      select: { 
+        deaRecordId: true,
+        needsReprocessing: true,
+        retryCount: true,
+        errorMessage: true
+      }
     });
 
-    console.log(`📊 Encontrados ${pendingRecords.length} registros para procesar`);
+    const existingIds = existingValidations.map((v: { deaRecordId: number }) => v.deaRecordId);
+    const needsReprocessingIds = existingValidations
+      .filter((v: { needsReprocessing: boolean; errorMessage: string | null; retryCount: number }) => 
+        v.needsReprocessing || (v.errorMessage && v.retryCount < options.maxRetries))
+      .map((v: { deaRecordId: number }) => v.deaRecordId);
+
+    const queryOptions: {
+      where: {
+        OR: Array<{
+          id: { notIn: number[] } | { in: number[] }
+        }>
+      },
+      orderBy: { createdAt: 'asc' },
+      take?: number
+    } = {
+      where: {
+        OR: [
+          // Registros sin validación
+          { id: { notIn: existingIds } },
+          // Registros que necesitan reprocesamiento
+          { id: { in: needsReprocessingIds } }
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    };
+
+    // Aplicar límite si no es --no-limit
+    if (!options.noLimit && options.limit) {
+      queryOptions.take = options.limit;
+    }
+
+    const pendingRecords = await prisma.deaRecord.findMany(queryOptions);
+
+    // Obtener estadísticas para mostrar el progreso
+    const totalRecords = await prisma.deaRecord.count();
+    const processedRecords = await deaAddressValidation.count({
+      where: { needsReprocessing: false }
+    });
+    const needsReprocessingCount = await deaAddressValidation.count({
+      where: { needsReprocessing: true }
+    });
+
+    console.log(`📊 Estado actual:`);
+    console.log(`   Total registros DEA: ${totalRecords}`);
+    console.log(`   Ya procesados: ${processedRecords}`);
+    console.log(`   Necesitan reprocesamiento: ${needsReprocessingCount}`);
+    console.log(`   Sin procesar: ${totalRecords - processedRecords - needsReprocessingCount}`);
+    console.log(`📦 Encontrados ${pendingRecords.length} registros para procesar en este lote`);
 
     if (pendingRecords.length === 0) {
       console.log('✅ No hay registros pendientes de procesar');
@@ -42,14 +132,13 @@ async function main() {
     }
 
     // 2. Procesar registros en lotes
-    const BATCH_SIZE = 5;
+    const totalBatches = Math.ceil(pendingRecords.length / options.batchSize);
     
-    for (let i = 0; i < pendingRecords.length; i += BATCH_SIZE) {
-      const batch = pendingRecords.slice(i, i + BATCH_SIZE);
-      const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(pendingRecords.length / BATCH_SIZE);
+    for (let i = 0; i < pendingRecords.length; i += options.batchSize) {
+      const batch = pendingRecords.slice(i, i + options.batchSize);
+      const batchNumber = Math.floor(i / options.batchSize) + 1;
       
-      console.log(`📦 Procesando lote ${batchNumber}/${totalBatches} (${batch.length} registros)`);
+      console.log(`\n📦 Procesando lote ${batchNumber}/${totalBatches} (${batch.length} registros)`);
       
       // Procesar lote en paralelo
       const batchPromises = batch.map(async (record) => {
@@ -69,7 +158,7 @@ async function main() {
           const processingTime = Date.now() - recordStartTime;
 
           // Guardar resultados usando Prisma Client
-          await prisma.deaAddressValidation.upsert({
+          await deaAddressValidation.upsert({
             where: { deaRecordId: record.id },
             create: {
               deaRecordId: record.id,
@@ -152,8 +241,14 @@ async function main() {
       // Esperar a que termine el lote
       await Promise.allSettled(batchPromises);
       
-      // Pausa entre lotes
-      if (i + BATCH_SIZE < pendingRecords.length) {
+      // Mostrar progreso (solo si hay múltiples lotes)
+      if (totalBatches > 1) {
+        const progress = ((batchNumber / totalBatches) * 100).toFixed(1);
+        console.log(`📈 Progreso: ${progress}% (${batchNumber}/${totalBatches} lotes)`);
+      }
+      
+      // Pausa entre lotes (excepto el último)
+      if (i + options.batchSize < pendingRecords.length) {
         console.log('⏸️  Pausa entre lotes...');
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
@@ -166,6 +261,11 @@ async function main() {
     console.log(`❌ Fallidos: ${errorCount}`);
     console.log(`⏱️  Tiempo total: ${totalDuration}ms (${(totalDuration / 1000).toFixed(1)}s)`);
     console.log(`📈 Promedio por registro: ${processedCount > 0 ? Math.round(totalDuration / processedCount) : 0}ms`);
+    
+    // Mostrar velocidad solo si procesó más de 10 registros
+    if (processedCount > 10) {
+      console.log(`🚀 Velocidad: ${(processedCount / (totalDuration / 1000 / 60)).toFixed(1)} registros/min`);
+    }
     
     if (errors.length > 0) {
       console.log('\n❌ Errores encontrados:');
@@ -190,6 +290,15 @@ async function main() {
     stats.forEach(stat => {
       console.log(`  ${stat.overall_status}: ${stat.count} registros`);
     });
+
+    // Mostrar progreso total solo si hay muchos registros
+    if (totalRecords > 100) {
+      const finalProcessedRecords = await deaAddressValidation.count({
+        where: { needsReprocessing: false }
+      });
+      const finalProgress = ((finalProcessedRecords / totalRecords) * 100).toFixed(1);
+      console.log(`\n🎯 Progreso total del sistema: ${finalProgress}% (${finalProcessedRecords}/${totalRecords} registros)`);
+    }
 
     console.log('🏁 === FIN PRE-PROCESAMIENTO ===\n');
 

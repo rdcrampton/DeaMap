@@ -80,7 +80,131 @@ export class StepValidationService {
         };
       }
       
-      // Crear progreso inicial
+      // 🚀 NUEVA LÓGICA: Verificar si existe validación previa con overall_status = 'valid'
+      let preValidatedData: {
+        search_results: unknown;
+        validation_details: unknown;
+        overall_status: string;
+        recommended_actions: unknown;
+        processing_duration_ms: number;
+        needs_reprocessing: boolean;
+        processed_at: Date;
+      } | null = null;
+
+      try {
+        console.log(`🔍 DEBUG: Verificando validación previa para DEA ${deaRecordId}...`);
+        
+        // Verificar si existe tabla dea_address_validations
+        const tableExists = await prisma.$queryRaw`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'dea_address_validations'
+          );
+        ` as Array<{ exists: boolean }>;
+
+        if (tableExists[0]?.exists) {
+          const preValidated = await prisma.$queryRaw`
+            SELECT 
+              search_results,
+              validation_details,
+              overall_status,
+              recommended_actions,
+              processing_duration_ms,
+              needs_reprocessing,
+              processed_at
+            FROM dea_address_validations 
+            WHERE dea_record_id = ${deaRecordId}
+            AND overall_status = 'valid'
+            LIMIT 1
+          ` as Array<{
+            search_results: unknown;
+            validation_details: unknown;
+            overall_status: string;
+            recommended_actions: unknown;
+            processing_duration_ms: number;
+            needs_reprocessing: boolean;
+            processed_at: Date;
+          }>;
+
+          if (preValidated.length > 0) {
+            preValidatedData = preValidated[0];
+            console.log(`✅ DEBUG: Encontrada validación previa VÁLIDA para DEA ${deaRecordId}`);
+          }
+        }
+      } catch (dbError) {
+        console.error(`❌ DEBUG: Error verificando validación previa:`, dbError);
+      }
+
+      // Si existe validación previa válida, saltar pasos 1 y 2
+      if (preValidatedData && preValidatedData.overall_status === 'valid') {
+        console.log(`⚡ DEBUG: Saltando pasos 1 y 2 para DEA ${deaRecordId} - dirección ya validada`);
+        
+        // Extraer dirección oficial de los resultados pre-calculados
+        const searchResults = Array.isArray(preValidatedData.search_results) ? preValidatedData.search_results : [];
+        const officialAddress = searchResults.length > 0 ? searchResults[0] : null;
+
+        if (officialAddress) {
+          // Crear progreso con pasos 1 y 2 ya completados/saltados
+          const progress: StepValidationProgress = {
+            deaRecordId,
+            currentStep: 3, // ⭐ SALTAR DIRECTAMENTE AL PASO 3
+            totalSteps: 4,
+            steps: [
+              {
+                stepNumber: 1,
+                title: 'Confirmar Dirección',
+                status: 'skipped',
+                required: false,
+                skipReason: 'Dirección ya validada previamente como correcta'
+              },
+              {
+                stepNumber: 2,
+                title: 'Verificar Código Postal',
+                status: 'skipped',
+                required: false,
+                skipReason: 'Código postal ya validado previamente como correcto'
+              },
+              {
+                stepNumber: 3,
+                title: 'Verificar Distrito',
+                status: 'current',
+                required: true
+              },
+              {
+                stepNumber: 4,
+                title: 'Verificar Coordenadas',
+                status: 'pending',
+                required: true
+              }
+            ],
+            stepData: {
+              step1: {
+                selectedAddress: officialAddress as AddressSearchResult,
+                userConfirmed: true,
+                timestamp: preValidatedData.processed_at
+              },
+              step2: {
+                originalPostalCode: record.codigoPostal.toString(),
+                confirmedPostalCode: (officialAddress as AddressSearchResult).codigoPostal || record.codigoPostal.toString(),
+                userConfirmed: true,
+                autoSkipped: true,
+                timestamp: preValidatedData.processed_at
+              }
+            },
+            isComplete: false
+          };
+
+          return {
+            success: true,
+            progress,
+            nextStep: 3,
+            message: `✅ Dirección previamente validada como correcta. Saltando al paso 3 (verificación de distrito).`
+          };
+        }
+      }
+      
+      // Lógica original para casos sin validación previa válida
       const progress: StepValidationProgress = {
         deaRecordId,
         currentStep: 1,

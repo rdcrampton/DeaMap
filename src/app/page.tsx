@@ -6,6 +6,7 @@ import type { DeaRecord } from '@/types'
 import { filterRecords, getUniqueTypes } from '@/utils/helpers'
 import DeaCard from '@/components/DeaCard'
 import DeaModal from '@/components/DeaModal'
+import DeaFormModal from '@/components/DeaFormModal'
 import SearchFilters from '@/components/SearchFilters'
 import StatsDashboard from '@/components/StatsDashboard'
 import HeroHeader from '@/components/HeroHeader'
@@ -25,6 +26,8 @@ export default function Home() {
 
     const [selectedRecord, setSelectedRecord] = useState<DeaRecord | null>(null)
     const [modalOpen, setModalOpen] = useState(false)
+    const [formModalOpen, setFormModalOpen] = useState(false)
+    const [editingRecord, setEditingRecord] = useState<DeaRecord | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [filterType, setFilterType] = useState('')
 
@@ -40,11 +43,27 @@ export default function Home() {
     )
 
     /**
-     * Opens the modal with the selected record for viewing or editing
+     * Opens the modal with the selected record for viewing
      */
     const handleOpenRecordModal = useCallback((record: DeaRecord) => {
         setSelectedRecord(record)
         setModalOpen(true)
+    }, [])
+
+    /**
+     * Opens the form modal for editing a record
+     */
+    const handleEditRecord = useCallback((record: DeaRecord) => {
+        setEditingRecord(record)
+        setFormModalOpen(true)
+    }, [])
+
+    /**
+     * Opens the form modal for creating a new record
+     */
+    const handleCreateRecord = useCallback(() => {
+        setEditingRecord(null)
+        setFormModalOpen(true)
     }, [])
 
     /**
@@ -62,7 +81,7 @@ export default function Home() {
     }, [deleteRecord, refreshRecords])
 
     /**
-     * Closes the modal and resets the selected record
+     * Closes the view modal and resets the selected record
      */
     const handleCloseModal = useCallback(() => {
         setSelectedRecord(null)
@@ -70,21 +89,29 @@ export default function Home() {
     }, [])
 
     /**
+     * Closes the form modal and resets the editing record
+     */
+    const handleCloseFormModal = useCallback(() => {
+        setEditingRecord(null)
+        setFormModalOpen(false)
+    }, [])
+
+    /**
      * Saves a record (create or update) and refreshes the list
      */
-    const handleSaveRecord = useCallback(async (record: DeaRecord) => {
+    const handleSaveRecord = useCallback(async (record: Omit<DeaRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
         try {
-            if (record.id) {
-                await updateRecord(record.id, record)
+            if (editingRecord?.id) {
+                await updateRecord(editingRecord.id, record as DeaRecord)
             } else {
-                await createRecord(record)
+                await createRecord(record as DeaRecord)
             }
             refreshRecords()
-            handleCloseModal()
+            handleCloseFormModal()
         } catch (error) {
             console.error('Error al guardar el registro:', error)
         }
-    }, [createRecord, updateRecord, refreshRecords, handleCloseModal])
+    }, [editingRecord, createRecord, updateRecord, refreshRecords, handleCloseFormModal])
 
     if (loading) return <LoadingScreen />
 
@@ -124,10 +151,7 @@ export default function Home() {
                             {filteredRecords.length} DEAs encontrados
                         </h2>
                         <button
-                            onClick={() => {
-                                setSelectedRecord(null)
-                                setModalOpen(true)
-                            }}
+                            onClick={handleCreateRecord}
                             className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                         >
                             <Activity className="w-4 h-4 mr-2" />
@@ -140,7 +164,7 @@ export default function Home() {
                             <DeaCard
                                 key={record.id}
                                 record={record}
-                                onEdit={() => handleOpenRecordModal(record)}
+                                onEdit={() => handleEditRecord(record)}
                                 onDelete={() => handleDelete(record.id)}
                                 onView={() => handleOpenRecordModal(record)}
                             />
@@ -159,6 +183,13 @@ export default function Home() {
                 record={selectedRecord}
                 isOpen={modalOpen}
                 onClose={handleCloseModal}
+                onSave={handleSaveRecord}
+            />
+
+            <DeaFormModal
+                record={editingRecord}
+                isOpen={formModalOpen}
+                onClose={handleCloseFormModal}
                 onSave={handleSaveRecord}
             />
         </main>

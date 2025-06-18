@@ -11,7 +11,7 @@ import type {
   VerificationSession, 
   ArrowMarker 
 } from '@/types/verification';
-import type { DeaRecord } from '@/types';
+import type { DeaRecord, DeaRecordWithValidation } from '@/types';
 import type { CropData, ArrowData } from '@/types/shared';
 
 export class SimpleVerificationService {
@@ -44,6 +44,73 @@ export class SimpleVerificationService {
       record.foto1.trim() !== '' && 
       !completedDeaIds.has(record.id)
     );
+  }
+
+  async getDeaRecordsForVerificationPaginated(page: number, limit: number): Promise<{
+    data: DeaRecord[];
+    pagination: {
+      currentPage: number;
+      pageSize: number;
+      totalRecords: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+    };
+  }> {
+    // Obtener IDs de DEAs que ya tienen sesiones completadas
+    const completedSessions = await this.verificationRepository.findAll();
+    const completedDeaIds = completedSessions
+      .filter(session => session.status === VerificationStatus.COMPLETED)
+      .map(session => session.deaRecordId);
+
+    // Usar el nuevo método optimizado del repositorio sin filtro de estado
+    const result = await this.deaRepository.findForVerificationWithFilters(
+      page, 
+      limit, 
+      undefined, // No status filter
+      completedDeaIds
+    );
+
+    // Calcular paginación
+    const totalPages = Math.ceil(result.totalCount / limit);
+    
+    // Convertir DeaRecordWithValidation[] a DeaRecord[] para mantener compatibilidad
+    const data: DeaRecord[] = result.data.map(record => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { addressValidation, ...deaRecord } = record;
+      return deaRecord;
+    });
+    
+    return {
+      data,
+      pagination: {
+        currentPage: page,
+        pageSize: limit,
+        totalRecords: result.totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      }
+    };
+  }
+
+  async getDeaRecordsCountForVerification(): Promise<number> {
+    // Obtener todos los registros para contar los válidos
+    const allRecords = await this.deaRepository.findAll();
+    
+    // Obtener IDs de DEAs que ya tienen sesiones completadas
+    const completedSessions = await this.verificationRepository.findAll();
+    const completedDeaIds = new Set(
+      completedSessions
+        .filter(session => session.status === VerificationStatus.COMPLETED)
+        .map(session => session.deaRecordId)
+    );
+    
+    return allRecords.filter(record => 
+      record.foto1 && 
+      record.foto1.trim() !== '' && 
+      !completedDeaIds.has(record.id)
+    ).length;
   }
 
   async startVerification(deaId: number): Promise<VerificationSession> {
@@ -250,5 +317,67 @@ export class SimpleVerificationService {
 
   async deleteArrowMarker(markerId: number): Promise<void> {
     await this.arrowMarkerRepository.delete(markerId);
+  }
+
+  // Nuevos métodos para búsqueda y filtros
+  async searchDeaById(id: number): Promise<DeaRecordWithValidation | null> {
+    const record = await this.deaRepository.findWithAddressValidation(id);
+    if (!record || !record.foto1 || record.foto1.trim() === '') {
+      return null;
+    }
+    return record;
+  }
+
+  async searchDeaByProvisionalNumber(provisionalNumber: number): Promise<DeaRecordWithValidation | null> {
+    const record = await this.deaRepository.findByProvisionalNumberWithAddressValidation(provisionalNumber);
+    if (!record || !record.foto1 || record.foto1.trim() === '') {
+      return null;
+    }
+    return record;
+  }
+
+  async getDeaRecordsForVerificationWithFilters(
+    page: number, 
+    limit: number, 
+    statusFilter?: 'all' | 'needs_review' | 'invalid' | 'problematic'
+  ): Promise<{
+    data: DeaRecordWithValidation[];
+    pagination: {
+      currentPage: number;
+      pageSize: number;
+      totalRecords: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+    };
+  }> {
+    // Obtener IDs de DEAs que ya tienen sesiones completadas
+    const completedSessions = await this.verificationRepository.findAll();
+    const completedDeaIds = completedSessions
+      .filter(session => session.status === VerificationStatus.COMPLETED)
+      .map(session => session.deaRecordId);
+
+    // Usar el nuevo método optimizado del repositorio
+    const result = await this.deaRepository.findForVerificationWithFilters(
+      page, 
+      limit, 
+      statusFilter, 
+      completedDeaIds
+    );
+
+    // Calcular paginación
+    const totalPages = Math.ceil(result.totalCount / limit);
+    
+    return {
+      data: result.data,
+      pagination: {
+        currentPage: page,
+        pageSize: limit,
+        totalRecords: result.totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      }
+    };
   }
 }

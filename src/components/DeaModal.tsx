@@ -174,6 +174,35 @@ export default function DeaModal({ record, isOpen, onClose }: DeaModalProps) {
 						</div>
 					)}
 
+					{/* Fotografías */}
+					{(record.foto1 || record.foto2) && (
+						<div className="space-y-4">
+							<h3 className="text-lg font-semibold text-gray-900">Fotografías</h3>
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+								{record.foto1 && (
+									<div className="space-y-2">
+										<h4 className="text-sm font-medium text-gray-700">Foto 1</h4>
+										<img
+											src={record.foto1}
+											alt="Foto 1 del DEA"
+											className="w-full h-48 object-cover rounded-lg border border-gray-200"
+										/>
+									</div>
+								)}
+								{record.foto2 && (
+									<div className="space-y-2">
+										<h4 className="text-sm font-medium text-gray-700">Foto 2</h4>
+										<img
+											src={record.foto2}
+											alt="Foto 2 del DEA"
+											className="w-full h-48 object-cover rounded-lg border border-gray-200"
+										/>
+									</div>
+								)}
+							</div>
+						</div>
+					)}
+
 					{/* Comentarios */}
 					{record.comentarioLibre && (
 						<div className="space-y-4">

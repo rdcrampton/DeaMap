@@ -817,19 +817,6 @@ export default function StepByStepValidation({
               {/* Botones de Acción */}
               <div className="mt-4 space-y-3">
                 <div className="flex space-x-2">
-                  <button
-                    onClick={() => executeStep(4, {
-                      confirmedCoordinates: {
-                        lat: officialCoordinates.lat || 0,
-                        lng: officialCoordinates.lng || 0
-                      }
-                    })}
-                    disabled={loading}
-                    className="px-4 py-2 text-white rounded hover:opacity-90 disabled:opacity-50"
-                    style={{ backgroundColor: '#003DF6' }}
-                  >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Coordenadas Oficiales'}
-                  </button>
 
                   {userCoordinates && (
                     <button
@@ -846,6 +833,21 @@ export default function StepByStepValidation({
                       {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Mantener Coordenadas del Usuario'}
                     </button>
                   )}
+
+                  <button
+                    onClick={() => executeStep(4, {
+                      confirmedCoordinates: {
+                        lat: officialCoordinates.lat || 0,
+                        lng: officialCoordinates.lng || 0
+                      }
+                    })}
+                    disabled={loading}
+                    className="px-4 py-2 text-white rounded hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: '#003DF6' }}
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirmar Coordenadas Oficiales'}
+                  </button>
+
                 </div>
 
                 {/* Coordenadas Personalizadas */}

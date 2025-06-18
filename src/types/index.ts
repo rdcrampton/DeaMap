@@ -64,7 +64,7 @@ export interface DeaModalProps {
 	record: DeaRecord | null
 	isOpen: boolean
 	onClose: () => void
-	onSave: (record: DeaRecord) => Promise<void>
+	onSave?: (record: DeaRecord) => Promise<void>
 }
 
 export interface EstablecimientoTheme {
@@ -96,3 +96,28 @@ export type TipoEstablecimiento =
 	| 'Farmacia'
 	| 'Otro'
 	| 'Otro establecimiento administración pública'
+
+export interface DeaAddressValidation {
+	id: number
+	deaRecordId: number
+	searchResults: Record<string, unknown>[]
+	validationDetails?: Record<string, unknown>
+	overallStatus: string
+	recommendedActions: Record<string, unknown>[]
+	processedAt: string
+	processingDurationMs?: number
+	searchStrategiesUsed: Record<string, unknown>[]
+	validationVersion: string
+	needsReprocessing: boolean
+	errorMessage?: string
+	retryCount: number
+	createdAt: string
+	updatedAt: string
+}
+
+export interface DeaRecordWithValidation extends DeaRecord {
+	addressValidation?: DeaAddressValidation
+}
+
+export type StatusFilter = 'all' | 'needs_review' | 'invalid' | 'problematic';
+export type SearchType = 'id' | 'provisional';
