@@ -14,6 +14,11 @@ import type {
 import type { DeaRecord, DeaRecordWithValidation } from '@/types';
 import type { CropData, ArrowData } from '@/types/shared';
 
+// Interfaz extendida para incluir el campo de estado de verificación
+interface DeaRecordWithVerificationStatus extends DeaRecord {
+  dataVerificationStatus?: string;
+}
+
 export class SimpleVerificationService {
   private deaRepository: DeaRepository;
   private verificationRepository: VerificationRepository;
@@ -129,11 +134,21 @@ export class SimpleVerificationService {
       return existingSession;
     }
 
+    // Determinar paso inicial basado en el estado de verificación
+    let initialStep = VerificationStep.DATA_VALIDATION;
+    
+    // Si el DEA está pre-verificado, saltar directamente al etiquetado de imágenes
+    const deaRecordWithStatus = deaRecord as DeaRecordWithVerificationStatus;
+    if (deaRecordWithStatus.dataVerificationStatus === 'pre_verified') {
+      initialStep = VerificationStep.IMAGE_CROP_1;
+      console.log(`🚀 DEA ${deaId} está pre-verificado, saltando directamente al etiquetado de imágenes`);
+    }
+
     // Crear nueva sesión de verificación
     const session = await this.verificationRepository.create({
       deaRecordId: deaId,
       status: VerificationStatus.IN_PROGRESS,
-      currentStep: VerificationStep.DATA_VALIDATION,
+      currentStep: initialStep,
       originalImageUrl: deaRecord.foto1,
       secondImageUrl: deaRecord.foto2 // Cargar la segunda imagen si existe
     });

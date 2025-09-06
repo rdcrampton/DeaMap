@@ -198,8 +198,9 @@ export default function VerificationPage({ params }: VerificationPageProps) {
         // Si es válida, continuar al recorte de la segunda imagen
         await updateStep(VerificationStep.IMAGE_CROP_2);
       } else {
-        // Si no es válida, redirigir a la página principal
-        router.push('/verify');
+        // Si no es válida, completar la verificación automáticamente
+        // La primera imagen ya está procesada, no necesitamos la segunda
+        await completeVerification();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al validar imagen');

@@ -4,6 +4,7 @@ import type { DeaRecord, DeaRecordWithValidation } from '@/types'
 export interface IDeaRepository {
   findAll(): Promise<DeaRecord[]>;
   findAllPaginated(page: number, limit: number): Promise<DeaRecord[]>;
+  findAllVerifiedAndCompleted(): Promise<DeaRecord[]>;
   countAll(): Promise<number>;
   findById(id: number): Promise<DeaRecord | null>;
   findByProvisionalNumber(provisionalNumber: number): Promise<DeaRecord | null>;
@@ -44,6 +45,48 @@ export class DeaRepository implements IDeaRepository {
       orderBy: { createdAt: 'desc' }
     });
     return records.map(record => this.mapToDeaRecord(record));
+  }
+
+  async findAllVerifiedAndCompleted(): Promise<DeaRecord[]> {
+    const records = await prisma.deaRecord.findMany({
+      where: {
+        verificationSessions: {
+          some: {
+            status: 'completed'
+          }
+        }
+      },
+      include: {
+        verificationSessions: {
+          where: {
+            status: 'completed'
+          },
+          orderBy: {
+            completedAt: 'desc'
+          },
+          take: 1
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Map records and include processed image URLs from verification sessions
+    return records.map(record => {
+      const mappedRecord = this.mapToDeaRecord(record);
+      const completedSession = record.verificationSessions?.[0];
+      
+      if (completedSession) {
+        // Override foto1 and foto2 with processed images if available
+        // If second image was discarded (secondProcessedImageUrl is null/empty), don't show it
+        return {
+          ...mappedRecord,
+          foto1: completedSession.processedImageUrl || mappedRecord.foto1,
+          foto2: completedSession.secondProcessedImageUrl || undefined
+        };
+      }
+      
+      return mappedRecord;
+    });
   }
 
   async countAll(): Promise<number> {

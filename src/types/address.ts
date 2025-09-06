@@ -24,6 +24,9 @@ export interface AddressSearchResult {
   distrito: number;
   distritoNombre: string;
   barrio?: string;
+  barrioId?: number;          // ID numérico del barrio
+  barrioNombre?: string;      // Nombre del barrio
+  codigoBarrio?: number;      // Código oficial del barrio
   latitud: number;
   longitud: number;
   confidence: number;
@@ -68,6 +71,15 @@ export interface AddressValidationDetails {
     official?: number;
     needsCorrection: boolean;
   };
+  neighborhood: {                // Validación de barrio
+    input?: string;
+    official?: {
+      id: number;
+      nombre: string;
+      codigoBarrio: number;
+    };
+    needsCorrection: boolean;
+  };
   coordinates: {
     input?: { latitude: number; longitude: number };
     official?: { latitude: number; longitude: number };
@@ -87,6 +99,7 @@ export interface ComprehensiveAddressValidation {
     streetNumber?: string;
     postalCode?: string;
     district?: number;
+    neighborhoodId?: number;    // ID del barrio corregido
     coordinates?: { latitude: number; longitude: number };
   };
 }

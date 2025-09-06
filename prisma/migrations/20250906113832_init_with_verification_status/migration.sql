@@ -46,6 +46,9 @@ CREATE TABLE "dea_records" (
     "defLat" DOUBLE PRECISION,
     "defLon" DOUBLE PRECISION,
     "defCodDea" TEXT,
+    "gmBarrio" TEXT,
+    "defBarrio" TEXT,
+    "data_verification_status" TEXT NOT NULL DEFAULT 'pending',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -227,6 +230,7 @@ CREATE TABLE "dea_address_validations" (
     "needs_reprocessing" BOOLEAN NOT NULL DEFAULT true,
     "error_message" TEXT,
     "retry_count" INTEGER NOT NULL DEFAULT 0,
+    "detected_neighborhood_name" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -297,6 +301,9 @@ CREATE INDEX "direcciones_latitud_longitud_idx" ON "direcciones"("latitud", "lon
 CREATE INDEX "direcciones_via_id_distrito_id_numero_codigo_postal_idx" ON "direcciones"("via_id", "distrito_id", "numero", "codigo_postal");
 
 -- CreateIndex
+CREATE INDEX "idx_direcciones_spatial" ON "direcciones"("latitud", "longitud");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "dea_codes_codigo_completo_key" ON "dea_codes"("codigo_completo");
 
 -- CreateIndex
@@ -336,22 +343,22 @@ ALTER TABLE "processed_images" ADD CONSTRAINT "processed_images_verification_ses
 ALTER TABLE "barrios" ADD CONSTRAINT "barrios_distrito_id_fkey" FOREIGN KEY ("distrito_id") REFERENCES "distritos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "via_rangos_numeracion" ADD CONSTRAINT "via_rangos_numeracion_via_id_fkey" FOREIGN KEY ("via_id") REFERENCES "vias"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "via_rangos_numeracion" ADD CONSTRAINT "via_rangos_numeracion_barrio_id_fkey" FOREIGN KEY ("barrio_id") REFERENCES "barrios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "via_rangos_numeracion" ADD CONSTRAINT "via_rangos_numeracion_distrito_id_fkey" FOREIGN KEY ("distrito_id") REFERENCES "distritos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "via_rangos_numeracion" ADD CONSTRAINT "via_rangos_numeracion_barrio_id_fkey" FOREIGN KEY ("barrio_id") REFERENCES "barrios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "via_rangos_numeracion" ADD CONSTRAINT "via_rangos_numeracion_via_id_fkey" FOREIGN KEY ("via_id") REFERENCES "vias"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "direcciones" ADD CONSTRAINT "direcciones_via_id_fkey" FOREIGN KEY ("via_id") REFERENCES "vias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "direcciones" ADD CONSTRAINT "direcciones_barrio_id_fkey" FOREIGN KEY ("barrio_id") REFERENCES "barrios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "direcciones" ADD CONSTRAINT "direcciones_distrito_id_fkey" FOREIGN KEY ("distrito_id") REFERENCES "distritos"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "direcciones" ADD CONSTRAINT "direcciones_barrio_id_fkey" FOREIGN KEY ("barrio_id") REFERENCES "barrios"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "direcciones" ADD CONSTRAINT "direcciones_via_id_fkey" FOREIGN KEY ("via_id") REFERENCES "vias"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "dea_codes" ADD CONSTRAINT "dea_codes_dea_record_id_fkey" FOREIGN KEY ("dea_record_id") REFERENCES "dea_records"("id") ON DELETE SET NULL ON UPDATE CASCADE;

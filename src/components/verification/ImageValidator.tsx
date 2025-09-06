@@ -57,11 +57,17 @@ export default function ImageValidator({
         <h4 className="text-md font-semibold text-yellow-800 mb-2">
           ¿Es esta una foto válida?
         </h4>
-        <p className="text-yellow-700 text-sm">
+        <p className="text-yellow-700 text-sm mb-3">
           Verifica que la imagen muestre claramente el DEA y su ubicación. 
           Si la imagen está borrosa, mal enfocada, o no muestra el DEA correctamente, 
           márcala como inválida.
         </p>
+        <div className="bg-yellow-100 border border-yellow-300 rounded p-3">
+          <p className="text-yellow-800 text-xs font-medium">
+            💡 <strong>Nota:</strong> Si marcas la imagen como inválida, la verificación se completará automáticamente 
+            usando solo la primera imagen procesada.
+          </p>
+        </div>
       </div>
 
       {/* Botones de validación */}

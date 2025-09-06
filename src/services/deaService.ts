@@ -3,6 +3,7 @@ import type { DeaRecord } from '@/types';
 
 export interface IDeaService {
   getAllRecords(): Promise<DeaRecord[]>;
+  getVerifiedAndCompletedRecords(): Promise<DeaRecord[]>;
   getRecordById(id: number): Promise<DeaRecord | null>;
   createRecord(data: Omit<DeaRecord, 'id'>): Promise<DeaRecord>;
   updateRecord(id: number, data: Partial<DeaRecord>): Promise<DeaRecord>;
@@ -18,6 +19,10 @@ export class DeaService implements IDeaService {
 
   async getAllRecords(): Promise<DeaRecord[]> {
     return await this.repository.findAll();
+  }
+
+  async getVerifiedAndCompletedRecords(): Promise<DeaRecord[]> {
+    return await this.repository.findAllVerifiedAndCompleted();
   }
 
   async getRecordById(id: number): Promise<DeaRecord | null> {

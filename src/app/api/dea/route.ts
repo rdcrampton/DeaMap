@@ -6,11 +6,11 @@ import { handleApiError, createSuccessResponse } from '@/utils/apiUtils'
 const deaService = ServiceProvider.getDeaService();
 
 /**
- * GET handler for retrieving all DEA records
+ * GET handler for retrieving verified and completed DEA records
  */
 export async function GET() {
 	try {
-		const records = await deaService.getAllRecords()
+		const records = await deaService.getVerifiedAndCompletedRecords()
 		return createSuccessResponse(records)
 	} catch (error) {
 		return handleApiError(error, 'Error al obtener registros')

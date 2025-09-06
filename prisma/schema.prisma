@@ -54,6 +54,9 @@ model DeaRecord {
   defLat                Float?
   defLon                Float?
   defCodDea             String?
+  gmBarrio              String?
+  defBarrio             String?
+  dataVerificationStatus String               @default("pending") @map("data_verification_status")
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
   addressValidation     DeaAddressValidation?
@@ -273,6 +276,7 @@ model DeaAddressValidation {
   needsReprocessing    Boolean   @default(true) @map("needs_reprocessing")
   errorMessage         String?   @map("error_message")
   retryCount           Int       @default(0) @map("retry_count")
+  detectedNeighborhoodName String? @map("detected_neighborhood_name")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
   deaRecord            DeaRecord @relation(fields: [deaRecordId], references: [id], onDelete: Cascade)

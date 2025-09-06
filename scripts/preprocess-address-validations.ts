@@ -157,6 +157,14 @@ async function main() {
 
           const processingTime = Date.now() - recordStartTime;
 
+          // Extraer información del barrio del mejor resultado
+          const bestMatch = validation.searchResult.suggestions[0];
+          const neighborhoodInfo = bestMatch ? {
+            detectedNeighborhoodId: bestMatch.barrioId || null,
+            detectedNeighborhoodName: bestMatch.barrioNombre || null,
+            detectedNeighborhoodCode: bestMatch.codigoBarrio || null,
+          } : {};
+
           // Guardar resultados usando Prisma Client
           await deaAddressValidation.upsert({
             where: { deaRecordId: record.id },
@@ -170,7 +178,8 @@ async function main() {
               searchStrategiesUsed: ['exact', 'fuzzy'],
               needsReprocessing: false,
               errorMessage: null,
-              retryCount: 0
+              retryCount: 0,
+              ...neighborhoodInfo  // Incluir info del barrio
             },
             update: {
               searchResults: validation.searchResult.suggestions,
@@ -182,12 +191,18 @@ async function main() {
               processedAt: new Date(),
               needsReprocessing: false,
               errorMessage: null,
-              retryCount: 0
+              retryCount: 0,
+              ...neighborhoodInfo  // Incluir info del barrio
             }
           });
 
           processedCount++;
-          console.log(`✅ DEA ${record.id}: ${processingTime}ms`);
+          // Mostrar información del barrio si está disponible
+          if (bestMatch?.barrioId) {
+            console.log(`✅ DEA ${record.id}: ${processingTime}ms - Barrio: ${bestMatch.barrioNombre} (ID: ${bestMatch.barrioId})`);
+          } else {
+            console.log(`✅ DEA ${record.id}: ${processingTime}ms`);
+          }
           
           return { success: true, recordId: record.id, processingTime };
           
@@ -290,6 +305,21 @@ async function main() {
     stats.forEach(stat => {
       console.log(`  ${stat.overall_status}: ${stat.count} registros`);
     });
+
+    // Añadir estadísticas de barrios
+    const neighborhoodStats = await prisma.$queryRaw`
+      SELECT 
+        COUNT(*) as total_with_neighborhood,
+        COUNT(DISTINCT detected_neighborhood_id) as unique_neighborhoods
+      FROM dea_address_validations 
+      WHERE detected_neighborhood_id IS NOT NULL
+    ` as Array<{ total_with_neighborhood: bigint; unique_neighborhoods: bigint }>;
+
+    if (neighborhoodStats.length > 0) {
+      console.log('\n🏙️ Estadísticas de barrios:');
+      console.log(`  DEAs con barrio identificado: ${neighborhoodStats[0].total_with_neighborhood}`);
+      console.log(`  Barrios únicos detectados: ${neighborhoodStats[0].unique_neighborhoods}`);
+    }
 
     // Mostrar progreso total solo si hay muchos registros
     if (totalRecords > 100) {

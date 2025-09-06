@@ -239,6 +239,10 @@ export class NewMadridValidationService {
         input: input.district || '',
         needsCorrection: false
       },
+      neighborhood: {              // Nueva validación de barrio
+        input: undefined,
+        needsCorrection: false
+      },
       coordinates: {
         input: input.coordinates,
         needsReview: false
@@ -253,6 +257,7 @@ export class NewMadridValidationService {
       validation.streetNumber.needsCorrection = true;
       validation.postalCode.needsCorrection = true;
       validation.district.needsCorrection = true;
+      validation.neighborhood.needsCorrection = true;
       validation.coordinates.needsReview = true;
       return validation;
     }
@@ -309,6 +314,16 @@ export class NewMadridValidationService {
       
       validation.coordinates.distance = distance * 1000; // Convertir a metros
       validation.coordinates.needsReview = distance * 1000 > this.config.coordinateToleranceMeters;
+    }
+
+    // Validar barrio
+    if (bestMatch.barrioId && bestMatch.barrioNombre) {
+      validation.neighborhood.official = {
+        id: bestMatch.barrioId,
+        nombre: bestMatch.barrioNombre,
+        codigoBarrio: bestMatch.codigoBarrio || 0
+      };
+      validation.neighborhood.needsCorrection = false; // Siempre tomamos el oficial
     }
 
     return validation;
@@ -392,6 +407,13 @@ export class NewMadridValidationService {
     if (actions.length === 0) {
       actions.push('Dirección validada correctamente');
     }
+
+      // Nueva acción para barrio identificado
+      if (validationDetails.neighborhood.official) {
+        actions.push(
+          `Barrio identificado: ${validationDetails.neighborhood.official.nombre} (ID: ${validationDetails.neighborhood.official.id}, Código: ${validationDetails.neighborhood.official.codigoBarrio})`
+        );
+      }
 
     return actions;
   }
