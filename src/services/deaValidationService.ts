@@ -100,6 +100,7 @@ export class DeaValidationService {
           streetNumber: { input: record.numeroVia || '', needsCorrection: false, inValidRange: false },
           postalCode: { input: record.codigoPostal.toString(), needsCorrection: false },
           district: { input: record.distrito, needsCorrection: false },
+          neighborhood: { needsCorrection: false },
           coordinates: { input: { latitude: record.latitud, longitude: record.longitud }, needsReview: false }
         },
         overallStatus: 'invalid',
