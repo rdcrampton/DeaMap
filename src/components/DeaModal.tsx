@@ -185,7 +185,7 @@ export default function DeaModal({ record, isOpen, onClose }: DeaModalProps) {
 										<img
 											src={record.foto1}
 											alt="Foto 1 del DEA"
-											className="w-full h-48 object-cover rounded-lg border border-gray-200"
+											className="w-full max-h-64 object-contain bg-gray-50 rounded-lg border border-gray-200"
 										/>
 									</div>
 								)}
@@ -195,7 +195,7 @@ export default function DeaModal({ record, isOpen, onClose }: DeaModalProps) {
 										<img
 											src={record.foto2}
 											alt="Foto 2 del DEA"
-											className="w-full h-48 object-cover rounded-lg border border-gray-200"
+											className="w-full max-h-64 object-contain bg-gray-50 rounded-lg border border-gray-200"
 										/>
 									</div>
 								)}
