@@ -8,6 +8,13 @@ import { getEstablecimientoTheme } from '@/styles/themes'
 
 const DeaCard: React.FC<DeaCardProps> = ({ record, onEdit, onDelete, onView }) => {
 	const theme = getEstablecimientoTheme(record.tipoEstablecimiento)
+	
+	// Función para obtener la primera imagen disponible
+	const getDisplayImage = () => {
+		return record.foto1 || record.foto2 || null
+	}
+	
+	const displayImage = getDisplayImage()
 
 	return (
 		<div
@@ -17,18 +24,26 @@ const DeaCard: React.FC<DeaCardProps> = ({ record, onEdit, onDelete, onView }) =
 				border: '1px solid rgba(226, 232, 240, 0.8)'
 			}}
 		>
-			{/* Header con gradiente */}
+			{/* Header con gradiente e imagen */}
 			<div
 				className="relative h-20"
-				style={{ background: theme.bg }}
+				style={{
+					background: displayImage 
+						? `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.6)), url(${displayImage})`
+						: theme.bg,
+					backgroundSize: 'cover',
+					backgroundPosition: 'center'
+				}}
 			>
-				{/* Patrón decorativo */}
-				<div
-					className="absolute inset-0 opacity-20"
-					style={{
-						backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M0 0h40v40H0V0zm20 20a20 20 0 1 1-40 0 20 20 0 0 1 40 0z'/%3E%3C/g%3E%3C/svg%3E")`
-					}}
-				/>
+				{/* Patrón decorativo solo si no hay imagen */}
+				{!displayImage && (
+					<div
+						className="absolute inset-0 opacity-20"
+						style={{
+							backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M0 0h40v40H0V0zm20 20a20 20 0 1 1-40 0 20 20 0 0 1 40 0z'/%3E%3C/g%3E%3C/svg%3E")`
+						}}
+					/>
+				)}
 
 				{/* Número DEA flotante */}
 				<div
