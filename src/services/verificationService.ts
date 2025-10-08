@@ -16,12 +16,12 @@ import type { CropData, ArrowData } from '@/types/shared';
 export interface IVerificationService {
   getDeaRecordsForVerification(): Promise<DeaRecord[]>;
   startVerification(deaId: number): Promise<VerificationSession>;
-  getVerificationSession(sessionId: number): Promise<VerificationSession | null>;
-  updateStep(sessionId: number, step: VerificationStep): Promise<VerificationSession>;
-  saveCroppedImage(sessionId: number, imageUrl: string, cropData: CropData): Promise<VerificationSession>;
-  saveArrowMarker(sessionId: number, arrowData: ArrowData): Promise<ArrowMarker>;
-  completeVerification(sessionId: number): Promise<VerificationSession>;
-  cancelVerification(sessionId: number): Promise<void>;
+  getVerificationSession(sessionId: string): Promise<VerificationSession | null>;
+  updateStep(sessionId: string, step: VerificationStep): Promise<VerificationSession>;
+  saveCroppedImage(sessionId: string, imageUrl: string, cropData: CropData): Promise<VerificationSession>;
+  saveArrowMarker(sessionId: string, arrowData: ArrowData): Promise<ArrowMarker>;
+  completeVerification(sessionId: string): Promise<VerificationSession>;
+  cancelVerification(sessionId: string): Promise<void>;
 }
 
 export class VerificationService implements IVerificationService {
@@ -64,7 +64,7 @@ export class VerificationService implements IVerificationService {
     // Por ahora simularemos la creación de la sesión
     // En una implementación real, usaríamos el VerificationRepository
     const session: VerificationSession = {
-      id: Date.now(), // ID temporal
+      id: Date.now().toString(), // ID temporal
       ...sessionData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -74,13 +74,13 @@ export class VerificationService implements IVerificationService {
     return session;
   }
 
-  async getVerificationSession(sessionId: number): Promise<VerificationSession | null> {
+  async getVerificationSession(sessionId: string): Promise<VerificationSession | null> {
     // Por ahora retornamos null, en implementación real usaríamos el repository
     console.log(`Getting verification session: ${sessionId}`);
     return null;
   }
 
-  async updateStep(sessionId: number, step: VerificationStep): Promise<VerificationSession> {
+  async updateStep(sessionId: string, step: VerificationStep): Promise<VerificationSession> {
     // Simular actualización de paso
     const session = await this.getVerificationSession(sessionId);
     if (!session) {
@@ -94,7 +94,7 @@ export class VerificationService implements IVerificationService {
   }
 
   async saveCroppedImage(
-    sessionId: number, 
+    sessionId: string, 
     imageUrl: string, 
     cropData: CropData
   ): Promise<VerificationSession> {
@@ -123,7 +123,7 @@ export class VerificationService implements IVerificationService {
     }
   }
 
-  async saveArrowMarker(sessionId: number, arrowData: ArrowData): Promise<ArrowMarker> {
+  async saveArrowMarker(sessionId: string, arrowData: ArrowData): Promise<ArrowMarker> {
     const session = await this.getVerificationSession(sessionId);
     if (!session) {
       throw new Error('Sesión de verificación no encontrada');
@@ -169,7 +169,7 @@ export class VerificationService implements IVerificationService {
     }
   }
 
-  async completeVerification(sessionId: number): Promise<VerificationSession> {
+  async completeVerification(sessionId: string): Promise<VerificationSession> {
     const session = await this.getVerificationSession(sessionId);
     if (!session) {
       throw new Error('Sesión de verificación no encontrada');
@@ -199,7 +199,7 @@ export class VerificationService implements IVerificationService {
     }
   }
 
-  async cancelVerification(sessionId: number): Promise<void> {
+  async cancelVerification(sessionId: string): Promise<void> {
     const session = await this.getVerificationSession(sessionId);
     if (!session) {
       throw new Error('Sesión de verificación no encontrada');
@@ -221,7 +221,7 @@ export class VerificationService implements IVerificationService {
 
   // Métodos auxiliares
 
-  async getVerificationProgress(sessionId: number): Promise<{
+  async getVerificationProgress(sessionId: string): Promise<{
     currentStep: VerificationStep;
     completedSteps: VerificationStep[];
     totalSteps: number;
@@ -235,9 +235,9 @@ export class VerificationService implements IVerificationService {
     const allSteps: VerificationStep[] = [
       VerificationStep.DATA_VALIDATION,
       VerificationStep.DEA_INFO,
+      VerificationStep.IMAGE_SELECTION,
       VerificationStep.IMAGE_CROP_1,
       VerificationStep.ARROW_PLACEMENT_1,
-      VerificationStep.IMAGE_VALIDATION_2,
       VerificationStep.IMAGE_CROP_2,
       VerificationStep.ARROW_PLACEMENT_2,
       VerificationStep.REVIEW,
@@ -255,11 +255,11 @@ export class VerificationService implements IVerificationService {
     };
   }
 
-  async getArrowMarkers(sessionId: number): Promise<ArrowMarker[]> {
+  async getArrowMarkers(sessionId: string): Promise<ArrowMarker[]> {
     return await this.arrowMarkerRepository.findBySessionId(sessionId);
   }
 
-  async deleteArrowMarker(markerId: number): Promise<void> {
+  async deleteArrowMarker(markerId: string): Promise<void> {
     await this.arrowMarkerRepository.delete(markerId);
   }
 }

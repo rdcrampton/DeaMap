@@ -205,36 +205,6 @@ export default function VerificationPage({ params }: VerificationPageProps) {
   };
 
   // Handlers para la segunda imagen
-  const handleImageValidation = async (isValid: boolean) => {
-    try {
-      const response = await fetch(`/api/verify/${resolvedParams.id}/validate-image2`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ isValid }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al validar imagen');
-      }
-
-      const updatedSession = await response.json();
-      setSession(updatedSession);
-
-      if (isValid) {
-        // Si es válida, continuar al recorte de la segunda imagen
-        await updateStep(VerificationStep.IMAGE_CROP_2);
-      } else {
-        // Si no es válida, completar la verificación automáticamente
-        // La primera imagen ya está procesada, no necesitamos la segunda
-        await completeVerification();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al validar imagen');
-    }
-  };
-
   const handleSecondCropComplete = async (cropData: CropData) => {
     if (!session?.secondImageUrl) return;
 
