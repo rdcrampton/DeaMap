@@ -2,16 +2,16 @@ import { prisma } from '@/lib/db';
 import type { ProcessedImage, ImageType } from '@/types/verification';
 
 export interface IProcessedImageRepository {
-  findBySessionId(sessionId: number): Promise<ProcessedImage[]>;
+  findBySessionId(sessionId: string): Promise<ProcessedImage[]>;
   create(data: Omit<ProcessedImage, 'id' | 'createdAt'>): Promise<ProcessedImage>;
-  update(id: number, data: Partial<ProcessedImage>): Promise<ProcessedImage>;
-  delete(id: number): Promise<ProcessedImage>;
-  deleteBySessionId(sessionId: number): Promise<void>;
-  findByType(sessionId: number, imageType: ImageType): Promise<ProcessedImage | null>;
+  update(id: string, data: Partial<ProcessedImage>): Promise<ProcessedImage>;
+  delete(id: string): Promise<ProcessedImage>;
+  deleteBySessionId(sessionId: string): Promise<void>;
+  findByType(sessionId: string, imageType: ImageType): Promise<ProcessedImage | null>;
 }
 
 export class ProcessedImageRepository implements IProcessedImageRepository {
-  async findBySessionId(sessionId: number): Promise<ProcessedImage[]> {
+  async findBySessionId(sessionId: string): Promise<ProcessedImage[]> {
     const images = await prisma.processedImage.findMany({
       where: { verificationSessionId: sessionId },
       orderBy: { createdAt: 'asc' }
@@ -35,7 +35,7 @@ export class ProcessedImageRepository implements IProcessedImageRepository {
     return this.mapToProcessedImage(image);
   }
 
-  async update(id: number, data: Partial<ProcessedImage>): Promise<ProcessedImage> {
+  async update(id: string, data: Partial<ProcessedImage>): Promise<ProcessedImage> {
     const updateData: Record<string, unknown> = {};
     
     if (data.originalFilename !== undefined) updateData.originalFilename = data.originalFilename;
@@ -52,7 +52,7 @@ export class ProcessedImageRepository implements IProcessedImageRepository {
     return this.mapToProcessedImage(image);
   }
 
-  async delete(id: number): Promise<ProcessedImage> {
+  async delete(id: string): Promise<ProcessedImage> {
     const image = await prisma.processedImage.delete({
       where: { id }
     });
@@ -60,13 +60,13 @@ export class ProcessedImageRepository implements IProcessedImageRepository {
     return this.mapToProcessedImage(image);
   }
 
-  async deleteBySessionId(sessionId: number): Promise<void> {
+  async deleteBySessionId(sessionId: string): Promise<void> {
     await prisma.processedImage.deleteMany({
       where: { verificationSessionId: sessionId }
     });
   }
 
-  async findByType(sessionId: number, imageType: ImageType): Promise<ProcessedImage | null> {
+  async findByType(sessionId: string, imageType: ImageType): Promise<ProcessedImage | null> {
     const image = await prisma.processedImage.findFirst({
       where: { 
         verificationSessionId: sessionId,
@@ -80,8 +80,8 @@ export class ProcessedImageRepository implements IProcessedImageRepository {
 
   private mapToProcessedImage(image: Record<string, unknown>): ProcessedImage {
     return {
-      id: image.id as number,
-      verificationSessionId: image.verificationSessionId as number,
+      id: image.id as string,
+      verificationSessionId: image.verificationSessionId as string,
       originalFilename: image.originalFilename as string,
       processedFilename: image.processedFilename as string,
       imageType: image.imageType as ImageType,

@@ -156,16 +156,16 @@ export class SimpleVerificationService {
     return session;
   }
 
-  async getVerificationSession(sessionId: number): Promise<VerificationSession | null> {
+  async getVerificationSession(sessionId: string): Promise<VerificationSession | null> {
     return await this.verificationRepository.findById(sessionId);
   }
 
-  async updateStep(sessionId: number, step: VerificationStep): Promise<VerificationSession> {
+  async updateStep(sessionId: string, step: VerificationStep): Promise<VerificationSession> {
     return await this.verificationRepository.updateStep(sessionId, step);
   }
 
   async saveCroppedImage(
-    sessionId: number, 
+    sessionId: string, 
     imageUrl: string, 
     cropData: CropData
   ): Promise<VerificationSession> {
@@ -223,7 +223,7 @@ export class SimpleVerificationService {
     }
   }
 
-  async saveArrowMarker(sessionId: number, arrowData: ArrowData): Promise<ArrowMarker> {
+  async saveArrowMarker(sessionId: string, arrowData: ArrowData): Promise<ArrowMarker> {
     const session = await this.getVerificationSession(sessionId);
     if (!session) {
       throw new Error('Sesión de verificación no encontrada');
@@ -280,7 +280,7 @@ export class SimpleVerificationService {
     }
   }
 
-  async completeVerification(sessionId: number): Promise<VerificationSession> {
+  async completeVerification(sessionId: string): Promise<VerificationSession> {
     const session = await this.getVerificationSession(sessionId);
     if (!session) {
       throw new Error('Sesión de verificación no encontrada');
@@ -308,7 +308,7 @@ export class SimpleVerificationService {
     }
   }
 
-  async cancelVerification(sessionId: number): Promise<void> {
+  async cancelVerification(sessionId: string): Promise<void> {
     const session = await this.getVerificationSession(sessionId);
     if (!session) {
       throw new Error('Sesión de verificación no encontrada');
@@ -326,11 +326,11 @@ export class SimpleVerificationService {
     }
   }
 
-  async getArrowMarkers(sessionId: number): Promise<ArrowMarker[]> {
+  async getArrowMarkers(sessionId: string): Promise<ArrowMarker[]> {
     return await this.arrowMarkerRepository.findBySessionId(sessionId);
   }
 
-  async deleteArrowMarker(markerId: number): Promise<void> {
+  async deleteArrowMarker(markerId: string): Promise<void> {
     await this.arrowMarkerRepository.delete(markerId);
   }
 

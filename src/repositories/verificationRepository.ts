@@ -3,23 +3,23 @@ import type { VerificationSession, VerificationStatus, VerificationStep, ImageTy
 
 export interface IVerificationRepository {
   findAll(): Promise<VerificationSession[]>;
-  findById(id: number): Promise<VerificationSession | null>;
+  findById(id: string): Promise<VerificationSession | null>;
   findByDeaRecordId(deaRecordId: number): Promise<VerificationSession | null>;
   findByDeaRecordIdForValidation(deaRecordId: number): Promise<VerificationSession | null>;
   create(data: Omit<VerificationSession, 'id' | 'createdAt' | 'updatedAt'>): Promise<VerificationSession>;
-  update(id: number, data: Partial<VerificationSession>): Promise<VerificationSession>;
-  updateStep(id: number, step: VerificationStep): Promise<VerificationSession>;
-  updateStatus(id: number, status: VerificationStatus): Promise<VerificationSession>;
-  updateStepData(id: number, stepData: Record<string, unknown>): Promise<VerificationSession>;
+  update(id: string, data: Partial<VerificationSession>): Promise<VerificationSession>;
+  updateStep(id: string, step: VerificationStep): Promise<VerificationSession>;
+  updateStatus(id: string, status: VerificationStatus): Promise<VerificationSession>;
+  updateStepData(id: string, stepData: Record<string, unknown>): Promise<VerificationSession>;
   createOrUpdateForValidation(deaRecordId: number, stepData: Record<string, unknown>, currentStep?: string): Promise<VerificationSession>;
-  delete(id: number): Promise<VerificationSession>;
+  delete(id: string): Promise<VerificationSession>;
   findPendingVerifications(): Promise<VerificationSession[]>;
 }
 
 export class VerificationRepository implements IVerificationRepository {
   private mapToVerificationSession(session: Record<string, unknown>): VerificationSession {
     return {
-      id: session.id as number,
+      id: session.id as string,
       deaRecordId: session.deaRecordId as number,
       status: session.status as VerificationStatus,
       currentStep: session.currentStep as VerificationStep,
@@ -30,6 +30,10 @@ export class VerificationRepository implements IVerificationRepository {
       secondImageUrl: (session.secondImageUrl as string) || undefined,
       secondCroppedImageUrl: (session.secondCroppedImageUrl as string) || undefined,
       secondProcessedImageUrl: (session.secondProcessedImageUrl as string) || undefined,
+      image1Valid: (session.image1Valid as boolean) || undefined,
+      image2Valid: (session.image2Valid as boolean) || undefined,
+      imagesSwapped: (session.imagesSwapped as boolean) || undefined,
+      markedAsInvalid: (session.markedAsInvalid as boolean) || undefined,
       createdAt: (session.createdAt as Date).toISOString(),
       updatedAt: (session.updatedAt as Date).toISOString(),
       completedAt: session.completedAt ? (session.completedAt as Date).toISOString() : undefined,
@@ -69,8 +73,8 @@ export class VerificationRepository implements IVerificationRepository {
         updatedAt: ((session.deaRecord as Record<string, unknown>).updatedAt as Date).toISOString()
       } : undefined,
       arrowMarkers: (session.arrowMarkers as Record<string, unknown>[])?.map((marker) => ({
-        id: marker.id as number,
-        verificationSessionId: marker.verificationSessionId as number,
+        id: marker.id as string,
+        verificationSessionId: marker.verificationSessionId as string,
         imageNumber: marker.imageNumber as number,
         startX: marker.startX as number,
         startY: marker.startY as number,
@@ -81,8 +85,8 @@ export class VerificationRepository implements IVerificationRepository {
         createdAt: (marker.createdAt as Date).toISOString()
       })),
       processedImages: (session.processedImages as Record<string, unknown>[])?.map((image) => ({
-        id: image.id as number,
-        verificationSessionId: image.verificationSessionId as number,
+        id: image.id as string,
+        verificationSessionId: image.verificationSessionId as string,
         originalFilename: image.originalFilename as string,
         processedFilename: image.processedFilename as string,
         imageType: image.imageType as ImageType,
@@ -103,10 +107,10 @@ export class VerificationRepository implements IVerificationRepository {
       orderBy: { createdAt: 'desc' }
     });
 
-    return sessions.map(this.mapToVerificationSession);
+    return sessions.map(this.mapToVerificationSession.bind(this));
   }
 
-  async findById(id: number): Promise<VerificationSession | null> {
+  async findById(id: string): Promise<VerificationSession | null> {
     const session = await prisma.verificationSession.findUnique({
       where: { id },
       include: {
@@ -177,7 +181,7 @@ export class VerificationRepository implements IVerificationRepository {
     return this.mapToVerificationSession(session);
   }
 
-  async update(id: number, data: Partial<VerificationSession>): Promise<VerificationSession> {
+  async update(id: string, data: Partial<VerificationSession>): Promise<VerificationSession> {
     const updateData: Record<string, unknown> = {};
     
     if (data.status) updateData.status = data.status;
@@ -189,6 +193,10 @@ export class VerificationRepository implements IVerificationRepository {
     if (data.secondImageUrl !== undefined) updateData.secondImageUrl = data.secondImageUrl;
     if (data.secondCroppedImageUrl !== undefined) updateData.secondCroppedImageUrl = data.secondCroppedImageUrl;
     if (data.secondProcessedImageUrl !== undefined) updateData.secondProcessedImageUrl = data.secondProcessedImageUrl;
+    if (data.image1Valid !== undefined) updateData.image1Valid = data.image1Valid;
+    if (data.image2Valid !== undefined) updateData.image2Valid = data.image2Valid;
+    if (data.imagesSwapped !== undefined) updateData.imagesSwapped = data.imagesSwapped;
+    if (data.markedAsInvalid !== undefined) updateData.markedAsInvalid = data.markedAsInvalid;
     if (data.completedAt !== undefined) updateData.completedAt = data.completedAt ? new Date(data.completedAt) : null;
 
     const session = await prisma.verificationSession.update({
@@ -204,7 +212,7 @@ export class VerificationRepository implements IVerificationRepository {
     return this.mapToVerificationSession(session);
   }
 
-  async updateStep(id: number, step: VerificationStep): Promise<VerificationSession> {
+  async updateStep(id: string, step: VerificationStep): Promise<VerificationSession> {
     const session = await prisma.verificationSession.update({
       where: { id },
       data: { currentStep: step },
@@ -218,7 +226,7 @@ export class VerificationRepository implements IVerificationRepository {
     return this.mapToVerificationSession(session);
   }
 
-  async updateStatus(id: number, status: VerificationStatus): Promise<VerificationSession> {
+  async updateStatus(id: string, status: VerificationStatus): Promise<VerificationSession> {
     const updateData: Record<string, unknown> = { status };
     
     if (status === 'completed') {
@@ -238,7 +246,7 @@ export class VerificationRepository implements IVerificationRepository {
     return this.mapToVerificationSession(session);
   }
 
-  async updateStepData(id: number, stepData: Record<string, unknown>): Promise<VerificationSession> {
+  async updateStepData(id: string, stepData: Record<string, unknown>): Promise<VerificationSession> {
     const session = await prisma.verificationSession.update({
       where: { id },
       data: { stepData: JSON.parse(JSON.stringify(stepData)) },
@@ -284,7 +292,7 @@ export class VerificationRepository implements IVerificationRepository {
     }
   }
 
-  async delete(id: number): Promise<VerificationSession> {
+  async delete(id: string): Promise<VerificationSession> {
     const session = await prisma.verificationSession.delete({
       where: { id },
       include: {
@@ -310,7 +318,7 @@ export class VerificationRepository implements IVerificationRepository {
       orderBy: { createdAt: 'desc' }
     });
 
-    return sessions.map(this.mapToVerificationSession);
+    return sessions.map(this.mapToVerificationSession.bind(this));
   }
 }
 

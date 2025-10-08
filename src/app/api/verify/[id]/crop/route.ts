@@ -8,16 +8,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const sessionId = parseInt(id);
+    const { id: sessionId } = await params;
     const { imageUrl, cropData } = await request.json();
-    
-    if (isNaN(sessionId)) {
-      return NextResponse.json(
-        { error: 'ID de sesión inválido' }, 
-        { status: 400 }
-      );
-    }
 
     if (!imageUrl || !cropData) {
       return NextResponse.json(

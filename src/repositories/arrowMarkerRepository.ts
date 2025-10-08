@@ -2,15 +2,15 @@ import { prisma } from '@/lib/db';
 import type { ArrowMarker } from '@/types/verification';
 
 export interface IArrowMarkerRepository {
-  findBySessionId(sessionId: number): Promise<ArrowMarker[]>;
+  findBySessionId(sessionId: string): Promise<ArrowMarker[]>;
   create(data: Omit<ArrowMarker, 'id' | 'createdAt'>): Promise<ArrowMarker>;
-  update(id: number, data: Partial<ArrowMarker>): Promise<ArrowMarker>;
-  delete(id: number): Promise<ArrowMarker>;
-  deleteBySessionId(sessionId: number): Promise<void>;
+  update(id: string, data: Partial<ArrowMarker>): Promise<ArrowMarker>;
+  delete(id: string): Promise<ArrowMarker>;
+  deleteBySessionId(sessionId: string): Promise<void>;
 }
 
 export class ArrowMarkerRepository implements IArrowMarkerRepository {
-  async findBySessionId(sessionId: number): Promise<ArrowMarker[]> {
+  async findBySessionId(sessionId: string): Promise<ArrowMarker[]> {
     const markers = await prisma.arrowMarker.findMany({
       where: { verificationSessionId: sessionId },
       orderBy: { createdAt: 'asc' }
@@ -36,7 +36,7 @@ export class ArrowMarkerRepository implements IArrowMarkerRepository {
     return this.mapToArrowMarker(marker);
   }
 
-  async update(id: number, data: Partial<ArrowMarker>): Promise<ArrowMarker> {
+  async update(id: string, data: Partial<ArrowMarker>): Promise<ArrowMarker> {
     const updateData: Record<string, unknown> = {};
     
     if (data.imageNumber !== undefined) updateData.imageNumber = data.imageNumber;
@@ -55,7 +55,7 @@ export class ArrowMarkerRepository implements IArrowMarkerRepository {
     return this.mapToArrowMarker(marker);
   }
 
-  async delete(id: number): Promise<ArrowMarker> {
+  async delete(id: string): Promise<ArrowMarker> {
     const marker = await prisma.arrowMarker.delete({
       where: { id }
     });
@@ -63,7 +63,7 @@ export class ArrowMarkerRepository implements IArrowMarkerRepository {
     return this.mapToArrowMarker(marker);
   }
 
-  async deleteBySessionId(sessionId: number): Promise<void> {
+  async deleteBySessionId(sessionId: string): Promise<void> {
     await prisma.arrowMarker.deleteMany({
       where: { verificationSessionId: sessionId }
     });
@@ -71,8 +71,8 @@ export class ArrowMarkerRepository implements IArrowMarkerRepository {
 
   private mapToArrowMarker(marker: Record<string, unknown>): ArrowMarker {
     return {
-      id: marker.id as number,
-      verificationSessionId: marker.verificationSessionId as number,
+      id: marker.id as string,
+      verificationSessionId: marker.verificationSessionId as string,
       imageNumber: marker.imageNumber as number,
       startX: marker.startX as number,
       startY: marker.startY as number,

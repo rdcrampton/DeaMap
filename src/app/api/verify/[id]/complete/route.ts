@@ -8,15 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const sessionId = parseInt(id);
-    
-    if (isNaN(sessionId)) {
-      return NextResponse.json(
-        { error: 'ID de sesión inválido' }, 
-        { status: 400 }
-      );
-    }
+    const { id: sessionId } = await params;
 
     const completedSession = await verificationService.completeVerification(sessionId);
     return NextResponse.json(completedSession);

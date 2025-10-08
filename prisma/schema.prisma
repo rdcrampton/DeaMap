@@ -67,7 +67,7 @@ model DeaRecord {
 }
 
 model VerificationSession {
-  id                      Int              @id @default(autoincrement())
+  id                      String           @id @default(cuid())
   deaRecordId             Int              @map("dea_record_id")
   status                  String           @default("in_progress")
   currentStep             String           @default("dea_info") @map("current_step")
@@ -78,6 +78,10 @@ model VerificationSession {
   secondImageUrl          String?          @map("second_image_url")
   secondCroppedImageUrl   String?          @map("second_cropped_image_url")
   secondProcessedImageUrl String?          @map("second_processed_image_url")
+  image1Valid             Boolean?         @map("image1_valid")
+  image2Valid             Boolean?         @map("image2_valid")
+  imagesSwapped           Boolean?         @map("images_swapped")
+  markedAsInvalid         Boolean          @default(false) @map("marked_as_invalid")
   createdAt               DateTime         @default(now()) @map("created_at")
   updatedAt               DateTime         @updatedAt @map("updated_at")
   completedAt             DateTime?        @map("completed_at")
@@ -89,8 +93,8 @@ model VerificationSession {
 }
 
 model ArrowMarker {
-  id                    Int                 @id @default(autoincrement())
-  verificationSessionId Int                 @map("verification_session_id")
+  id                    String              @id @default(cuid())
+  verificationSessionId String              @map("verification_session_id")
   imageNumber           Int                 @map("image_number")
   startX                Float               @map("start_x")
   startY                Float               @map("start_y")
@@ -105,8 +109,8 @@ model ArrowMarker {
 }
 
 model ProcessedImage {
-  id                    Int                 @id @default(autoincrement())
-  verificationSessionId Int                 @map("verification_session_id")
+  id                    String              @id @default(cuid())
+  verificationSessionId String              @map("verification_session_id")
   originalFilename      String              @map("original_filename")
   processedFilename     String              @map("processed_filename")
   imageType             String              @map("image_type")

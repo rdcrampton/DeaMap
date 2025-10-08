@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.828.0",
+    "@paralleldrive/cuid2": "^2.2.2",
     "@prisma/client": "^6.9.0",
     "@types/uuid": "^10.0.0",
     "@vercel/analytics": "^1.5.0",

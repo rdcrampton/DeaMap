@@ -8,8 +8,8 @@ import type { VerificationSession } from '@/types/verification';
 import type { CropData, ArrowData } from '@/types/shared';
 import ImageCropper from '@/components/verification/ImageCropper';
 import ArrowPlacer from '@/components/verification/ArrowPlacer';
-import ImageValidator from '@/components/verification/ImageValidator';
 import ArrowPlacerWithOrigin from '@/components/verification/ArrowPlacerWithOrigin';
+import ImagePairSelector, { ImageSelection } from '@/components/verification/ImagePairSelector';
 import DeaValidationPanel from '@/components/validation/DeaValidationPanel';
 
 interface VerificationPageProps {
@@ -165,8 +165,12 @@ export default function VerificationPage({ params }: VerificationPageProps) {
       const updatedSession = await response.json();
       setSession(updatedSession);
 
-      // Avanzar al siguiente paso - validación de segunda imagen
-      await updateStep(VerificationStep.IMAGE_VALIDATION_2);
+      // Determinar siguiente paso según si hay imagen 2 válida
+      if (session.image2Valid) {
+        await updateStep(VerificationStep.IMAGE_CROP_2);
+      } else {
+        await updateStep(VerificationStep.REVIEW);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al procesar flecha');
     }
@@ -174,6 +178,30 @@ export default function VerificationPage({ params }: VerificationPageProps) {
 
   const handleArrowCancel = () => {
     updateStep(VerificationStep.IMAGE_CROP_1);
+  };
+
+  // Handler para selección de imágenes
+  const handleImageSelection = async (selection: ImageSelection) => {
+    try {
+      const response = await fetch(`/api/verify/${resolvedParams.id}/select-images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(selection),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al procesar selección de imágenes');
+      }
+
+      const updatedSession = await response.json();
+      setSession(updatedSession);
+
+      // El API ya determina el siguiente paso, no necesitamos hacer nada más
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al procesar selección');
+    }
   };
 
   // Handlers para la segunda imagen
@@ -324,12 +352,26 @@ export default function VerificationPage({ params }: VerificationPageProps) {
             )}
             <div className="mt-6 flex justify-end">
               <button
-                onClick={() => updateStep(VerificationStep.IMAGE_CROP_1)}
+                onClick={() => updateStep(VerificationStep.IMAGE_SELECTION)}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
               >
                 Continuar
               </button>
             </div>
+          </div>
+        );
+
+      case VerificationStep.IMAGE_SELECTION:
+        return (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-2xl font-bold mb-4">Selección de Imágenes</h2>
+            <ImagePairSelector
+              image1Url={session.originalImageUrl}
+              image2Url={session.secondImageUrl}
+              descripcionAcceso={session.deaRecord?.descripcionAcceso}
+              onSelectionComplete={handleImageSelection}
+              onCancel={() => updateStep(VerificationStep.DEA_INFO)}
+            />
           </div>
         );
 
@@ -383,31 +425,6 @@ export default function VerificationPage({ params }: VerificationPageProps) {
           </div>
         );
 
-      case VerificationStep.IMAGE_VALIDATION_2:
-        return (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4">Validar Segunda Imagen</h2>
-            {session.secondImageUrl ? (
-              <ImageValidator
-                imageUrl={session.secondImageUrl}
-                descripcionAcceso={session.deaRecord?.descripcionAcceso}
-                onValidationComplete={handleImageValidation}
-                onCancel={() => updateStep(VerificationStep.ARROW_PLACEMENT_1)}
-              />
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No hay segunda imagen disponible</p>
-                <button
-                  onClick={() => updateStep(VerificationStep.ARROW_PLACEMENT_1)}
-                  className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                >
-                  Continuar sin segunda imagen
-                </button>
-              </div>
-            )}
-          </div>
-        );
-
       case VerificationStep.IMAGE_CROP_2:
         return (
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -420,7 +437,7 @@ export default function VerificationPage({ params }: VerificationPageProps) {
                 imageUrl={session.secondImageUrl}
                 onCropChange={handleCropChange}
                 onCropComplete={handleSecondCropComplete}
-                onCancel={() => updateStep(VerificationStep.IMAGE_VALIDATION_2)}
+                onCancel={() => updateStep(VerificationStep.IMAGE_SELECTION)}
               />
             ) : (
               <div className="text-center py-8">

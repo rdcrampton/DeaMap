@@ -9,15 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const sessionId = parseInt(id);
-    
-    if (isNaN(sessionId)) {
-      return NextResponse.json(
-        { error: 'ID de sesión inválido' }, 
-        { status: 400 }
-      );
-    }
+    const { id: sessionId } = await params;
 
     const session = await verificationService.getVerificationSession(sessionId);
     
@@ -43,16 +35,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const sessionId = parseInt(id);
+    const { id: sessionId } = await params;
     const { step } = await request.json();
-    
-    if (isNaN(sessionId)) {
-      return NextResponse.json(
-        { error: 'ID de sesión inválido' }, 
-        { status: 400 }
-      );
-    }
 
     if (!step || !Object.values(VerificationStep).includes(step)) {
       return NextResponse.json(
@@ -77,15 +61,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const sessionId = parseInt(id);
-    
-    if (isNaN(sessionId)) {
-      return NextResponse.json(
-        { error: 'ID de sesión inválido' }, 
-        { status: 400 }
-      );
-    }
+    const { id: sessionId } = await params;
 
     await verificationService.cancelVerification(sessionId);
     return NextResponse.json({ message: 'Verificación cancelada' });

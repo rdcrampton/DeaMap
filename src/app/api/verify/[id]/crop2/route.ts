@@ -10,15 +10,8 @@ export async function POST(
 ) {
   try {
     const resolvedParams = await params;
-    const sessionId = parseInt(resolvedParams.id);
+    const sessionId = resolvedParams.id;
     const { imageUrl, cropData }: { imageUrl: string; cropData: CropData } = await request.json();
-
-    if (isNaN(sessionId)) {
-      return NextResponse.json(
-        { error: 'ID de sesión inválido' },
-        { status: 400 }
-      );
-    }
 
     // Obtener la sesión actual
     const session = await verificationRepository.findById(sessionId);

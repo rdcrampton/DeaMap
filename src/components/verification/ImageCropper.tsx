@@ -34,6 +34,8 @@ export default function ImageCropper({
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [canvasScale, setCanvasScale] = useState(1);
   const [processing, setProcessing] = useState(false);
+  const [loadingState, setLoadingState] = useState<string>('Cargando imagen...');
+  const [retryAttempt, setRetryAttempt] = useState<number>(0);
 
   // Calcular el área de recorte inicial
   const calculateInitialCrop = (imgWidth: number, imgHeight: number) => {
@@ -116,12 +118,29 @@ export default function ImageCropper({
   // Cargar imagen
   useEffect(() => {
     setImageLoaded(false);
+    setLoadingState('Cargando imagen...');
+    setRetryAttempt(0);
     
     const loadImageAsync = async () => {
       try {
-        // Usar loadImageWithProxy que maneja automáticamente SharePoint
-        const { loadImageWithProxy } = await import('@/utils/sharePointProxy');
-        const img = await loadImageWithProxy(imageUrl);
+        // Usar loadImageWithRetry que maneja automáticamente reintentos y CORS
+        const { loadImageWithRetry } = await import('@/utils/imageLoader');
+        const result = await loadImageWithRetry(imageUrl, {
+          maxRetries: 3,
+          initialDelay: 1000,
+          useCacheBusting: true,
+          useProxyFallback: true,
+          onRetry: (attempt, maxRetries) => {
+            setRetryAttempt(attempt);
+            if (attempt === maxRetries) {
+              setLoadingState(`Último intento... (${attempt}/${maxRetries})`);
+            } else {
+              setLoadingState(`Reintentando... (${attempt}/${maxRetries})`);
+            }
+          }
+        });
+        
+        const img = result.image;
         
         // IMPORTANTE: Aplicar orientación EXIF para obtener dimensiones correctas
         // Esto asegura que las dimensiones coincidan con las que usará Sharp en el backend
@@ -191,8 +210,9 @@ export default function ImageCropper({
         
       } catch (error) {
         console.error('❌ Error loading image:', error);
-        // Fallback: usar la imagen original si falla la corrección
-        const { loadImageWithProxy } = await import('@/utils/sharePointProxy');
+        setLoadingState('Error al cargar la imagen');
+        // Fallback: intentar con la función legacy
+        const { loadImageWithProxy } = await import('@/utils/imageLoader');
         const img = await loadImageWithProxy(imageUrl);
         
         setImageDimensions({ width: img.width, height: img.height });
@@ -429,7 +449,12 @@ export default function ImageCropper({
           <div className="flex items-center justify-center w-full h-64 md:h-96 border border-gray-300 rounded bg-gray-50">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-              <p className="text-gray-500">Cargando imagen...</p>
+              <p className="text-gray-500">{loadingState}</p>
+              {retryAttempt > 0 && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Esto puede tomar unos segundos...
+                </p>
+              )}
             </div>
           </div>
         ) : (

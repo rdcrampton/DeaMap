@@ -2,7 +2,7 @@
 import { DeaRecord } from './index';
 
 export interface VerificationSession {
-  id: number;
+  id: string;
   deaRecordId: number;
   status: VerificationStatus;
   currentStep: VerificationStep;
@@ -13,6 +13,10 @@ export interface VerificationSession {
   secondImageUrl?: string;
   secondCroppedImageUrl?: string;
   secondProcessedImageUrl?: string;
+  image1Valid?: boolean;
+  image2Valid?: boolean;
+  imagesSwapped?: boolean;
+  markedAsInvalid?: boolean;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -22,8 +26,8 @@ export interface VerificationSession {
 }
 
 export interface ArrowMarker {
-  id: number;
-  verificationSessionId: number;
+  id: string;
+  verificationSessionId: string;
   imageNumber: number;
   startX: number;
   startY: number;
@@ -35,8 +39,8 @@ export interface ArrowMarker {
 }
 
 export interface ProcessedImage {
-  id: number;
-  verificationSessionId: number;
+  id: string;
+  verificationSessionId: string;
   originalFilename: string;
   processedFilename: string;
   imageType: ImageType;
@@ -54,9 +58,9 @@ export enum VerificationStatus {
 export enum VerificationStep {
   DATA_VALIDATION = 'data_validation',
   DEA_INFO = 'dea_info',
+  IMAGE_SELECTION = 'image_selection',
   IMAGE_CROP_1 = 'image_crop_1',
   ARROW_PLACEMENT_1 = 'arrow_placement_1',
-  IMAGE_VALIDATION_2 = 'image_validation_2',
   IMAGE_CROP_2 = 'image_crop_2',
   ARROW_PLACEMENT_2 = 'arrow_placement_2',
   REVIEW = 'review',
@@ -91,6 +95,12 @@ export const VERIFICATION_STEPS_CONFIG: Record<VerificationStep, StepConfig> = {
     component: 'DeaInfoStep',
     allowSkip: false
   },
+  [VerificationStep.IMAGE_SELECTION]: {
+    title: 'Selección de Imágenes',
+    description: 'Valida y selecciona las imágenes a procesar',
+    component: 'ImageSelectionStep',
+    allowSkip: false
+  },
   [VerificationStep.IMAGE_CROP_1]: {
     title: 'Recortar Primera Imagen',
     description: 'Selecciona el área cuadrada de la imagen',
@@ -111,12 +121,6 @@ export const VERIFICATION_STEPS_CONFIG: Record<VerificationStep, StepConfig> = {
       color: '#dc2626',
       allowMultiple: false
     }
-  },
-  [VerificationStep.IMAGE_VALIDATION_2]: {
-    title: 'Validar Segunda Imagen',
-    description: 'Verifica si la segunda imagen es válida',
-    component: 'ImageValidationStep',
-    allowSkip: false
   },
   [VerificationStep.IMAGE_CROP_2]: {
     title: 'Recortar Segunda Imagen',
