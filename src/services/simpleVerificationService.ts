@@ -137,11 +137,11 @@ export class SimpleVerificationService {
     // Determinar paso inicial basado en el estado de verificación
     let initialStep = VerificationStep.DATA_VALIDATION;
     
-    // Si el DEA está pre-verificado, saltar directamente al etiquetado de imágenes
+    // Si el DEA está pre-verificado, saltar directamente a la selección de imágenes
     const deaRecordWithStatus = deaRecord as DeaRecordWithVerificationStatus;
     if (deaRecordWithStatus.dataVerificationStatus === 'pre_verified') {
-      initialStep = VerificationStep.IMAGE_CROP_1;
-      console.log(`🚀 DEA ${deaId} está pre-verificado, saltando directamente al etiquetado de imágenes`);
+      initialStep = VerificationStep.IMAGE_SELECTION;
+      console.log(`🚀 DEA ${deaId} está pre-verificado, saltando validación de datos y comenzando en selección de imágenes`);
     }
 
     // Crear nueva sesión de verificación

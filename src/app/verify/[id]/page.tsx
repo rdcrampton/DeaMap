@@ -263,7 +263,10 @@ export default function VerificationPage({ params }: VerificationPageProps) {
   const getStepProgress = () => {
     if (!session) return { current: 0, total: 0, percentage: 0 };
 
-    const steps = Object.keys(VERIFICATION_STEPS_CONFIG);
+    // Excluir el paso COMPLETED del cálculo ya que es solo un estado interno
+    const steps = Object.keys(VERIFICATION_STEPS_CONFIG).filter(
+      step => step !== VerificationStep.COMPLETED
+    );
     const currentIndex = steps.indexOf(session.currentStep);
 
     return {
@@ -490,10 +493,21 @@ export default function VerificationPage({ params }: VerificationPageProps) {
                   </div>
                 ) : session.secondImageUrl ? (
                   <div className="border border-gray-200 rounded-lg p-8 bg-gray-50 text-center">
-                    <p className="text-gray-500">Segunda imagen no procesada</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      La imagen fue validada pero no se completó el procesamiento
-                    </p>
+                    {session.image2Valid === false ? (
+                      <>
+                        <p className="text-gray-500">❌ Imagen marcada como no válida</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Esta imagen fue descartada en el paso de validación
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-gray-500">Segunda imagen no procesada</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          La imagen está validada pero pendiente de procesar
+                        </p>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="border border-gray-200 rounded-lg p-8 bg-gray-50 text-center">
@@ -513,7 +527,8 @@ export default function VerificationPage({ params }: VerificationPageProps) {
                 <p>• Primera imagen: {session.processedImageUrl ? 'Procesada correctamente' : 'Pendiente'}</p>
                 <p>• Segunda imagen: {
                   session.secondProcessedImageUrl ? 'Procesada correctamente' :
-                  session.secondImageUrl ? 'Validada pero no procesada' :
+                  session.image2Valid === false ? 'Marcada como no válida' :
+                  session.secondImageUrl ? 'Validada pero pendiente de procesar' :
                   'No disponible'
                 }</p>
                 {session.deaRecord && (
