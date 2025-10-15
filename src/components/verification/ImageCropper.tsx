@@ -29,7 +29,9 @@ export default function ImageCropper({
   const [cropArea, setCropArea] = useState<CropArea>({ x: 0, y: 0, width: 0, height: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [resizingCorner, setResizingCorner] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [initialCropArea, setInitialCropArea] = useState<CropArea>({ x: 0, y: 0, width: 0, height: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [canvasScale, setCanvasScale] = useState(1);
@@ -304,7 +306,9 @@ export default function ImageCropper({
 
     if (corner) {
       setIsResizing(true);
+      setResizingCorner(corner);
       setDragStart({ x: pos.x, y: pos.y });
+      setInitialCropArea({ ...cropArea });
     } else if (isInsideCropArea(pos.x, pos.y)) {
       setIsDragging(true);
       setDragStart({ x: pos.x - cropArea.x, y: pos.y - cropArea.y });
@@ -321,28 +325,105 @@ export default function ImageCropper({
       const newCropArea = { ...cropArea, x: newX, y: newY };
       setCropArea(newCropArea);
       onCropChange(newCropArea);
-    } else if (isResizing) {
-      const corner = getCornerAtPosition(dragStart.x, dragStart.y);
-      if (!corner) return;
-
+    } else if (isResizing && resizingCorner) {
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
-      const delta = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+      
+      // Calcular tamaño mínimo: 50% del lado más corto de la imagen
+      const minSize = Math.min(imageDimensions.width, imageDimensions.height) * 0.5;
 
-      let newCrop = { ...cropArea };
+      let newCrop = { ...initialCropArea };
+      let delta: number;
 
-      switch (corner) {
-        case 'bottom-right':
-          const newSize = Math.max(50, Math.min(cropArea.width + delta,
-            Math.min(imageDimensions.width - cropArea.x, imageDimensions.height - cropArea.y)));
+      switch (resizingCorner) {
+        case 'top-left': {
+          // Redimensionar desde esquina superior izquierda
+          // Mover hacia arriba-izquierda (negativos) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(deltaX + deltaY || -1);
+          const newSize = Math.max(minSize, initialCropArea.width - delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            initialCropArea.x + initialCropArea.width,
+            initialCropArea.y + initialCropArea.height,
+            imageDimensions.width,
+            imageDimensions.height
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
           newCrop = {
-            ...cropArea,
-            width: newSize,
-            height: newSize
+            x: initialCropArea.x + initialCropArea.width - finalSize,
+            y: initialCropArea.y + initialCropArea.height - finalSize,
+            width: finalSize,
+            height: finalSize
           };
           break;
+        }
+
+        case 'top-right': {
+          // Redimensionar desde esquina superior derecha
+          // Mover hacia arriba-derecha (X+ Y-) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(deltaX - deltaY || 1);
+          const newSize = Math.max(minSize, initialCropArea.width + delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            imageDimensions.width - initialCropArea.x,
+            initialCropArea.y + initialCropArea.height
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
+          newCrop = {
+            x: initialCropArea.x,
+            y: initialCropArea.y + initialCropArea.height - finalSize,
+            width: finalSize,
+            height: finalSize
+          };
+          break;
+        }
+
+        case 'bottom-left': {
+          // Redimensionar desde esquina inferior izquierda
+          // Mover hacia abajo-izquierda (X- Y+) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(-deltaX + deltaY || 1);
+          const newSize = Math.max(minSize, initialCropArea.width + delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            initialCropArea.x + initialCropArea.width,
+            imageDimensions.height - initialCropArea.y
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
+          newCrop = {
+            x: initialCropArea.x + initialCropArea.width - finalSize,
+            y: initialCropArea.y,
+            width: finalSize,
+            height: finalSize
+          };
+          break;
+        }
+
+        case 'bottom-right': {
+          // Redimensionar desde esquina inferior derecha
+          // Mover hacia abajo-derecha (positivos) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(deltaX + deltaY || 1);
+          const newSize = Math.max(minSize, initialCropArea.width + delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            imageDimensions.width - initialCropArea.x,
+            imageDimensions.height - initialCropArea.y
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
+          newCrop = {
+            x: initialCropArea.x,
+            y: initialCropArea.y,
+            width: finalSize,
+            height: finalSize
+          };
+          break;
+        }
       }
 
+      // Validar que el crop está dentro de los límites
       if (newCrop.x >= 0 && newCrop.y >= 0 && 
           newCrop.x + newCrop.width <= imageDimensions.width &&
           newCrop.y + newCrop.height <= imageDimensions.height) {
@@ -378,7 +459,9 @@ export default function ImageCropper({
 
     if (corner) {
       setIsResizing(true);
+      setResizingCorner(corner);
       setDragStart({ x: pos.x, y: pos.y });
+      setInitialCropArea({ ...cropArea });
     } else if (isInsideCropArea(pos.x, pos.y)) {
       setIsDragging(true);
       setDragStart({ x: pos.x - cropArea.x, y: pos.y - cropArea.y });
@@ -396,28 +479,105 @@ export default function ImageCropper({
       const newCropArea = { ...cropArea, x: newX, y: newY };
       setCropArea(newCropArea);
       onCropChange(newCropArea);
-    } else if (isResizing) {
-      const corner = getCornerAtPosition(dragStart.x, dragStart.y);
-      if (!corner) return;
-
+    } else if (isResizing && resizingCorner) {
       const deltaX = pos.x - dragStart.x;
       const deltaY = pos.y - dragStart.y;
-      const delta = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+      
+      // Calcular tamaño mínimo: 50% del lado más corto de la imagen
+      const minSize = Math.min(imageDimensions.width, imageDimensions.height) * 0.5;
 
-      let newCrop = { ...cropArea };
+      let newCrop = { ...initialCropArea };
+      let delta: number;
 
-      switch (corner) {
-        case 'bottom-right':
-          const newSize = Math.max(50, Math.min(cropArea.width + delta,
-            Math.min(imageDimensions.width - cropArea.x, imageDimensions.height - cropArea.y)));
+      switch (resizingCorner) {
+        case 'top-left': {
+          // Redimensionar desde esquina superior izquierda
+          // Mover hacia arriba-izquierda (negativos) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(deltaX + deltaY || -1);
+          const newSize = Math.max(minSize, initialCropArea.width - delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            initialCropArea.x + initialCropArea.width,
+            initialCropArea.y + initialCropArea.height,
+            imageDimensions.width,
+            imageDimensions.height
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
           newCrop = {
-            ...cropArea,
-            width: newSize,
-            height: newSize
+            x: initialCropArea.x + initialCropArea.width - finalSize,
+            y: initialCropArea.y + initialCropArea.height - finalSize,
+            width: finalSize,
+            height: finalSize
           };
           break;
+        }
+
+        case 'top-right': {
+          // Redimensionar desde esquina superior derecha
+          // Mover hacia arriba-derecha (X+ Y-) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(deltaX - deltaY || 1);
+          const newSize = Math.max(minSize, initialCropArea.width + delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            imageDimensions.width - initialCropArea.x,
+            initialCropArea.y + initialCropArea.height
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
+          newCrop = {
+            x: initialCropArea.x,
+            y: initialCropArea.y + initialCropArea.height - finalSize,
+            width: finalSize,
+            height: finalSize
+          };
+          break;
+        }
+
+        case 'bottom-left': {
+          // Redimensionar desde esquina inferior izquierda
+          // Mover hacia abajo-izquierda (X- Y+) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(-deltaX + deltaY || 1);
+          const newSize = Math.max(minSize, initialCropArea.width + delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            initialCropArea.x + initialCropArea.width,
+            imageDimensions.height - initialCropArea.y
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
+          newCrop = {
+            x: initialCropArea.x + initialCropArea.width - finalSize,
+            y: initialCropArea.y,
+            width: finalSize,
+            height: finalSize
+          };
+          break;
+        }
+
+        case 'bottom-right': {
+          // Redimensionar desde esquina inferior derecha
+          // Mover hacia abajo-derecha (positivos) debe AUMENTAR el tamaño
+          delta = Math.max(Math.abs(deltaX), Math.abs(deltaY)) * Math.sign(deltaX + deltaY || 1);
+          const newSize = Math.max(minSize, initialCropArea.width + delta);
+          // Limitar por espacio disponible
+          const maxSize = Math.min(
+            imageDimensions.width - initialCropArea.x,
+            imageDimensions.height - initialCropArea.y
+          );
+          const finalSize = Math.min(newSize, maxSize);
+          
+          newCrop = {
+            x: initialCropArea.x,
+            y: initialCropArea.y,
+            width: finalSize,
+            height: finalSize
+          };
+          break;
+        }
       }
 
+      // Validar que el crop está dentro de los límites
       if (newCrop.x >= 0 && newCrop.y >= 0 && 
           newCrop.x + newCrop.width <= imageDimensions.width &&
           newCrop.y + newCrop.height <= imageDimensions.height) {
@@ -499,8 +659,8 @@ export default function ImageCropper({
 
       {imageLoaded && (
         <div className="text-sm text-gray-600 text-center max-w-md px-4">
-          <p className="mb-1">Arrastra para mover • Usa la esquina inferior derecha para redimensionar</p>
-          <p>Tamaño: {Math.round(cropArea.width)} × {Math.round(cropArea.height)} px</p>
+          <p className="mb-1">Arrastra para mover • Usa cualquier esquina para redimensionar</p>
+          <p>Tamaño: {Math.round(cropArea.width)} × {Math.round(cropArea.height)} px (mín: {Math.round(Math.min(imageDimensions.width, imageDimensions.height) * 0.5)}px)</p>
         </div>
       )}
     </div>
