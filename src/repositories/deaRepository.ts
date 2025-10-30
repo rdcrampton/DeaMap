@@ -5,7 +5,12 @@ export interface IDeaRepository {
   findAll(): Promise<DeaRecord[]>;
   findAllPaginated(page: number, limit: number): Promise<DeaRecord[]>;
   findAllVerifiedAndCompleted(): Promise<DeaRecord[]>;
+  findAllVerifiedAndCompletedPaginated(page: number, limit: number): Promise<{
+    data: DeaRecord[];
+    totalCount: number;
+  }>;
   countAll(): Promise<number>;
+  countVerifiedAndCompleted(): Promise<number>;
   findById(id: number): Promise<DeaRecord | null>;
   findByProvisionalNumber(provisionalNumber: number): Promise<DeaRecord | null>;
   findWithAddressValidation(id: number): Promise<DeaRecordWithValidation | null>;
@@ -91,6 +96,87 @@ export class DeaRepository implements IDeaRepository {
 
   async countAll(): Promise<number> {
     return await prisma.deaRecord.count();
+  }
+
+  async countVerifiedAndCompleted(): Promise<number> {
+    return await prisma.deaRecord.count({
+      where: {
+        verificationSessions: {
+          some: {
+            status: 'completed'
+          }
+        }
+      }
+    });
+  }
+
+  async findAllVerifiedAndCompletedPaginated(page: number, limit: number): Promise<{
+    data: DeaRecord[];
+    totalCount: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    // Ejecutar ambas consultas en paralelo
+    const [records, totalCount] = await Promise.all([
+      prisma.deaRecord.findMany({
+        where: {
+          verificationSessions: {
+            some: {
+              status: 'completed'
+            }
+          }
+        },
+        include: {
+          verificationSessions: {
+            where: {
+              status: 'completed'
+            },
+            orderBy: {
+              completedAt: 'desc'
+            },
+            take: 1,
+            select: {
+              processedImageUrl: true,
+              secondProcessedImageUrl: true
+            }
+          }
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.deaRecord.count({
+        where: {
+          verificationSessions: {
+            some: {
+              status: 'completed'
+            }
+          }
+        }
+      })
+    ]);
+
+    // Map records and include processed image URLs from verification sessions
+    const mappedRecords = records.map(record => {
+      const mappedRecord = this.mapToDeaRecord(record);
+      const completedSession = record.verificationSessions?.[0];
+      
+      if (completedSession) {
+        // Override foto1 and foto2 with processed images if available
+        return {
+          ...mappedRecord,
+          foto1: completedSession.processedImageUrl || mappedRecord.foto1,
+          foto2: completedSession.secondProcessedImageUrl || undefined
+        };
+      }
+      
+      return mappedRecord;
+    });
+
+    return {
+      data: mappedRecords,
+      totalCount
+    };
   }
 
   async findById(id: number): Promise<DeaRecord | null> {

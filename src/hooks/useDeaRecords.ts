@@ -3,12 +3,36 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { DeaRecord } from '@/types'
 
+interface PaginatedResponse {
+  data: DeaRecord[];
+  pagination: {
+    currentPage: number;
+    pageSize: number;
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
 /**
  * API client for DEA records
  */
 const deaApiClient = {
   /**
-   * Fetch all DEA records
+   * Fetch paginated DEA records
+   */
+  fetchPaginated: async (page: number = 1, limit: number = 50): Promise<PaginatedResponse> => {
+    const response = await fetch(`/api/dea?page=${page}&limit=${limit}`)
+    if (!response.ok) {
+      throw new Error(`Error en la carga: ${response.status}`)
+    }
+    return await response.json()
+  },
+
+  /**
+   * Fetch all DEA records (deprecated - use fetchPaginated instead)
+   * @deprecated This method loads all records at once and may cause memory issues
    */
   fetchAll: async (): Promise<DeaRecord[]> => {
     const response = await fetch('/api/dea')
@@ -76,29 +100,66 @@ const deaApiClient = {
 }
 
 /**
- * Hook for managing DEA records with optimized performance
+ * Hook for managing DEA records with optimized performance and pagination
  */
-export default function useDeaRecords() {
+export default function useDeaRecords(pageSize: number = 50) {
   const [records, setRecords] = useState<DeaRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [totalRecords, setTotalRecords] = useState(0)
 
   /**
-   * Refresh all records from the API
+   * Load records for a specific page (replaces existing records)
    */
-  const refreshRecords = useCallback(async () => {
+  const loadPage = useCallback(async (page: number) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await deaApiClient.fetchAll()
-      setRecords(data)
+      const response = await deaApiClient.fetchPaginated(page, pageSize)
+      setRecords(response.data)
+      setCurrentPage(response.pagination.currentPage)
+      setHasMore(response.pagination.hasNextPage)
+      setTotalRecords(response.pagination.totalRecords)
     } catch (err) {
       console.error('Error al cargar los registros:', err)
       setError(err instanceof Error ? err : new Error('Error desconocido al cargar registros'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [pageSize])
+
+  /**
+   * Load more records (appends to existing records)
+   */
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loadingMore) return
+
+    setLoadingMore(true)
+    setError(null)
+    try {
+      const nextPage = currentPage + 1
+      const response = await deaApiClient.fetchPaginated(nextPage, pageSize)
+      setRecords(prev => [...prev, ...response.data])
+      setCurrentPage(response.pagination.currentPage)
+      setHasMore(response.pagination.hasNextPage)
+      setTotalRecords(response.pagination.totalRecords)
+    } catch (err) {
+      console.error('Error al cargar más registros:', err)
+      setError(err instanceof Error ? err : new Error('Error desconocido al cargar más registros'))
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [currentPage, hasMore, loadingMore, pageSize])
+
+  /**
+   * Refresh all records from the API (loads first page)
+   */
+  const refreshRecords = useCallback(async () => {
+    await loadPage(1)
+  }, [loadPage])
 
   /**
    * Create a new record
@@ -130,12 +191,17 @@ export default function useDeaRecords() {
   const returnValue = useMemo(() => ({
     records,
     loading,
+    loadingMore,
     error,
+    hasMore,
+    totalRecords,
+    currentPage,
+    loadMore,
     refreshRecords,
     createRecord,
     updateRecord,
     deleteRecord
-  }), [records, loading, error, refreshRecords, createRecord, updateRecord, deleteRecord])
+  }), [records, loading, loadingMore, error, hasMore, totalRecords, currentPage, loadMore, refreshRecords, createRecord, updateRecord, deleteRecord])
 
   return returnValue
 }

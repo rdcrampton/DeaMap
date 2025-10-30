@@ -6,6 +6,7 @@ export interface IVerificationRepository {
   findById(id: string): Promise<VerificationSession | null>;
   findByDeaRecordId(deaRecordId: number): Promise<VerificationSession | null>;
   findByDeaRecordIdForValidation(deaRecordId: number): Promise<VerificationSession | null>;
+  findCompletedDeaIds(): Promise<number[]>;
   create(data: Omit<VerificationSession, 'id' | 'createdAt' | 'updatedAt'>): Promise<VerificationSession>;
   update(id: string, data: Partial<VerificationSession>): Promise<VerificationSession>;
   updateStep(id: string, step: VerificationStep): Promise<VerificationSession>;
@@ -319,6 +320,23 @@ export class VerificationRepository implements IVerificationRepository {
     });
 
     return sessions.map(this.mapToVerificationSession.bind(this));
+  }
+
+  /**
+   * Optimized method to fetch only DEA IDs that have completed verification sessions
+   * This avoids loading full session objects when we only need IDs
+   */
+  async findCompletedDeaIds(): Promise<number[]> {
+    const completedSessions = await prisma.verificationSession.findMany({
+      where: {
+        status: 'completed'
+      },
+      select: {
+        deaRecordId: true
+      }
+    });
+
+    return completedSessions.map(session => session.deaRecordId);
   }
 }
 

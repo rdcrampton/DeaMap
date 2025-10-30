@@ -62,11 +62,8 @@ export class SimpleVerificationService {
       hasPreviousPage: boolean;
     };
   }> {
-    // Obtener IDs de DEAs que ya tienen sesiones completadas
-    const completedSessions = await this.verificationRepository.findAll();
-    const completedDeaIds = completedSessions
-      .filter(session => session.status === VerificationStatus.COMPLETED)
-      .map(session => session.deaRecordId);
+    // Usar el método optimizado que solo trae IDs, no objetos completos
+    const completedDeaIds = await this.verificationRepository.findCompletedDeaIds();
 
     // Usar el nuevo método optimizado del repositorio sin filtro de estado
     const result = await this.deaRepository.findForVerificationWithFilters(
@@ -366,11 +363,8 @@ export class SimpleVerificationService {
       hasPreviousPage: boolean;
     };
   }> {
-    // Obtener IDs de DEAs que ya tienen sesiones completadas
-    const completedSessions = await this.verificationRepository.findAll();
-    const completedDeaIds = completedSessions
-      .filter(session => session.status === VerificationStatus.COMPLETED)
-      .map(session => session.deaRecordId);
+    // Usar el método optimizado que solo trae IDs, no objetos completos
+    const completedDeaIds = await this.verificationRepository.findCompletedDeaIds();
 
     // Usar el nuevo método optimizado del repositorio
     const result = await this.deaRepository.findForVerificationWithFilters(

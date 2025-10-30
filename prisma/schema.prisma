@@ -89,6 +89,8 @@ model VerificationSession {
   processedImages         ProcessedImage[]
   deaRecord               DeaRecord        @relation(fields: [deaRecordId], references: [id])
 
+  @@index([status])
+  @@index([deaRecordId, status])
   @@map("verification_sessions")
 }
 
@@ -289,5 +291,6 @@ model DeaAddressValidation {
   @@index([needsReprocessing])
   @@index([processedAt])
   @@index([validationVersion])
+  @@index([overallStatus, needsReprocessing])
   @@map("dea_address_validations")
 }
