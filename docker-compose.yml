@@ -8,10 +8,35 @@ services:
       POSTGRES_PASSWORD: toor
       POSTGRES_DB: samur_dea
     ports:
-      - "5433:5432"
+      - "5555:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  face-blur:
+    build:
+      context: ./scripts/face_blur_service
+      dockerfile: Dockerfile
+    container_name: dea-face-blur-gpu
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - TF_FORCE_GPU_ALLOW_GROWTH=true
+      - CUDA_VISIBLE_DEVICES=0
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./scripts/face_blur_service:/app
+      - face_blur_models:/app/models
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   postgres_data:
+  face_blur_models:

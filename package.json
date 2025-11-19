@@ -27,7 +27,13 @@
     "db:format": "prisma format",
     "migrate-sharepoint": "tsx scripts/migrate-sharepoint-to-s3.ts",
     "migrate-sharepoint:dry-run": "tsx scripts/migrate-sharepoint-to-s3.ts --dry-run",
-    "verify-s3": "tsx scripts/verify-s3-migration.ts"
+    "verify-s3": "tsx scripts/verify-s3-migration.ts",
+    "export-final-images": "tsx scripts/export-final-dea-images.ts",
+    "face-blur:build": "docker-compose build face-blur",
+    "face-blur:start": "docker-compose up -d face-blur",
+    "face-blur:stop": "docker-compose stop face-blur",
+    "face-blur:logs": "docker-compose logs -f face-blur",
+    "face-blur:status": "curl http://localhost:5000/health"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.828.0",
@@ -36,6 +42,8 @@
     "@types/uuid": "^10.0.0",
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
+    "@vladmandic/face-api": "^1.7.15",
+    "canvas": "^3.2.0",
     "dotenv": "^17.2.2",
     "lucide-react": "^0.513.0",
     "next": "15.3.3",

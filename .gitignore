@@ -45,3 +45,6 @@ scripts/check-*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+data/exports/*
