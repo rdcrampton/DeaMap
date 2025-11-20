@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { VerificationStep, VERIFICATION_STEPS_CONFIG } from '@/types/verification';
+import { VerificationStep, VerificationStatus, VERIFICATION_STEPS_CONFIG } from '@/types/verification';
 import type { VerificationSession } from '@/types/verification';
 import type { CropData, ArrowData } from '@/types/shared';
 import ImageCropper from '@/components/verification/ImageCropper';
@@ -11,6 +11,8 @@ import ArrowPlacer from '@/components/verification/ArrowPlacer';
 import ArrowPlacerWithOrigin from '@/components/verification/ArrowPlacerWithOrigin';
 import ImagePairSelector, { ImageSelection } from '@/components/verification/ImagePairSelector';
 import DeaValidationPanel from '@/components/validation/DeaValidationPanel';
+import DiscardModal from '@/components/verification/DiscardModal';
+import { DiscardReason } from '@/types/verification';
 
 interface VerificationPageProps {
   params: Promise<{ id: string }>;
@@ -21,6 +23,8 @@ export default function VerificationPage({ params }: VerificationPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const router = useRouter();
   const resolvedParams = use(params);
 
@@ -38,10 +42,19 @@ export default function VerificationPage({ params }: VerificationPageProps) {
         throw new Error('Error al cargar sesión');
       }
       const data = await response.json();
+      
+      // Si la sesión ya está completada, redirigir inmediatamente sin renderizar
+      if (data.status === VerificationStatus.COMPLETED) {
+        // NO establecer session, NO cambiar loading, solo redirigir
+        // Esto mantiene el spinner visible y evita renderizar el contenido
+        router.replace('/verify');
+        return;
+      }
+      
       setSession(data);
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
       setLoading(false);
     }
   };
@@ -78,8 +91,13 @@ export default function VerificationPage({ params }: VerificationPageProps) {
         throw new Error('Error al completar verificación');
       }
 
-      // Redirigir a la página principal después de completar
-      router.push('/verify');
+      const updatedSession = await response.json();
+      setSession(updatedSession);
+      
+      // Redirigir después de 3 segundos para mostrar el mensaje de éxito
+      setTimeout(() => {
+        router.push('/verify');
+      }, 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al completar verificación');
     } finally {
@@ -104,6 +122,32 @@ export default function VerificationPage({ params }: VerificationPageProps) {
       router.push('/verify');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cancelar verificación');
+    }
+  };
+
+  const handleDiscardDea = async (reason: DiscardReason, notes?: string) => {
+    setDiscarding(true);
+    try {
+      const response = await fetch(`/api/verify/${resolvedParams.id}/discard`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason, notes }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al descartar DEA');
+      }
+
+      // Redirigir después de descartar exitosamente
+      setTimeout(() => {
+        router.push('/verify');
+      }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al descartar DEA');
+      setDiscarding(false);
+      setIsDiscardModalOpen(false);
     }
   };
 
@@ -201,6 +245,33 @@ export default function VerificationPage({ params }: VerificationPageProps) {
       // El API ya determina el siguiente paso, no necesitamos hacer nada más
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al procesar selección');
+    }
+  };
+
+  // Handler para subir nuevas imágenes
+  const handleUploadNewImages = async (image1Url: string | null, image2Url: string | null) => {
+    try {
+      const response = await fetch(`/api/verify/${resolvedParams.id}/upload-images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image1Url,
+          image2Url
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al subir nuevas imágenes');
+      }
+
+      const updatedSession = await response.json();
+      setSession(updatedSession);
+
+      // El API determina el siguiente paso automáticamente
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al subir nuevas imágenes');
     }
   };
 
@@ -338,11 +409,33 @@ export default function VerificationPage({ params }: VerificationPageProps) {
         return (
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-2xl font-bold mb-4">Selección de Imágenes</h2>
+            
+            {/* Botón de Descartar DEA */}
+            <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-md font-semibold text-orange-800 mb-2">
+                    ¿No puedes continuar con este DEA?
+                  </h3>
+                  <p className="text-sm text-orange-700 mb-3">
+                    Si las imágenes no son válidas y no puedes obtener nuevas, puedes descartar este DEA y documentar el motivo.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDiscardModalOpen(true)}
+                className="w-full sm:w-auto px-6 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-colors"
+              >
+                🗑️ Descartar DEA
+              </button>
+            </div>
+
             <ImagePairSelector
               image1Url={session.originalImageUrl}
               image2Url={session.secondImageUrl}
               descripcionAcceso={session.deaRecord?.descripcionAcceso}
               onSelectionComplete={handleImageSelection}
+              onUploadNewImages={handleUploadNewImages}
               onCancel={() => updateStep(VerificationStep.DEA_INFO)}
             />
           </div>
@@ -562,6 +655,40 @@ export default function VerificationPage({ params }: VerificationPageProps) {
           </div>
         );
 
+      case VerificationStep.COMPLETED:
+        return (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="text-center py-12">
+              <div className="mb-6">
+                <svg className="w-20 h-20 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                ✅ Verificación Completada
+              </h2>
+              {session.markedAsInvalid ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md mx-auto mb-6">
+                  <p className="text-yellow-800 font-medium mb-2">
+                    ⚠️ DEA completado sin imágenes válidas
+                  </p>
+                  <p className="text-yellow-700 text-sm">
+                    Este DEA fue marcado como completado porque ninguna de las imágenes era válida para procesar.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-gray-600 mb-6">
+                  El DEA ha sido verificado exitosamente y las imágenes han sido procesadas.
+                </p>
+              )}
+              <div className="text-sm text-gray-500">
+                <p>Redirigiendo a la lista en unos segundos...</p>
+                <Loader2 className="w-4 h-4 animate-spin mx-auto mt-2" />
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return (
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -604,10 +731,24 @@ export default function VerificationPage({ params }: VerificationPageProps) {
     );
   }
 
+  // Si no hay sesión, no renderizar el contenido (probablemente redirigiendo)
+  if (!session) {
+    return null;
+  }
+
   const progress = getStepProgress();
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Discard Modal */}
+      <DiscardModal
+        isOpen={isDiscardModalOpen}
+        onClose={() => setIsDiscardModalOpen(false)}
+        onConfirm={handleDiscardDea}
+        deaName={session?.deaRecord?.nombre}
+        loading={discarding}
+      />
+
       <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">

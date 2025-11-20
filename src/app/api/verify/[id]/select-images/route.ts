@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { VerificationStep, VerificationSession } from '@/types/verification';
+import { VerificationStep, VerificationStatus, VerificationSession } from '@/types/verification';
 import { verificationRepository } from '@/repositories/verificationRepository';
 
 interface SelectImagesRequest {
@@ -46,6 +46,7 @@ export async function POST(
     if (markedAsInvalid) {
       // Si está marcado como inválido, ir directo a completado
       updateData.currentStep = VerificationStep.COMPLETED;
+      updateData.status = VerificationStatus.COMPLETED;
       updateData.completedAt = new Date().toISOString();
     } else if (image1Valid && !image2Valid) {
       // Solo imagen 1 válida -> crop imagen 1
@@ -59,6 +60,7 @@ export async function POST(
     } else {
       // Ninguna válida (no debería pasar, pero por si acaso)
       updateData.currentStep = VerificationStep.COMPLETED;
+      updateData.status = VerificationStatus.COMPLETED;
       updateData.markedAsInvalid = true;
       updateData.completedAt = new Date().toISOString();
     }

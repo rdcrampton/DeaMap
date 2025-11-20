@@ -1,4 +1,4 @@
-// src/services/simpleVerificationService.ts
+e// src/services/simpleVerificationService.ts
 
 import { DeaRepository } from '@/repositories/deaRepository';
 import { VerificationRepository } from '@/repositories/verificationRepository';
@@ -33,21 +33,24 @@ export class SimpleVerificationService {
   }
 
   async getDeaRecordsForVerification(): Promise<DeaRecord[]> {
-    // Obtener DEAs que tienen foto1 pero no han sido verificados
+    // Obtener DEAs que tienen foto1 pero no han sido verificados ni descartados
     const allRecords = await this.deaRepository.findAll();
     
-    // Obtener IDs de DEAs que ya tienen sesiones completadas
+    // Obtener IDs de DEAs que ya tienen sesiones completadas o descartadas
     const completedSessions = await this.verificationRepository.findAll();
-    const completedDeaIds = new Set(
+    const excludedDeaIds = new Set(
       completedSessions
-        .filter(session => session.status === VerificationStatus.COMPLETED)
+        .filter(session => 
+          session.status === VerificationStatus.COMPLETED || 
+          session.status === VerificationStatus.DISCARDED
+        )
         .map(session => session.deaRecordId)
     );
     
     return allRecords.filter(record => 
       record.foto1 && 
       record.foto1.trim() !== '' && 
-      !completedDeaIds.has(record.id)
+      !excludedDeaIds.has(record.id)
     );
   }
 
@@ -283,7 +286,8 @@ export class SimpleVerificationService {
       throw new Error('Sesión de verificación no encontrada');
     }
 
-    if (!session.processedImageUrl) {
+    // Permitir completar sin imágenes procesadas si está marcado como inválido
+    if (!session.processedImageUrl && !session.markedAsInvalid) {
       throw new Error('La verificación no está completa');
     }
 
@@ -320,6 +324,41 @@ export class SimpleVerificationService {
       // Las flechas y imágenes procesadas se mantienen para auditoría
     } catch (error) {
       throw new Error(`Error al cancelar la verificación: ${error}`);
+    }
+  }
+
+  async discardVerification(
+    sessionId: string,
+    reason: string,
+    notes?: string
+  ): Promise<VerificationSession> {
+    const session = await this.getVerificationSession(sessionId);
+    if (!session) {
+      throw new Error('Sesión de verificación no encontrada');
+    }
+
+    try {
+      // Crear información de descarte
+      const discardInfo = {
+        reason,
+        notes,
+        discardedAt: new Date().toISOString()
+      };
+
+      // Actualizar sesión como descartada
+      const updatedSession = await this.verificationRepository.update(sessionId, {
+        status: VerificationStatus.DISCARDED,
+        markedAsInvalid: true,
+        stepData: {
+          ...session.stepData,
+          discardInfo
+        }
+      });
+
+      console.log(`✅ DEA ${session.deaRecordId} marcado como descartado: ${reason}`);
+      return updatedSession;
+    } catch (error) {
+      throw new Error(`Error al descartar la verificación: ${error}`);
     }
   }
 

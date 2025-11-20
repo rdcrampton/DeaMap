@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { loadImageWithRetry } from '@/utils/imageLoader';
+import ImageUpload from '@/components/ImageUpload';
 
 interface ImagePairSelectorProps {
   image1Url?: string;
   image2Url?: string;
   descripcionAcceso?: string;
   onSelectionComplete: (selection: ImageSelection) => void;
+  onUploadNewImages?: (image1Url: string | null, image2Url: string | null) => void;
   onCancel: () => void;
 }
 
@@ -34,6 +36,7 @@ export default function ImagePairSelector({
   image2Url,
   descripcionAcceso,
   onSelectionComplete,
+  onUploadNewImages,
   onCancel
 }: ImagePairSelectorProps) {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,6 +47,9 @@ export default function ImagePairSelector({
   const [image1DataUrl, setImage1DataUrl] = useState<string>('');
   const [image2DataUrl, setImage2DataUrl] = useState<string>('');
   const [loadingState, setLoadingState] = useState<string>('Cargando imágenes...');
+  const [uploadMode, setUploadMode] = useState(false);
+  const [newImage1Url, setNewImage1Url] = useState<string | null>(null);
+  const [newImage2Url, setNewImage2Url] = useState<string | null>(null);
 
   const hasImage1 = !!image1Url;
   const hasImage2 = !!image2Url;
@@ -201,8 +207,92 @@ export default function ImagePairSelector({
     }
   };
 
+  const handleUploadNewImages = async () => {
+    if (!onUploadNewImages) return;
+    if (!newImage1Url && !newImage2Url) return;
+
+    setIsProcessing(true);
+    try {
+      await onUploadNewImages(newImage1Url, newImage2Url);
+    } catch (error) {
+      console.error('Error uploading new images:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Renderizar caso: Sin imágenes
   if (hasNoImages) {
+    if (uploadMode && onUploadNewImages) {
+      return (
+        <div className="space-y-6 w-full">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-blue-800 mb-4">Subir Nuevas Imágenes</h3>
+            <p className="text-blue-700 mb-6">
+              Sube 1 o 2 imágenes nuevas para este DEA. Las imágenes deben corresponder a:
+            </p>
+            <ul className="text-blue-700 text-sm space-y-1 list-disc list-inside mb-6">
+              <li><strong>Imagen 1 (Entrada):</strong> Vista general desde la entrada</li>
+              <li><strong>Imagen 2 (Detalle):</strong> Vista de cerca del DEA</li>
+            </ul>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ImageUpload
+                label="Imagen 1 (Entrada) - Opcional"
+                value={newImage1Url || undefined}
+                onChange={(url) => setNewImage1Url(url)}
+                prefix="dea-images/entrada"
+                required={false}
+              />
+              <ImageUpload
+                label="Imagen 2 (Detalle) - Opcional"
+                value={newImage2Url || undefined}
+                onChange={(url) => setNewImage2Url(url)}
+                prefix="dea-images/detalle"
+                required={false}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={handleUploadNewImages}
+              disabled={isProcessing || (!newImage1Url && !newImage2Url)}
+              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                  Procesando...
+                </>
+              ) : (
+                'Continuar con las Imágenes Subidas'
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setUploadMode(false);
+                setNewImage1Url(null);
+                setNewImage2Url(null);
+              }}
+              disabled={isProcessing}
+              className="px-6 py-3 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Cancelar
+            </button>
+          </div>
+
+          {!newImage1Url && !newImage2Url && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-yellow-700 text-sm">
+                ⚠️ Debes subir al menos una imagen para continuar
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6 w-full">
         <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
@@ -210,13 +300,23 @@ export default function ImagePairSelector({
           <p className="text-red-700 mb-4">
             Este DEA no tiene imágenes disponibles para procesar.
           </p>
-          <button
-            onClick={() => handleSelection('both_invalid')}
-            disabled={isProcessing}
-            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-          >
-            {isProcessing ? 'Procesando...' : 'Marcar DEA como Inválido'}
-          </button>
+          <div className="flex flex-col gap-3 max-w-md mx-auto">
+            {onUploadNewImages && (
+              <button
+                onClick={() => setUploadMode(true)}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                📤 Subir Nuevas Imágenes
+              </button>
+            )}
+            <button
+              onClick={() => handleSelection('both_invalid')}
+              disabled={isProcessing}
+              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              {isProcessing ? 'Procesando...' : 'Marcar DEA como Inválido'}
+            </button>
+          </div>
         </div>
         <button
           onClick={onCancel}
@@ -319,6 +419,77 @@ export default function ImagePairSelector({
             Cancelar
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // Modo de subida de imágenes cuando hay imágenes inválidas
+  if (uploadMode && onUploadNewImages) {
+    return (
+      <div className="space-y-6 w-full">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-blue-800 mb-4">Subir Nuevas Imágenes</h3>
+          <p className="text-blue-700 mb-6">
+            Las imágenes actuales no son válidas. Sube 1 o 2 imágenes nuevas para reemplazarlas:
+          </p>
+          <ul className="text-blue-700 text-sm space-y-1 list-disc list-inside mb-6">
+            <li><strong>Imagen 1 (Entrada):</strong> Vista general desde la entrada</li>
+            <li><strong>Imagen 2 (Detalle):</strong> Vista de cerca del DEA</li>
+          </ul>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ImageUpload
+              label="Imagen 1 (Entrada) - Opcional"
+              value={newImage1Url || undefined}
+              onChange={(url) => setNewImage1Url(url)}
+              prefix="dea-images/entrada"
+              required={false}
+            />
+            <ImageUpload
+              label="Imagen 2 (Detalle) - Opcional"
+              value={newImage2Url || undefined}
+              onChange={(url) => setNewImage2Url(url)}
+              prefix="dea-images/detalle"
+              required={false}
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-4">
+          <button
+            onClick={handleUploadNewImages}
+            disabled={isProcessing || (!newImage1Url && !newImage2Url)}
+            className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                Procesando...
+              </>
+            ) : (
+              'Continuar con las Imágenes Subidas'
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setUploadMode(false);
+              setNewImage1Url(null);
+              setNewImage2Url(null);
+            }}
+            disabled={isProcessing}
+            className="px-6 py-3 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+          >
+            Cancelar
+          </button>
+        </div>
+
+        {!newImage1Url && !newImage2Url && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-yellow-700 text-sm">
+              ⚠️ Debes subir al menos una imagen para continuar
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -439,13 +610,24 @@ export default function ImagePairSelector({
           </button>
         </div>
 
-        <button
-          onClick={() => handleSelection('both_invalid')}
-          disabled={isProcessing || isLoading}
-          className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          ❌ Ambas Inválidas
-        </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => handleSelection('both_invalid')}
+            disabled={isProcessing || isLoading}
+            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ❌ Ambas Inválidas
+          </button>
+          {onUploadNewImages && (
+            <button
+              onClick={() => setUploadMode(true)}
+              disabled={isProcessing || isLoading}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              📤 Subir Nuevas Imágenes
+            </button>
+          )}
+        </div>
 
         <button
           onClick={onCancel}

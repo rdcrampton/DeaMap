@@ -52,7 +52,33 @@ export interface ProcessedImage {
 export enum VerificationStatus {
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
-  CANCELLED = 'cancelled'
+  CANCELLED = 'cancelled',
+  DISCARDED = 'discarded'
+}
+
+export enum DiscardReason {
+  CLOSED_PERMANENTLY = 'closed_permanently',
+  DOES_NOT_EXIST = 'does_not_exist',
+  INCORRECT_DATA = 'incorrect_data',
+  DUPLICATE = 'duplicate',
+  NOT_ACCESSIBLE = 'not_accessible',
+  OTHER = 'other'
+}
+
+export const DISCARD_REASON_LABELS: Record<DiscardReason, string> = {
+  [DiscardReason.CLOSED_PERMANENTLY]: 'Establecimiento cerrado permanentemente',
+  [DiscardReason.DOES_NOT_EXIST]: 'DEA ya no existe en la ubicación',
+  [DiscardReason.INCORRECT_DATA]: 'Información incorrecta o incompleta',
+  [DiscardReason.DUPLICATE]: 'Registro duplicado',
+  [DiscardReason.NOT_ACCESSIBLE]: 'No accesible para verificación',
+  [DiscardReason.OTHER]: 'Otro motivo'
+};
+
+export interface DiscardInfo {
+  reason: DiscardReason;
+  notes?: string;
+  discardedAt: string;
+  discardedBy?: string;
 }
 
 export enum VerificationStep {

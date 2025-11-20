@@ -323,20 +323,23 @@ export class VerificationRepository implements IVerificationRepository {
   }
 
   /**
-   * Optimized method to fetch only DEA IDs that have completed verification sessions
+   * Optimized method to fetch only DEA IDs that have completed or discarded verification sessions
    * This avoids loading full session objects when we only need IDs
    */
   async findCompletedDeaIds(): Promise<number[]> {
-    const completedSessions = await prisma.verificationSession.findMany({
+    const excludedSessions = await prisma.verificationSession.findMany({
       where: {
-        status: 'completed'
+        OR: [
+          { status: 'completed' },
+          { status: 'discarded' }
+        ]
       },
       select: {
         deaRecordId: true
       }
     });
 
-    return completedSessions.map(session => session.deaRecordId);
+    return excludedSessions.map(session => session.deaRecordId);
   }
 }
 
