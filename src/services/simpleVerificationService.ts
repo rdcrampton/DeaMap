@@ -1,4 +1,4 @@
-e// src/services/simpleVerificationService.ts
+// src/services/simpleVerificationService.ts
 
 import { DeaRepository } from '@/repositories/deaRepository';
 import { VerificationRepository } from '@/repositories/verificationRepository';
