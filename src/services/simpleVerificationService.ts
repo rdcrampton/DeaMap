@@ -130,8 +130,15 @@ export class SimpleVerificationService {
 
     // Verificar si ya existe una sesión en progreso
     const existingSession = await this.verificationRepository.findByDeaRecordId(deaId);
-    if (existingSession) {
+    if (existingSession && existingSession.status === VerificationStatus.IN_PROGRESS) {
+      // Solo devolver sesión si está en progreso, permitir re-verificación si está completada/descartada
+      console.log(`📋 Sesión en progreso encontrada para DEA ${deaId}, continuando con ella`);
       return existingSession;
+    }
+    
+    // Si hay sesión previa completada o descartada, se permitirá crear una nueva
+    if (existingSession) {
+      console.log(`🔄 DEA ${deaId} tiene una sesión previa en estado ${existingSession.status}, permitiendo re-verificación`);
     }
 
     // Determinar paso inicial basado en el estado de verificación

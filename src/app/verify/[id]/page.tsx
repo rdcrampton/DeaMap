@@ -43,8 +43,9 @@ export default function VerificationPage({ params }: VerificationPageProps) {
       }
       const data = await response.json();
       
-      // Si la sesión ya está completada, redirigir inmediatamente sin renderizar
-      if (data.status === VerificationStatus.COMPLETED) {
+      // Si la sesión ya está completada o descartada, redirigir inmediatamente sin renderizar
+      if (data.status === VerificationStatus.COMPLETED || data.status === VerificationStatus.DISCARDED) {
+        console.log(`⚠️ Sesión ${resolvedParams.id} está en estado ${data.status}, redirigiendo a lista de verificaciones`);
         // NO establecer session, NO cambiar loading, solo redirigir
         // Esto mantiene el spinner visible y evita renderizar el contenido
         router.replace('/verify');
