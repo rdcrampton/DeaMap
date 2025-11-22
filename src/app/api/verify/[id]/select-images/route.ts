@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { VerificationStep, VerificationStatus, VerificationSession } from '@/types/verification';
 import { verificationRepository } from '@/repositories/verificationRepository';
+import { DeaRepository } from '@/repositories/deaRepository';
+
+const deaRepository = new DeaRepository();
 
 interface SelectImagesRequest {
   image1Valid: boolean;
@@ -46,8 +49,14 @@ export async function POST(
     if (markedAsInvalid) {
       // Si está marcado como inválido, ir directo a completado
       updateData.currentStep = VerificationStep.COMPLETED;
-      updateData.status = VerificationStatus.COMPLETED;
+      updateData.status = VerificationStatus.VERIFIED;
       updateData.completedAt = new Date().toISOString();
+      
+      // Actualizar el estado de verificación de datos del DEA
+      await deaRepository.update(session.deaRecordId, {
+        dataVerificationStatus: 'invalid'
+      });
+      console.log(`✅ DEA ${session.deaRecordId} marcado como inválido (markedAsInvalid)`);
     } else if (image1Valid && !image2Valid) {
       // Solo imagen 1 válida -> crop imagen 1
       updateData.currentStep = VerificationStep.IMAGE_CROP_1;
@@ -60,9 +69,15 @@ export async function POST(
     } else {
       // Ninguna válida (no debería pasar, pero por si acaso)
       updateData.currentStep = VerificationStep.COMPLETED;
-      updateData.status = VerificationStatus.COMPLETED;
+      updateData.status = VerificationStatus.VERIFIED;
       updateData.markedAsInvalid = true;
       updateData.completedAt = new Date().toISOString();
+      
+      // Actualizar el estado de verificación de datos del DEA
+      await deaRepository.update(session.deaRecordId, {
+        dataVerificationStatus: 'invalid'
+      });
+      console.log(`✅ DEA ${session.deaRecordId} marcado como inválido (ninguna imagen válida)`);
     }
 
     // Actualizar la sesión usando el repositorio

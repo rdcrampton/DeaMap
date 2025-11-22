@@ -49,6 +49,7 @@ export interface DeaRecord {
 	defLat?: number
 	defLon?: number
 	defCodDea?: string
+	dataVerificationStatus?: string
 	createdAt: string
 	updatedAt: string
 }
@@ -119,5 +120,5 @@ export interface DeaRecordWithValidation extends DeaRecord {
 	addressValidation?: DeaAddressValidation
 }
 
-export type StatusFilter = 'all' | 'needs_review' | 'invalid' | 'problematic';
+export type StatusFilter = 'all' | 'pending' | 'in_progress' | 'discarded';
 export type SearchType = 'id' | 'provisional';

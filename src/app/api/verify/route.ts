@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '12');
-    const statusFilter = searchParams.get('statusFilter') as 'all' | 'needs_review' | 'invalid' | 'problematic' | null;
+    const statusFilter = searchParams.get('statusFilter') as 'all' | 'pending' | 'in_progress' | 'discarded' | null;
 
     // Validar parámetros
     if (page < 1 || limit < 1 || limit > 50) {
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Validar filtro de estado
-    if (statusFilter && !['all', 'needs_review', 'invalid', 'problematic'].includes(statusFilter)) {
+    if (statusFilter && !['all', 'pending', 'in_progress', 'discarded'].includes(statusFilter)) {
       return NextResponse.json(
         { error: 'Filtro de estado inválido' }, 
         { status: 400 }

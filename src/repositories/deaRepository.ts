@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import type { DeaRecord, DeaRecordWithValidation } from '@/types'
+import { VerificationStatus } from '@/types/verification'
 
 export interface IDeaRepository {
   findAll(): Promise<DeaRecord[]>;
@@ -57,14 +58,14 @@ export class DeaRepository implements IDeaRepository {
       where: {
         verificationSessions: {
           some: {
-            status: 'completed'
+            status: VerificationStatus.VERIFIED
           }
         }
       },
       include: {
         verificationSessions: {
           where: {
-            status: 'completed'
+            status: VerificationStatus.VERIFIED
           },
           orderBy: {
             completedAt: 'desc'
@@ -103,7 +104,7 @@ export class DeaRepository implements IDeaRepository {
       where: {
         verificationSessions: {
           some: {
-            status: 'completed'
+            status: VerificationStatus.VERIFIED
           }
         }
       }
@@ -122,14 +123,14 @@ export class DeaRepository implements IDeaRepository {
         where: {
           verificationSessions: {
             some: {
-              status: 'completed'
+              status: VerificationStatus.VERIFIED
             }
           }
         },
         include: {
           verificationSessions: {
             where: {
-              status: 'completed'
+              status: VerificationStatus.VERIFIED
             },
             orderBy: {
               completedAt: 'desc'
@@ -149,7 +150,7 @@ export class DeaRepository implements IDeaRepository {
         where: {
           verificationSessions: {
             some: {
-              status: 'completed'
+              status: VerificationStatus.VERIFIED
             }
           }
         }
@@ -320,21 +321,20 @@ export class DeaRepository implements IDeaRepository {
       };
     }
 
-    // Add status filter for address validation
+    // Add status filter for data verification status
     if (statusFilter && statusFilter !== 'all') {
-      whereClause.addressValidation = {};
-      
       switch (statusFilter) {
-        case 'needs_review':
-          whereClause.addressValidation.overallStatus = 'needs_review';
-          break;
-        case 'invalid':
-          whereClause.addressValidation.overallStatus = 'invalid';
-          break;
-        case 'problematic':
-          whereClause.addressValidation.overallStatus = {
-            in: ['needs_review', 'invalid']
+        case 'pending':
+          // Incluir tanto pending como pre_verified (ambos están pendientes de verificación)
+          whereClause.dataVerificationStatus = {
+            in: ['pending', 'pre_verified']
           };
+          break;
+        case 'in_progress':
+          whereClause.dataVerificationStatus = 'in_progress';
+          break;
+        case 'discarded':
+          whereClause.dataVerificationStatus = 'discarded';
           break;
       }
     }

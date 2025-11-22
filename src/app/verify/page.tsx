@@ -229,13 +229,13 @@ export default function VerifyPage() {
           {/* Sección de Filtros */}
           {!searchResult && (
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">🎯 Filtros de Estado de Dirección</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">🎯 Estado de Verificación de Datos</h2>
               <div className="flex flex-wrap gap-3">
                 {[
                   { value: 'all', label: 'Todos', icon: '📋' },
-                  { value: 'needs_review', label: 'Necesitan Revisión', icon: '⚠️' },
-                  { value: 'invalid', label: 'Inválidos', icon: '❌' },
-                  { value: 'problematic', label: 'Problemáticos', icon: '🚨' }
+                  { value: 'pending', label: 'Pendientes', icon: '🟡' },
+                  { value: 'in_progress', label: 'En Progreso', icon: '🔵' },
+                  { value: 'discarded', label: 'Descartados', icon: '❌' }
                 ].map((filter) => (
                   <button
                     key={filter.value}

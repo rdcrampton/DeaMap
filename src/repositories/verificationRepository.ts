@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
-import type { VerificationSession, VerificationStatus, VerificationStep, ImageType } from '@/types/verification';
+import { VerificationStatus, VerificationStep } from '@/types/verification';
+import type { VerificationSession, ImageType } from '@/types/verification';
 
 export interface IVerificationRepository {
   findAll(): Promise<VerificationSession[]>;
@@ -128,7 +129,7 @@ export class VerificationRepository implements IVerificationRepository {
     const session = await prisma.verificationSession.findFirst({
       where: { 
         deaRecordId,
-        status: 'in_progress'
+        status: VerificationStatus.IN_PROGRESS
       },
       include: {
         deaRecord: true,
@@ -144,7 +145,7 @@ export class VerificationRepository implements IVerificationRepository {
     const session = await prisma.verificationSession.findFirst({
       where: { 
         deaRecordId,
-        currentStep: 'data_validation'
+        currentStep: VerificationStep.DATA_VALIDATION
       },
       include: {
         deaRecord: true,
@@ -230,7 +231,7 @@ export class VerificationRepository implements IVerificationRepository {
   async updateStatus(id: string, status: VerificationStatus): Promise<VerificationSession> {
     const updateData: Record<string, unknown> = { status };
     
-    if (status === 'completed') {
+    if (status === VerificationStatus.VERIFIED) {
       updateData.completedAt = new Date();
     }
 
@@ -266,7 +267,7 @@ export class VerificationRepository implements IVerificationRepository {
     const existingSession = await prisma.verificationSession.findFirst({
       where: { 
         deaRecordId,
-        currentStep: 'data_validation'
+        currentStep: VerificationStep.DATA_VALIDATION
       }
     });
 
@@ -278,8 +279,8 @@ export class VerificationRepository implements IVerificationRepository {
       const session = await prisma.verificationSession.create({
         data: {
           deaRecordId,
-          status: 'in_progress',
-          currentStep: currentStep || 'data_validation',
+          status: VerificationStatus.IN_PROGRESS,
+          currentStep: currentStep || VerificationStep.DATA_VALIDATION,
           stepData: JSON.parse(JSON.stringify(stepData))
         },
         include: {
@@ -309,7 +310,7 @@ export class VerificationRepository implements IVerificationRepository {
   async findPendingVerifications(): Promise<VerificationSession[]> {
     const sessions = await prisma.verificationSession.findMany({
       where: {
-        status: 'in_progress'
+        status: VerificationStatus.IN_PROGRESS
       },
       include: {
         deaRecord: true,
@@ -330,8 +331,8 @@ export class VerificationRepository implements IVerificationRepository {
     const excludedSessions = await prisma.verificationSession.findMany({
       where: {
         OR: [
-          { status: 'completed' },
-          { status: 'discarded' }
+          { status: VerificationStatus.VERIFIED },
+          { status: VerificationStatus.DISCARDED }
         ]
       },
       select: {

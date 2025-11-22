@@ -50,9 +50,10 @@ export interface ProcessedImage {
 }
 
 export enum VerificationStatus {
+  PENDING = 'pending',
   IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
+  PRE_VERIFIED = 'pre_verified',
+  VERIFIED = 'verified',
   DISCARDED = 'discarded'
 }
 
