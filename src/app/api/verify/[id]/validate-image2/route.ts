@@ -23,7 +23,7 @@ export async function POST(
     if (!isValid) {
       // Si la imagen no es válida, marcar como incompleto y finalizar
       const updatedSession = await verificationRepository.update(sessionId, {
-        status: VerificationStatus.CANCELLED,
+        status: VerificationStatus.DISCARDED,
         completedAt: new Date().toISOString()
       });
 
