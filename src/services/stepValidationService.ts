@@ -80,72 +80,38 @@ export class StepValidationService {
         };
       }
       
-      // 🚀 NUEVA LÓGICA: Verificar si existe validación previa con overall_status = 'valid'
-      let preValidatedData: {
-        search_results: unknown;
-        validation_details: unknown;
-        overall_status: string;
-        recommended_actions: unknown;
-        processing_duration_ms: number;
-        needs_reprocessing: boolean;
-        processed_at: Date;
-      } | null = null;
+      // 🚀 LÓGICA CORRECTA: Verificar addressValidationStatus del registro DEA
+      const recordWithStatus = record as typeof record & { addressValidationStatus?: string };
+      console.log(`🔍 DEBUG: Verificando addressValidationStatus para DEA ${deaRecordId}...`);
+      console.log(`📊 DEBUG: addressValidationStatus = "${recordWithStatus.addressValidationStatus || 'undefined'}"`);
 
-      try {
-        console.log(`🔍 DEBUG: Verificando validación previa para DEA ${deaRecordId}...`);
+      // Si la dirección ya fue validada completamente, saltar pasos 1 y 2
+      if (recordWithStatus.addressValidationStatus === 'completed') {
+        console.log(`⚡ DEBUG: Saltando pasos 1 y 2 para DEA ${deaRecordId} - addressValidationStatus es 'completed'`);
         
-        // Verificar si existe tabla dea_address_validations
-        const tableExists = await prisma.$queryRaw`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'dea_address_validations'
-          );
-        ` as Array<{ exists: boolean }>;
-
-        if (tableExists[0]?.exists) {
-          const preValidated = await prisma.$queryRaw`
-            SELECT 
-              search_results,
-              validation_details,
-              overall_status,
-              recommended_actions,
-              processing_duration_ms,
-              needs_reprocessing,
-              processed_at
-            FROM dea_address_validations 
-            WHERE dea_record_id = ${deaRecordId}
-            AND overall_status = 'valid'
-            LIMIT 1
-          ` as Array<{
-            search_results: unknown;
-            validation_details: unknown;
-            overall_status: string;
-            recommended_actions: unknown;
-            processing_duration_ms: number;
-            needs_reprocessing: boolean;
-            processed_at: Date;
-          }>;
-
-          if (preValidated.length > 0) {
-            preValidatedData = preValidated[0];
-            console.log(`✅ DEBUG: Encontrada validación previa VÁLIDA para DEA ${deaRecordId}`);
-          }
-        }
-      } catch (dbError) {
-        console.error(`❌ DEBUG: Error verificando validación previa:`, dbError);
-      }
-
-      // Si existe validación previa válida, saltar pasos 1 y 2
-      if (preValidatedData && preValidatedData.overall_status === 'valid') {
-        console.log(`⚡ DEBUG: Saltando pasos 1 y 2 para DEA ${deaRecordId} - dirección ya validada`);
-        
-        // Extraer dirección oficial de los resultados pre-calculados
-        const searchResults = Array.isArray(preValidatedData.search_results) ? preValidatedData.search_results : [];
-        const officialAddress = searchResults.length > 0 ? searchResults[0] : null;
-
-        if (officialAddress) {
-          // Crear progreso con pasos 1 y 2 ya completados/saltados
+        // Usar los datos definitivos (def*) que ya están en el registro
+        if (record.defTipoVia && record.defNombreVia && record.defCp && record.defDistrito) {
+          const officialAddress: AddressSearchResult = {
+            claseVia: record.defTipoVia,
+            nombreVia: record.defNombreVia,
+            nombreViaAcentos: record.defNombreVia,
+            numero: record.defNumero ?? '',
+            codigoPostal: record.defCp ?? '',
+            distrito: typeof record.defDistrito === 'string' ? parseInt(record.defDistrito, 10) : (record.defDistrito as number),
+            latitud: record.defLat || record.latitud,
+            longitud: record.defLon || record.longitud,
+            confidence: 1.0,
+            matchType: 'exact' as const
+          };
+          
+          console.log(`✅ DEBUG: Datos definitivos encontrados:`, {
+            tipoVia: officialAddress.claseVia,
+            nombreVia: officialAddress.nombreVia,
+            numero: officialAddress.numero,
+            cp: officialAddress.codigoPostal,
+            distrito: officialAddress.distrito
+          });
+          // ⭐ Devolver progreso calculado (NO persistir para evitar conflictos)
           const progress: StepValidationProgress = {
             deaRecordId,
             currentStep: 3, // ⭐ SALTAR DIRECTAMENTE AL PASO 3
@@ -180,20 +146,22 @@ export class StepValidationService {
             ],
             stepData: {
               step1: {
-                selectedAddress: officialAddress as AddressSearchResult,
+                selectedAddress: officialAddress,
                 userConfirmed: true,
-                timestamp: preValidatedData.processed_at
+                timestamp: new Date()
               },
               step2: {
                 originalPostalCode: record.codigoPostal.toString(),
-                confirmedPostalCode: (officialAddress as AddressSearchResult).codigoPostal || record.codigoPostal.toString(),
+                confirmedPostalCode: officialAddress.codigoPostal,
                 userConfirmed: true,
                 autoSkipped: true,
-                timestamp: preValidatedData.processed_at
+                timestamp: new Date()
               }
             },
             isComplete: false
           };
+
+          console.log(`✅ DEBUG: Devolviendo progress con currentStep: 3 y stepData poblado`);
 
           return {
             success: true,
@@ -201,7 +169,11 @@ export class StepValidationService {
             nextStep: 3,
             message: `✅ Dirección previamente validada como correcta. Saltando al paso 3 (verificación de distrito).`
           };
+        } else {
+          console.log(`⚠️ DEBUG: addressValidationStatus es 'completed' pero faltan campos def*`);
         }
+      } else {
+        console.log(`📋 DEBUG: addressValidationStatus NO es 'completed', iniciando validación normal desde paso 1`);
       }
       
       // Lógica original para casos sin validación previa válida
@@ -792,7 +764,7 @@ export class StepValidationService {
       const addr = progress.stepData.step1.selectedAddress;
       updateData.defTipoVia = addr.claseVia;
       updateData.defNombreVia = addr.nombreVia;
-      updateData.defNumero = addr.numero;
+      updateData.defNumero = addr.numero || null;
     }
     
     if (progress.stepData.step2) {
@@ -809,6 +781,9 @@ export class StepValidationService {
     }
     
     if (Object.keys(updateData).length > 0) {
+      // Marcar validación de dirección como completada
+      updateData.addressValidationStatus = 'completed';
+      
       await prisma.deaRecord.update({
         where: { id: progress.deaRecordId },
         data: updateData

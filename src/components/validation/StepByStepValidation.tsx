@@ -322,7 +322,12 @@ export default function StepByStepValidation({
       const response = await fetch(`/api/dea/${deaRecordId}/validate-steps`);
       const data = await response.json();
 
+      console.log('🔍 FRONTEND DEBUG: Respuesta del backend:', JSON.stringify(data, null, 2));
+
       if (data.success) {
+        console.log('✅ FRONTEND DEBUG: Progress recibido:', JSON.stringify(data.data.progress, null, 2));
+        console.log('📊 FRONTEND DEBUG: step1Data recibido:', JSON.stringify(data.data.step1Data, null, 2));
+        
         setProgress(data.data.progress);
         if (data.data.step1Data) {
           setStep1Data(data.data.step1Data);
@@ -330,7 +335,8 @@ export default function StepByStepValidation({
       } else {
         setError(data.error || 'Error inicializando validación');
       }
-    } catch {
+    } catch (error) {
+      console.error('❌ FRONTEND DEBUG: Error en fetch:', error);
       setError('Error de conexión');
     } finally {
       setLoading(false);
@@ -595,6 +601,34 @@ export default function StepByStepValidation({
 
     return (
       <div className="space-y-4">
+        {/* Mostrar información de dirección pre-validada cuando se saltan pasos */}
+        {step1Data?.message && step1Data.message.includes('previamente validada') && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <CheckCircle className="w-5 h-5 text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="font-semibold text-green-800 mb-2">Dirección Pre-Validada</h4>
+                <p className="text-sm text-green-700 mb-3">{step1Data.message}</p>
+                
+                <div className="bg-white p-3 rounded border border-green-200">
+                  <div className="text-sm space-y-2">
+                    <div>
+                      <strong>Dirección Validada:</strong> {step1Address.tipoVia} {step1Address.nombreVia} {step1Address.numeroVia}
+                    </div>
+                    <div>
+                      <strong>Código Postal:</strong> {step1Address.codigoPostal}
+                    </div>
+                    <div className="flex items-center text-green-700">
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      <span className="text-xs">Pasos 1 y 2 completados automáticamente</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-purple-50 p-4 rounded-lg">
           <h4 className="font-semibold text-purple-800 mb-2">
             Verificar Distrito
@@ -652,6 +686,9 @@ export default function StepByStepValidation({
   const renderStep4 = () => {
     const step1Address = progress?.stepData.step1?.selectedAddress;
     if (!step1Address) return null;
+
+    // Mostrar información de dirección pre-validada cuando se saltan pasos
+    const showPreValidatedInfo = step1Data?.message && step1Data.message.includes('previamente validada');
 
     // Calcular distancia entre coordenadas del usuario y oficiales
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -718,6 +755,32 @@ export default function StepByStepValidation({
 
     return (
         <>
+              {/* Mostrar información de dirección pre-validada cuando se saltan pasos */}
+              {showPreValidatedInfo && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start">
+                    <CheckCircle className="w-5 h-5 text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-green-800 mb-2">Validación Previa Completada</h4>
+                      <div className="text-sm space-y-2">
+                        <div className="flex items-center text-green-700">
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          <span>Dirección: {step1Address.tipoVia} {step1Address.nombreVia} {step1Address.numeroVia}</span>
+                        </div>
+                        <div className="flex items-center text-green-700">
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          <span>Código Postal: {step1Address.codigoPostal}</span>
+                        </div>
+                        <div className="flex items-center text-green-700">
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          <span>Distrito: {step1Address.distrito}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Coordenadas del Usuario */}
                 {userCoordinates && (

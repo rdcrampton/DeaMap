@@ -16,7 +16,7 @@ import type { CropData, ArrowData } from '@/types/shared';
 
 // Interfaz extendida para incluir el campo de estado de verificación
 interface DeaRecordWithVerificationStatus extends DeaRecord {
-  dataVerificationStatus?: string;
+  imageVerificationStatus?: string;
 }
 
 export class SimpleVerificationService {
@@ -142,16 +142,22 @@ export class SimpleVerificationService {
     }
 
     // Guardar el estado actual del DEA antes de cambiarlo
-    const deaRecordWithStatus = deaRecord as DeaRecordWithVerificationStatus;
-    const previousStatus = deaRecordWithStatus.dataVerificationStatus || 'pending';
+    const deaRecordWithStatus = deaRecord as DeaRecordWithVerificationStatus & { addressValidationStatus?: string };
+    const previousStatus = deaRecordWithStatus.imageVerificationStatus || 'pending';
+    const addressValidationStatus = deaRecordWithStatus.addressValidationStatus;
 
     // Determinar paso inicial basado en el estado de verificación
     let initialStep = VerificationStep.DATA_VALIDATION;
     
-    // Si el DEA está pre-verificado, saltar directamente a la selección de imágenes
+    // 🚀 PRIORIDAD 1: Si el DEA está pre-verificado, saltar directamente a la selección de imágenes
     if (previousStatus === 'pre_verified') {
       initialStep = VerificationStep.IMAGE_SELECTION;
       console.log(`🚀 DEA ${deaId} está pre-verificado, saltando validación de datos y comenzando en selección de imágenes`);
+    }
+    // 🚀 PRIORIDAD 2: Si la dirección ya está validada, saltar DATA_VALIDATION e ir a DEA_INFO
+    else if (addressValidationStatus === 'completed') {
+      initialStep = VerificationStep.DEA_INFO;
+      console.log(`✅ DEA ${deaId} tiene dirección validada (addressValidationStatus = 'completed'), saltando al paso DEA_INFO`);
     }
 
     // Crear nueva sesión de verificación con el estado previo guardado
@@ -168,7 +174,7 @@ export class SimpleVerificationService {
 
     // Actualizar el estado del DEA a in_progress
     await this.deaRepository.update(deaId, {
-      dataVerificationStatus: 'in_progress'
+      imageVerificationStatus: 'in_progress'
     });
 
     console.log(`✅ DEA ${deaId} actualizado a 'in_progress' (estado previo: '${previousStatus}' guardado)`);
@@ -319,13 +325,13 @@ export class SimpleVerificationService {
         completedAt: new Date().toISOString()
       });
 
-      // Actualizar el estado de verificación de datos del DEA
+      // Actualizar el estado de verificación de imágenes del DEA
       const newVerificationStatus = session.markedAsInvalid ? 'invalid' : 'verified';
       await this.deaRepository.update(session.deaRecordId, {
-        dataVerificationStatus: newVerificationStatus
+        imageVerificationStatus: newVerificationStatus
       });
 
-      console.log(`✅ DEA ${session.deaRecordId} actualizado con data_verification_status: ${newVerificationStatus}`);
+      console.log(`✅ DEA ${session.deaRecordId} actualizado con image_verification_status: ${newVerificationStatus}`);
 
       // ✅ CAMBIO IMPORTANTE: NO actualizar la imagen original
       // La imagen original se mantiene intacta en dea_records.foto1
@@ -355,7 +361,7 @@ export class SimpleVerificationService {
 
       // Restaurar el estado previo del DEA
       await this.deaRepository.update(session.deaRecordId, {
-        dataVerificationStatus: previousStatus
+        imageVerificationStatus: previousStatus
       });
 
       console.log(`✅ Sesión y DEA ${session.deaRecordId} restaurados a estado previo: '${previousStatus}'`);
@@ -394,9 +400,9 @@ export class SimpleVerificationService {
         }
       });
 
-      // Actualizar el estado de verificación de datos del DEA
+      // Actualizar el estado de verificación de imágenes del DEA
       await this.deaRepository.update(session.deaRecordId, {
-        dataVerificationStatus: 'discarded'
+        imageVerificationStatus: 'discarded'
       });
 
       console.log(`✅ DEA ${session.deaRecordId} marcado como descartado: ${reason}`);

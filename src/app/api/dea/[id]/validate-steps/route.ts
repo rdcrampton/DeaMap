@@ -25,6 +25,18 @@ export async function GET(
     // Inicializar validación paso a paso
     const result = await stepValidationService.initializeStepValidation(deaRecordId);
     
+    // 🔍 LOG 1: Ver qué devuelve el servicio
+    console.log(`🔍 LOG1: initializeStepValidation devolvió:`, {
+      success: result.success,
+      currentStep: result.progress?.currentStep,
+      hasStepData: !!result.progress?.stepData,
+      hasStep1Data: !!result.progress?.stepData?.step1,
+      stepDataKeys: result.progress?.stepData ? Object.keys(result.progress.stepData) : [],
+      step1Content: result.progress?.stepData?.step1 || 'UNDEFINED',
+      totalSteps: result.progress?.totalSteps,
+      stepsArray: result.progress?.steps?.map(s => ({ num: s.stepNumber, status: s.status }))
+    });
+    
     if (!result.success) {
       return NextResponse.json(
         { success: false, error: result.error },
@@ -32,8 +44,92 @@ export async function GET(
       );
     }
 
-    // Si es el paso 1 O 3 (cuando saltamos pasos), buscar datos pre-procesados primero
-    if (result.progress.currentStep === 1 || result.progress.currentStep === 3) {
+    // 🔍 LOG 2: Verificar condición del if
+    const shouldSkipToStep3 = result.progress.currentStep === 3 && result.progress.stepData.step1;
+    console.log(`🔍 LOG2: Verificando condición de skip:`, {
+      currentStep: result.progress.currentStep,
+      isStep3: result.progress.currentStep === 3,
+      hasStep1Data: !!result.progress.stepData.step1,
+      shouldSkipToStep3,
+      willEnterBlock: shouldSkipToStep3 ? 'YES ✅' : 'NO ❌'
+    });
+
+    // ⭐ SI YA ESTAMOS EN PASO 3, el servicio hizo el trabajo - solo necesitamos datos para el frontend
+    if (result.progress.currentStep === 3 && result.progress.stepData.step1) {
+      console.log(`✅ LOG3: ENTRANDO al bloque de skip - currentStep es 3 y step1Data existe`);
+      const record = await prisma.deaRecord.findUnique({
+        where: { id: deaRecordId }
+      });
+
+      if (!record) {
+        return NextResponse.json(
+          { success: false, error: 'Registro DEA no encontrado' },
+          { status: 404 }
+        );
+      }
+
+      // Función helper para mapear direcciones al formato del frontend
+      const mapAddressForFrontend = (address: AddressSearchResult) => ({
+        tipoVia: address.claseVia,
+        nombreVia: address.nombreViaAcentos || address.nombreVia,
+        numeroVia: address.numero || '',
+        codigoPostal: address.codigoPostal || '',
+        distrito: address.distrito || 0,
+        latitud: address.latitud,
+        longitud: address.longitud,
+        confidence: address.confidence || 1.0
+      });
+
+      // Obtener datos pre-calculados para mostrar en el frontend
+      const searchResults = result.progress.stepData.step1.selectedAddress;
+      const mappedAddress = mapAddressForFrontend(searchResults);
+      
+      // ⚠️ CRÍTICO: Mapear también el selectedAddress en progress para que el frontend lo reciba correctamente
+      const progressWithMappedAddress = {
+        ...result.progress,
+        stepData: {
+          ...result.progress.stepData,
+          step1: {
+            ...result.progress.stepData.step1,
+            selectedAddress: mappedAddress
+          },
+          step2: result.progress.stepData.step2
+        }
+      };
+      
+      console.log(`📤 LOG4: Devolviendo respuesta con skip - paso 3 directo`);
+      
+      return NextResponse.json({
+        success: true,
+        source: 'preprocessed_valid',
+        data: {
+          progress: progressWithMappedAddress,
+          step1Data: {
+            searchResult: {
+              found: true,
+              officialData: mappedAddress,
+              alternatives: [],
+              exactMatch: true
+            },
+            originalRecord: {
+              tipoVia: record.tipoVia,
+              nombreVia: record.nombreVia,
+              numeroVia: record.numeroVia || '',
+              complementoDireccion: record.complementoDireccion || '',
+              codigoPostal: record.codigoPostal,
+              distrito: record.distrito,
+              latitud: record.latitud,
+              longitud: record.longitud
+            },
+            message: result.message || '✅ Dirección previamente validada como correcta. Saltando al paso 3 (verificación de distrito).'
+          }
+        }
+      });
+    }
+
+    // Si es el paso 1, buscar datos pre-procesados primero
+    if (result.progress.currentStep === 1) {
+      console.log(`⚠️ LOG5: ENTRANDO al bloque de paso 1 - NO se saltaron los pasos`);
       console.log(`🔍 DEBUG: Iniciando validación para DEA ${deaRecordId}`);
       
       const record = await prisma.deaRecord.findUnique({
@@ -136,15 +232,28 @@ export async function GET(
               confidence: address.confidence
             });
 
+            // ⚠️ CRÍTICO: Mapear también el selectedAddress en progress para que el frontend lo reciba correctamente
+            const mappedAddress = searchResults.length > 0 ? mapAddressForFrontend(searchResults[0]) : null;
+            const progressWithMappedAddress = {
+              ...validationResult.progress,
+              stepData: {
+                ...validationResult.progress.stepData,
+                step1: validationResult.progress.stepData.step1 ? {
+                  ...validationResult.progress.stepData.step1,
+                  selectedAddress: mappedAddress || validationResult.progress.stepData.step1.selectedAddress
+                } : undefined
+              }
+            };
+
             return NextResponse.json({
               success: true,
               source: 'preprocessed_valid', // Indicar que viene de pre-procesamiento válido
               data: {
-                progress: validationResult.progress,
+                progress: progressWithMappedAddress,
                 step1Data: {
                   searchResult: {
                     found: searchResults.length > 0,
-                    officialData: searchResults.length > 0 ? mapAddressForFrontend(searchResults[0]) : null,
+                    officialData: mappedAddress,
                     alternatives: searchResults.slice(1).map(mapAddressForFrontend),
                     exactMatch: searchResults.length > 0 && searchResults[0].matchType === 'exact'
                   },
@@ -179,6 +288,8 @@ export async function GET(
 
         const searchResults = Array.isArray(preCalc.search_results) ? preCalc.search_results : [];
 
+        console.log(`📤 LOG6: Devolviendo respuesta preprocessed sin skip - paso 1`);
+        
         return NextResponse.json({
           success: true,
           source: 'preprocessed', // Indicar que viene de pre-procesamiento

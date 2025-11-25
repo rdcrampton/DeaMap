@@ -168,7 +168,7 @@ async function processDEABatch(
         if (!dryRun) {
           await prisma.deaRecord.update({
             where: { id: deaId },
-            data: { dataVerificationStatus: newStatus }
+            data: { imageVerificationStatus: newStatus }
           });
         }
         

@@ -63,7 +63,8 @@ type PrismaDeaRecord = {
   defCodDea: string | null;
   gmBarrio: string | null;
   defBarrio: string | null;
-  dataVerificationStatus: string;
+  imageVerificationStatus: string;
+  addressValidationStatus: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -90,7 +91,7 @@ export class DeaPrismaMapper {
       distrito: prismaRecord.distrito,
       codigoPostal: prismaRecord.codigoPostal,
       status: VerificationStatus.fromString(
-        prismaRecord.dataVerificationStatus || 'pending'
+        prismaRecord.imageVerificationStatus || 'pending'
       ),
       foto1: prismaRecord.foto1 ?? undefined,
       foto2: prismaRecord.foto2 ?? undefined,
@@ -118,7 +119,7 @@ export class DeaPrismaMapper {
       longitud: snapshot.location.longitude,
       distrito: snapshot.distrito,
       codigoPostal: snapshot.codigoPostal,
-      dataVerificationStatus: snapshot.status,
+      imageVerificationStatus: snapshot.status,
       defCodDea: snapshot.code,
       foto1: snapshot.foto1 ?? null,
       foto2: snapshot.foto2 ?? null,

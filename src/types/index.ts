@@ -49,7 +49,8 @@ export interface DeaRecord {
 	defLat?: number
 	defLon?: number
 	defCodDea?: string
-	dataVerificationStatus?: string
+	imageVerificationStatus?: string
+	addressValidationStatus?: string
 	createdAt: string
 	updatedAt: string
 }

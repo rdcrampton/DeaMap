@@ -54,7 +54,7 @@ export async function POST(
       
       // Actualizar el estado de verificación de datos del DEA
       await deaRepository.update(session.deaRecordId, {
-        dataVerificationStatus: 'invalid'
+        imageVerificationStatus: 'invalid'
       });
       console.log(`✅ DEA ${session.deaRecordId} marcado como inválido (markedAsInvalid)`);
     } else if (image1Valid && !image2Valid) {
@@ -75,7 +75,7 @@ export async function POST(
       
       // Actualizar el estado de verificación de datos del DEA
       await deaRepository.update(session.deaRecordId, {
-        dataVerificationStatus: 'invalid'
+        imageVerificationStatus: 'invalid'
       });
       console.log(`✅ DEA ${session.deaRecordId} marcado como inválido (ninguna imagen válida)`);
     }

@@ -321,20 +321,20 @@ export class DeaRepository implements IDeaRepository {
       };
     }
 
-    // Add status filter for data verification status
+    // Add status filter for image verification status
     if (statusFilter && statusFilter !== 'all') {
       switch (statusFilter) {
         case 'pending':
           // Incluir tanto pending como pre_verified (ambos están pendientes de verificación)
-          whereClause.dataVerificationStatus = {
+          whereClause.imageVerificationStatus = {
             in: ['pending', 'pre_verified']
           };
           break;
         case 'in_progress':
-          whereClause.dataVerificationStatus = 'in_progress';
+          whereClause.imageVerificationStatus = 'in_progress';
           break;
         case 'discarded':
-          whereClause.dataVerificationStatus = 'discarded';
+          whereClause.imageVerificationStatus = 'discarded';
           break;
       }
     }

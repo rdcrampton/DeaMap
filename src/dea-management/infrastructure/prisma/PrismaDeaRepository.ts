@@ -172,7 +172,7 @@ export class PrismaDeaRepository implements DeaRepository {
    */
   async countByStatus(status: VerificationStatus): Promise<number> {
     return await prisma.deaRecord.count({
-      where: { dataVerificationStatus: status.toString() }
+      where: { imageVerificationStatus: status.toString() }
     });
   }
 
@@ -207,7 +207,7 @@ export class PrismaDeaRepository implements DeaRepository {
     const where: Record<string, unknown> = {};
     
     if (options?.status) {
-      where.dataVerificationStatus = options.status.toString();
+      where.imageVerificationStatus = options.status.toString();
     }
     
     return where;
