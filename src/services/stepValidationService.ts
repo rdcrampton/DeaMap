@@ -91,13 +91,18 @@ export class StepValidationService {
         
         // Usar los datos definitivos (def*) que ya están en el registro
         if (record.defTipoVia && record.defNombreVia && record.defCp && record.defDistrito) {
+          const distrito = typeof record.defDistrito === 'string' ? parseInt(record.defDistrito, 10) : (record.defDistrito as number);
           const officialAddress: AddressSearchResult = {
+            id: 0, // Placeholder - not available when reconstructing from def* fields
+            viaId: 0, // Placeholder - not available when reconstructing from def* fields
+            codigoVia: 0, // Placeholder - not available when reconstructing from def* fields
             claseVia: record.defTipoVia,
             nombreVia: record.defNombreVia,
             nombreViaAcentos: record.defNombreVia,
-            numero: record.defNumero ?? '',
+            numero: record.defNumero ? parseInt(record.defNumero, 10) : undefined,
             codigoPostal: record.defCp ?? '',
-            distrito: typeof record.defDistrito === 'string' ? parseInt(record.defDistrito, 10) : (record.defDistrito as number),
+            distrito,
+            distritoNombre: `Distrito ${distrito}`, // Placeholder - not available when reconstructing
             latitud: record.defLat || record.latitud,
             longitud: record.defLon || record.longitud,
             confidence: 1.0,
@@ -152,7 +157,7 @@ export class StepValidationService {
               },
               step2: {
                 originalPostalCode: record.codigoPostal.toString(),
-                confirmedPostalCode: officialAddress.codigoPostal,
+                confirmedPostalCode: officialAddress.codigoPostal ?? '',
                 userConfirmed: true,
                 autoSkipped: true,
                 timestamp: new Date()
