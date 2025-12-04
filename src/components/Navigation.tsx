@@ -47,7 +47,7 @@ export default function Navigation() {
     { href: "/import", label: "Importar", icon: Upload },
   ];
 
-  const navLinks = user ? [...publicNavLinks, ...authNavLinks] : publicNavLinks;
+  const navLinks = user && user.is_verified ? [...publicNavLinks, ...authNavLinks] : publicNavLinks;
 
   return (
     <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
