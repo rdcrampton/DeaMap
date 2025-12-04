@@ -717,12 +717,12 @@ export default function AddressValidation({
             <h5 className="text-xs font-semibold text-blue-800 mt-4 mb-2">
               🏢 Ubicación Detallada
             </h5>
-            {renderFieldComparison("Piso", "floor", true, true)}
-            {renderFieldComparison("Ubicación Específica", "specific_location", true, true)}
-            {renderFieldComparison("Referencias Visibles", "visible_references", true, true)}
+            {renderFieldComparison("Piso", "floor", true)}
+            {renderFieldComparison("Ubicación Específica", "specific_location", true)}
+            {renderFieldComparison("Referencias Visibles", "visible_references", true)}
 
             <h5 className="text-xs font-semibold text-blue-800 mt-4 mb-2">🚪 Acceso</h5>
-            {renderFieldComparison("Descripción de Acceso", "access_description", true, true)}
+            {renderFieldComparison("Descripción de Acceso", "access_description", true)}
 
             {/* Coordinates - Mejoradas */}
             {(addressForm.latitude || suggestedAddress?.latitude) && (
