@@ -14,12 +14,19 @@ import { use, useEffect, useState } from "react";
 import AddressValidation from "@/components/verification/AddressValidation";
 import ArrowPlacer from "@/components/verification/ArrowPlacer";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import DeaInfoEdit from "@/components/verification/DeaInfoEdit";
 import ImageCropper from "@/components/verification/ImageCropper";
 import ImageMultiSelector from "@/components/verification/ImageMultiSelector";
 import ResponsibleForm from "@/components/verification/ResponsibleForm";
 import { useAuth } from "@/contexts/AuthContext";
 import type { CropData, ArrowData } from "@/types/shared";
-import type { AddressData, ResponsibleData } from "@/types/verification";
+import type {
+  AddressData,
+  ResponsibleData,
+  ValidatedImageData,
+  ProcessedImageData,
+  ImageProcessingState,
+} from "@/types/verification";
 import { VerificationStep, VERIFICATION_STEPS_CONFIG } from "@/types/verification";
 
 interface VerificationData {
@@ -247,9 +254,23 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                 street_type: data.aed.location?.street_type ?? undefined,
                 street_name: data.aed.location?.street_name ?? undefined,
                 street_number: data.aed.location?.street_number ?? undefined,
+                additional_info: data.aed.location?.additional_info ?? undefined,
                 postal_code: data.aed.location?.postal_code ?? undefined,
                 latitude: data.aed.location?.latitude ?? undefined,
                 longitude: data.aed.location?.longitude ?? undefined,
+                coordinates_precision: data.aed.location?.coordinates_precision ?? undefined,
+                city_name: data.aed.location?.city_name ?? undefined,
+                city_code: data.aed.location?.city_code ?? undefined,
+                district_code: data.aed.location?.district_code ?? undefined,
+                district_name: data.aed.location?.district_name ?? undefined,
+                neighborhood_code: data.aed.location?.neighborhood_code ?? undefined,
+                neighborhood_name: data.aed.location?.neighborhood_name ?? undefined,
+                access_description: data.aed.location?.access_description ?? undefined,
+                visible_references: data.aed.location?.visible_references ?? undefined,
+                floor: data.aed.location?.floor ?? undefined,
+                specific_location: data.aed.location?.specific_location ?? undefined,
+                location_observations: data.aed.location?.location_observations ?? undefined,
+                access_warnings: data.aed.location?.access_warnings ?? undefined,
               }}
               observations={data.aed.origin_observations ?? undefined}
               onValidationComplete={(validatedAddress: AddressData) => {
@@ -277,6 +298,8 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               descripcionAcceso={data.aed.location?.access_description || undefined}
               onValidationComplete={async (result) => {
                 try {
+                  let finalImages: AedImage[] = data.aed.images;
+
                   // Si hay imágenes eliminadas o nuevas, actualizar el DEA
                   if (result.deletedImageIds.length > 0 || result.newImages) {
                     const response = await fetch(`/api/aeds/${resolvedParams.id}`, {
@@ -298,18 +321,54 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                       throw new Error("Error al actualizar las imágenes");
                     }
 
-                    // Refrescar datos para mostrar imágenes actualizadas
+                    // Refrescar datos para obtener imágenes actualizadas
                     await fetchVerificationData();
+
+                    // Esperar a que el estado se actualice
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+
+                    // Obtener imágenes actualizadas desde el estado
+                    const refreshResponse = await fetch(`/api/verify/${resolvedParams.id}`);
+                    if (refreshResponse.ok) {
+                      const refreshedData = await refreshResponse.json();
+                      finalImages = refreshedData.aed.images;
+                    }
                   }
 
-                  // Si hay imágenes válidas, continuar con crop
-                  if (result.validImages.length > 0) {
-                    updateStep(VerificationStep.IMAGE_CROP_FRONT, {
-                      validated_images: result.validImages,
+                  // Construir lista de imágenes válidas usando los IDs de result.validImages
+                  // pero combinando con newImages si existen
+                  const validImageIds = new Set(result.validImages.map((img) => img.id));
+
+                  // Filtrar las imágenes finales para obtener solo las válidas
+                  const allValidImages = finalImages.filter(
+                    (img) =>
+                      validImageIds.has(img.id) ||
+                      result.newImages?.some((newImg) => newImg.url === img.original_url)
+                  );
+
+                  console.log("Valid images after refresh:", allValidImages);
+
+                  // Si hay imágenes válidas, iniciar procesamiento secuencial
+                  if (allValidImages.length > 0) {
+                    const validatedImages: ValidatedImageData[] = allValidImages.map((img) => ({
+                      id: img.id,
+                      url: img.original_url,
+                      order: img.order,
+                      type: img.type || "FRONT",
+                    }));
+
+                    console.log("Starting image processing with:", validatedImages);
+
+                    updateStep(VerificationStep.IMAGE_CROP, {
+                      validated_images: validatedImages,
+                      current_image_index: 0,
+                      processed_images: [],
                     });
                   } else {
                     // Si no hay imágenes válidas, saltar a asignación de responsable
                     updateStep(VerificationStep.RESPONSIBLE_ASSIGNMENT, {
+                      validated_images: [],
+                      processed_images: [],
                       images_invalid: true,
                     });
                   }
@@ -323,92 +382,114 @@ export default function VerifyPage({ params }: VerifyPageProps) {
           </div>
         );
 
-      case VerificationStep.IMAGE_CROP_FRONT:
+      case VerificationStep.IMAGE_CROP: {
+        // Obtener el estado de procesamiento de imágenes
+        const validationData = data.validation.data as ImageProcessingState | null;
+        const validatedImages = validationData?.validated_images || [];
+        const currentIndex = validationData?.current_image_index || 0;
+        const currentImage = validatedImages[currentIndex];
+
+        if (!currentImage) {
+          console.error("No current image found for cropping");
+          return null;
+        }
+
+        const imageNumber = currentIndex + 1;
+        const totalImages = validatedImages.length;
+
         return (
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4">{stepConfig.title}</h2>
-            <p className="text-gray-600 mb-6">{stepConfig.description}</p>
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold">{stepConfig.title}</h2>
+              <p className="text-gray-600 mt-2">{stepConfig.description}</p>
+              <div className="mt-2 text-sm text-blue-600 font-medium">
+                Procesando imagen {imageNumber} de {totalImages} - Tipo: {currentImage.type}
+              </div>
+            </div>
 
             <ImageCropper
-              imageUrl={data.aed.images[0]?.original_url || ""}
+              imageUrl={currentImage.url}
               onCropChange={(_cropData: CropData) => {
                 // Track crop changes
               }}
               onCropComplete={async (cropData: CropData) => {
-                // TODO: Call API to process cropped image
-                updateStep(VerificationStep.IMAGE_ARROW_FRONT, {
-                  front_crop_data: cropData,
+                // Guardar crop data y pasar al siguiente paso (arrow)
+                updateStep(VerificationStep.IMAGE_ARROW, {
+                  ...validationData,
+                  current_crop_data: cropData,
                 });
               }}
               onCancel={() => updateStep(VerificationStep.IMAGE_SELECTION)}
             />
           </div>
         );
+      }
 
-      case VerificationStep.IMAGE_ARROW_FRONT:
+      case VerificationStep.IMAGE_ARROW: {
+        // Obtener el estado de procesamiento de imágenes
+        const validationData = data.validation.data as
+          | (ImageProcessingState & {
+              current_crop_data?: CropData;
+            })
+          | null;
+        const validatedImages = validationData?.validated_images || [];
+        const currentIndex = validationData?.current_image_index || 0;
+        const processedImages = validationData?.processed_images || [];
+        const currentImage = validatedImages[currentIndex];
+        const currentCropData = validationData?.current_crop_data;
+
+        if (!currentImage) {
+          console.error("No current image found for arrow placement");
+          return null;
+        }
+
+        const imageNumber = currentIndex + 1;
+        const totalImages = validatedImages.length;
+
         return (
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4">{stepConfig.title}</h2>
-            <p className="text-gray-600 mb-6">{stepConfig.description}</p>
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold">{stepConfig.title}</h2>
+              <p className="text-gray-600 mt-2">{stepConfig.description}</p>
+              <div className="mt-2 text-sm text-blue-600 font-medium">
+                Procesando imagen {imageNumber} de {totalImages} - Tipo: {currentImage.type}
+              </div>
+            </div>
 
             <ArrowPlacer
-              imageUrl={data.aed.images[0]?.original_url || ""} // TODO: Use cropped image
+              imageUrl={currentImage.url} // TODO: Use cropped image if available
               onArrowComplete={async (arrowData: ArrowData) => {
-                // Determine if there's a second image
-                const hasSecondImage = data.aed.images.length > 1;
-                if (hasSecondImage) {
-                  updateStep(VerificationStep.IMAGE_CROP_INTERIOR, {
-                    front_arrow_data: arrowData,
+                // Guardar la imagen procesada
+                const newProcessedImage: ProcessedImageData = {
+                  image_id: currentImage.id,
+                  crop_data: currentCropData,
+                  arrow_data: arrowData,
+                };
+
+                const updatedProcessedImages = [...processedImages, newProcessedImage];
+
+                // Verificar si hay más imágenes por procesar
+                const nextIndex = currentIndex + 1;
+                if (nextIndex < validatedImages.length) {
+                  // Hay más imágenes, procesar la siguiente
+                  updateStep(VerificationStep.IMAGE_CROP, {
+                    validated_images: validatedImages,
+                    current_image_index: nextIndex,
+                    processed_images: updatedProcessedImages,
                   });
                 } else {
+                  // Ya se procesaron todas las imágenes, continuar a responsable
                   updateStep(VerificationStep.RESPONSIBLE_ASSIGNMENT, {
-                    front_arrow_data: arrowData,
+                    validated_images: validatedImages,
+                    processed_images: updatedProcessedImages,
                   });
                 }
               }}
-              onCancel={() => updateStep(VerificationStep.IMAGE_CROP_FRONT)}
+              onCancel={() => updateStep(VerificationStep.IMAGE_CROP)}
             />
           </div>
         );
-
-      case VerificationStep.IMAGE_CROP_INTERIOR:
-        return (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4">{stepConfig.title}</h2>
-            <p className="text-gray-600 mb-6">{stepConfig.description}</p>
-
-            <ImageCropper
-              imageUrl={data.aed.images[1]?.original_url || ""}
-              onCropChange={(_cropData: CropData) => {
-                // Track interior crop changes
-              }}
-              onCropComplete={async (cropData: CropData) => {
-                updateStep(VerificationStep.IMAGE_ARROW_INTERIOR, {
-                  interior_crop_data: cropData,
-                });
-              }}
-              onCancel={() => updateStep(VerificationStep.IMAGE_ARROW_FRONT)}
-            />
-          </div>
-        );
-
-      case VerificationStep.IMAGE_ARROW_INTERIOR:
-        return (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold mb-4">{stepConfig.title}</h2>
-            <p className="text-gray-600 mb-6">{stepConfig.description}</p>
-
-            <ArrowPlacer
-              imageUrl={data.aed.images[1]?.original_url || ""} // TODO: Use cropped image
-              onArrowComplete={async (arrowData: ArrowData) => {
-                updateStep(VerificationStep.RESPONSIBLE_ASSIGNMENT, {
-                  interior_arrow_data: arrowData,
-                });
-              }}
-              onCancel={() => updateStep(VerificationStep.IMAGE_CROP_INTERIOR)}
-            />
-          </div>
-        );
+      }
 
       case VerificationStep.RESPONSIBLE_ASSIGNMENT:
         return (
@@ -643,50 +724,28 @@ export default function VerifyPage({ params }: VerifyPageProps) {
           </div>
         </div>
 
-        {/* DEA Information */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Información del DEA</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500">Código</p>
-              <p className="font-medium text-gray-900">
-                {data.aed.code ||
-                  (data.aed.provisional_number ? `#${data.aed.provisional_number}` : "Sin código")}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Nombre</p>
-              <p className="font-medium text-gray-900">{data.aed.name}</p>
-            </div>
-            {data.aed.establishment_type && (
-              <div>
-                <p className="text-sm text-gray-500">Tipo de establecimiento</p>
-                <p className="font-medium text-gray-900">{data.aed.establishment_type}</p>
-              </div>
-            )}
-            {data.aed.location && (
-              <div>
-                <p className="text-sm text-gray-500">Ubicación</p>
-                <p className="font-medium text-gray-900">
-                  {data.aed.location.street_type} {data.aed.location.street_name}{" "}
-                  {data.aed.location.street_number}
-                  {data.aed.location.district_name && ` - ${data.aed.location.district_name}`}
-                </p>
-              </div>
-            )}
-            <div>
-              <p className="text-sm text-gray-500">Estado</p>
-              <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                {data.aed.status === "DRAFT" ? "Borrador" : "Pendiente de revisión"}
-              </span>
-            </div>
-            {data.aed.images && data.aed.images.length > 0 && (
-              <div>
-                <p className="text-sm text-gray-500">Imágenes</p>
-                <p className="font-medium text-gray-900">{data.aed.images.length} imagen(es)</p>
-              </div>
-            )}
-          </div>
+        {/* DEA Information - Editable */}
+        <div className="mb-6">
+          <DeaInfoEdit
+            aedId={data.aed.id}
+            initialData={{
+              code: data.aed.code,
+              provisional_number: data.aed.provisional_number,
+              name: data.aed.name,
+              establishment_type: data.aed.establishment_type,
+              location: data.aed.location
+                ? {
+                    street_type: data.aed.location.street_type,
+                    street_name: data.aed.location.street_name,
+                    street_number: data.aed.location.street_number,
+                    district_name: data.aed.location.district_name,
+                  }
+                : null,
+              status: data.aed.status,
+              images_count: data.aed.images.length,
+            }}
+            onUpdate={fetchVerificationData}
+          />
         </div>
 
         {/* Step Content */}

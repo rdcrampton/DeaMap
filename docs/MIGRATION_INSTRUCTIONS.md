@@ -26,6 +26,7 @@ npx prisma migrate reset
 ```
 
 **⚠️ ADVERTENCIA**: Este comando:
+
 - Eliminará TODOS los datos de la base de datos
 - Aplicará la migración inicial `20250126000000_init`
 - Ejecutará automáticamente el seed con datos de ejemplo
@@ -99,6 +100,7 @@ npm run db:seed
 ## 🌱 Datos de Ejemplo (Seed)
 
 El seed crea:
+
 - 2 distritos (Usera, Centro)
 - 2 responsables
 - 2 horarios
@@ -161,6 +163,7 @@ sudo apt-get install postgresql-postgis
 ### Error: "Migration failed"
 
 1. Verificar que la base de datos esté vacía o usar `--force`:
+
    ```bash
    npx prisma migrate reset --force
    ```

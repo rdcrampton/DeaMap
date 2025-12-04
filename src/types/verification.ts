@@ -1,10 +1,8 @@
 export enum VerificationStep {
   ADDRESS_VALIDATION = "address_validation",
   IMAGE_SELECTION = "image_selection",
-  IMAGE_CROP_FRONT = "image_crop_front",
-  IMAGE_ARROW_FRONT = "image_arrow_front",
-  IMAGE_CROP_INTERIOR = "image_crop_interior",
-  IMAGE_ARROW_INTERIOR = "image_arrow_interior",
+  IMAGE_CROP = "image_crop",
+  IMAGE_ARROW = "image_arrow",
   RESPONSIBLE_ASSIGNMENT = "responsible_assignment",
   REVIEW = "review",
   COMPLETED = "completed",
@@ -102,6 +100,26 @@ export interface ImagesValidationResult {
   }>;
 }
 
+// Sequential image processing types
+export interface ValidatedImageData {
+  id: string;
+  url: string;
+  order: number;
+  type: string;
+}
+
+export interface ProcessedImageData {
+  image_id: string;
+  crop_data?: CropData;
+  arrow_data?: ArrowData;
+}
+
+export interface ImageProcessingState {
+  validated_images: ValidatedImageData[];
+  current_image_index: number;
+  processed_images: ProcessedImageData[];
+}
+
 export const VERIFICATION_STEPS_CONFIG = {
   [VerificationStep.ADDRESS_VALIDATION]: {
     title: "Validación de Dirección",
@@ -113,25 +131,15 @@ export const VERIFICATION_STEPS_CONFIG = {
     description: "Selecciona las imágenes del frontal/acceso y del interior",
     required: true,
   },
-  [VerificationStep.IMAGE_CROP_FRONT]: {
-    title: "Recortar Imagen Frontal",
-    description: "Recorta la imagen del frontal o acceso al DEA",
+  [VerificationStep.IMAGE_CROP]: {
+    title: "Recortar Imagen",
+    description: "Recorta la imagen seleccionada",
     required: true,
   },
-  [VerificationStep.IMAGE_ARROW_FRONT]: {
-    title: "Marcar DEA en Imagen Frontal",
-    description: "Coloca una flecha señalando el DEA en la imagen frontal",
+  [VerificationStep.IMAGE_ARROW]: {
+    title: "Marcar DEA en Imagen",
+    description: "Coloca una flecha señalando el DEA en la imagen",
     required: true,
-  },
-  [VerificationStep.IMAGE_CROP_INTERIOR]: {
-    title: "Recortar Imagen Interior",
-    description: "Recorta la imagen del interior donde se ubica el DEA",
-    required: false,
-  },
-  [VerificationStep.IMAGE_ARROW_INTERIOR]: {
-    title: "Marcar DEA en Imagen Interior",
-    description: "Coloca una flecha señalando el DEA en la imagen interior",
-    required: false,
   },
   [VerificationStep.RESPONSIBLE_ASSIGNMENT]: {
     title: "Asignar Responsable",
