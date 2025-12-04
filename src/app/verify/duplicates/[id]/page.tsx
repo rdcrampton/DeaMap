@@ -80,6 +80,11 @@ export default function DuplicateComparePage({ params }: DuplicateComparePagePro
       return;
     }
 
+    if (!authLoading && user && !user.is_verified) {
+      router.push("/");
+      return;
+    }
+
     if (user) {
       fetchComparisonData();
     }
