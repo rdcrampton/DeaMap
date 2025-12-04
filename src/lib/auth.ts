@@ -1,4 +1,4 @@
-import { UserRole } from "@/generated/client";
+import { UserRole } from "@/generated/client/enums";
 import { NextRequest } from "next/server";
 
 import type { JWTPayload } from "@/types";

@@ -1,7 +1,6 @@
 {
   "framework": "nextjs",
   "buildCommand": "node scripts/migrate.js && next build",
-  "installCommand": "npm install --include=optional",
   "outputDirectory": ".next",
   "functions": {
     "src/app/api/**/*.ts": {
