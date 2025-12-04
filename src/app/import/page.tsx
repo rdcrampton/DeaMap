@@ -6,14 +6,18 @@
 "use client";
 
 import { Upload, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 
 import ImportDetailsModal from "@/components/import/ImportDetailsModal";
 import ImportHistoryTable from "@/components/import/ImportHistoryTable";
 import ImportWizard from "@/components/import/ImportWizard";
+import { useAuth } from "@/contexts/AuthContext";
 import { useImportBatches } from "@/hooks/useImportBatches";
 
 export default function ImportPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -25,6 +29,18 @@ export default function ImportPage() {
     autoRefresh: true,
     refreshInterval: 5000,
   });
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login?redirect=/import");
+      return;
+    }
+
+    if (!authLoading && user && !user.is_verified) {
+      router.push("/");
+      return;
+    }
+  }, [authLoading, user, router]);
 
   const handleWizardComplete = (_batchId: string) => {
     // Actualizar lista de importaciones y cerrar wizard
@@ -51,6 +67,21 @@ export default function ImportPage() {
       setPage(page + 1);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div
