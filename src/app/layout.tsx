@@ -19,6 +19,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <head>
         <meta charSet="utf-8" />
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="DeaMap" />
+        <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body className="font-sans antialiased">
         <AuthProvider>
@@ -35,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               success: {
                 duration: 3000,
                 iconTheme: {
-                  primary: "#4ade80",
+                  primary: "#247F52",
                   secondary: "#fff",
                 },
               },
