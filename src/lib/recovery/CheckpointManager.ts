@@ -3,7 +3,7 @@
  * Gestiona checkpoints granulares para importaciones resumibles
  */
 
-import type { PrismaClient } from "@/generated/client";
+import type { PrismaClient } from "@/generated/client/client";
 import { createHash } from "crypto";
 
 export interface CheckpointData {

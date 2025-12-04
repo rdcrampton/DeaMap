@@ -3,7 +3,7 @@
  * Mantiene el heartbeat activo durante procesos largos de importación
  */
 
-import type { PrismaClient } from "@/generated/client";
+import type { PrismaClient } from "@/generated/client/client";
 
 /**
  * Gestor de heartbeat para mantener vivo el estado de importaciones

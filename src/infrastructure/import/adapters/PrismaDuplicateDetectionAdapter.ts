@@ -7,7 +7,7 @@
  * - SIN coordenadas: fallback por código postal + scoring exhaustivo
  */
 
-import { PrismaClient } from "@/generated/client";
+import { PrismaClient } from "@/generated/client/client";
 import {
   DuplicateDetectionCriteria,
   IDuplicateDetectionService,

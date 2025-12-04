@@ -1,4 +1,4 @@
-import { UserRole } from "@/generated/client";
+import { UserRole } from "@/generated/client/enums";
 
 export interface UserPublic {
   id: string;

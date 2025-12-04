@@ -1,6 +1,12 @@
 "use client";
 
-import type { Aed, AedLocation, AedImage, AedResponsible, AedValidation } from "@/generated/client";
+import type {
+  Aed,
+  AedLocation,
+  AedImage,
+  AedResponsible,
+  AedValidation,
+} from "@/generated/client/client";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";

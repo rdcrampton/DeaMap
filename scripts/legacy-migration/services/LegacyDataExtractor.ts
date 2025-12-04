@@ -4,7 +4,7 @@
  * Infrastructure Layer - Repository
  */
 
-import { PrismaClient } from "../../../src/generated/client";
+import { PrismaClient } from "../../../src/generated/client/client";
 import type { LegacyDeaRecord, LegacyVerificationSession } from "../types";
 
 export interface LegacyRecordWithSession {

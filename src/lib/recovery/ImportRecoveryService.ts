@@ -3,7 +3,7 @@
  * Detecta y recupera importaciones interrumpidas al reiniciar el servidor
  */
 
-import type { PrismaClient } from "@/generated/client";
+import type { PrismaClient } from "@/generated/client/client";
 import { CheckpointManager } from "./CheckpointManager";
 
 export interface RecoveryConfig {

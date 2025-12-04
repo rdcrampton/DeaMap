@@ -3,7 +3,7 @@
  * Capa de Infraestructura
  */
 
-import { PrismaClient } from "@/generated/client";
+import { PrismaClient } from "@/generated/client/client";
 
 import {
   IImportRepository,
