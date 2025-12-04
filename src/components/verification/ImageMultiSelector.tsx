@@ -4,6 +4,7 @@ import { Loader2, Check, X, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
 
 import ImageUpload from "@/components/ImageUpload";
+import { AedImageType, IMAGE_TYPE_OPTIONS } from "@/types/image";
 import type { ImageValidationItem, ImagesValidationResult } from "@/types/verification";
 import { loadImageWithRetry } from "@/utils/imageLoader";
 
@@ -23,6 +24,7 @@ interface ImageState extends ImageValidationItem {
   loading: boolean;
   error: boolean;
   dataUrl: string;
+  selectedType?: AedImageType;
 }
 
 export default function ImageMultiSelector({
@@ -34,7 +36,9 @@ export default function ImageMultiSelector({
   const [imageStates, setImageStates] = useState<ImageState[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadMode, setUploadMode] = useState(false);
-  const [newImages, setNewImages] = useState<Array<{ url: string; order: number }>>([]);
+  const [newImages, setNewImages] = useState<
+    Array<{ url: string; order: number; type?: AedImageType }>
+  >([]);
 
   // Inicializar estados de las imágenes
   useEffect(() => {
@@ -47,6 +51,7 @@ export default function ImageMultiSelector({
       loading: true,
       error: false,
       dataUrl: "",
+      selectedType: img.type as AedImageType | undefined,
     }));
 
     setImageStates(initialStates);
@@ -93,13 +98,23 @@ export default function ImageMultiSelector({
     );
   };
 
+  const handleTypeChange = (index: number, type: AedImageType) => {
+    setImageStates((prev) =>
+      prev.map((state, idx) => (idx === index ? { ...state, selectedType: type } : state))
+    );
+  };
+
   const handleAddNewImage = (url: string) => {
     const maxOrder = Math.max(
       ...imageStates.map((s) => s.order),
       ...newImages.map((n) => n.order),
       0
     );
-    setNewImages((prev) => [...prev, { url, order: maxOrder + 1 }]);
+    setNewImages((prev) => [...prev, { url, order: maxOrder + 1, type: undefined }]);
+  };
+
+  const handleNewImageTypeChange = (index: number, type: AedImageType) => {
+    setNewImages((prev) => prev.map((img, idx) => (idx === index ? { ...img, type } : img)));
   };
 
   const handleRemoveNewImage = (index: number) => {
@@ -115,6 +130,17 @@ export default function ImageMultiSelector({
       return;
     }
 
+    // Validar que todas las imágenes válidas tengan tipo seleccionado
+    const imagesWithoutType = validImages.filter((img) => !img.selectedType);
+    const newImagesWithoutType = newImages.filter((img) => !img.type);
+
+    if (imagesWithoutType.length > 0 || newImagesWithoutType.length > 0) {
+      alert(
+        "Todas las imágenes deben tener un tipo asignado. Por favor, selecciona el tipo para cada imagen antes de continuar."
+      );
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
@@ -124,7 +150,7 @@ export default function ImageMultiSelector({
           url: img.url,
           order: img.order,
           isValid: img.isValid,
-          type: img.type,
+          type: img.selectedType,
         })),
         deletedImageIds,
         newImages: newImages.length > 0 ? newImages : undefined,
@@ -142,6 +168,11 @@ export default function ImageMultiSelector({
   const validCount = imageStates.filter((img) => img.isValid).length + newImages.length;
   const totalImages = imageStates.length + newImages.length;
   const hasNoValidImages = validCount === 0;
+  const validImagesWithoutType = imageStates.filter(
+    (img) => img.isValid && !img.selectedType
+  ).length;
+  const newImagesWithoutType = newImages.filter((img) => !img.type).length;
+  const totalImagesWithoutType = validImagesWithoutType + newImagesWithoutType;
 
   // Caso: Sin imágenes
   if (images.length === 0 && !uploadMode) {
@@ -192,8 +223,27 @@ export default function ImageMultiSelector({
               <img
                 src={img.url}
                 alt={`Nueva imagen ${index + 1}`}
-                className="w-full h-48 object-cover rounded"
+                className="w-full h-48 object-cover rounded mb-3"
               />
+              {/* Selector de tipo para nueva imagen */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-600 block">Tipo de imagen *</label>
+                <select
+                  value={img.type || ""}
+                  onChange={(e) => handleNewImageTypeChange(index, e.target.value as AedImageType)}
+                  className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    !img.type ? "border-red-300 bg-red-50" : "border-gray-300"
+                  }`}
+                >
+                  <option value="">Seleccionar tipo...</option>
+                  {IMAGE_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {!img.type && <p className="text-xs text-red-600">⚠️ Tipo requerido</p>}
+              </div>
             </div>
           ))}
 
@@ -292,7 +342,7 @@ export default function ImageMultiSelector({
             </div>
 
             {/* Controles */}
-            <div className="p-3 bg-gray-50">
+            <div className="p-3 bg-gray-50 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Imagen {index + 1}</span>
                 <button
@@ -317,6 +367,31 @@ export default function ImageMultiSelector({
                   )}
                 </button>
               </div>
+
+              {/* Selector de tipo de imagen */}
+              {img.isValid && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600 block">
+                    Tipo de imagen *
+                  </label>
+                  <select
+                    value={img.selectedType || ""}
+                    onChange={(e) => handleTypeChange(index, e.target.value as AedImageType)}
+                    disabled={img.loading}
+                    className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      !img.selectedType ? "border-red-300 bg-red-50" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="">Seleccionar tipo...</option>
+                    {IMAGE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {!img.selectedType && <p className="text-xs text-red-600">⚠️ Tipo requerido</p>}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -337,7 +412,7 @@ export default function ImageMultiSelector({
                 ✓ Nueva
               </div>
             </div>
-            <div className="p-3 bg-gray-50">
+            <div className="p-3 bg-gray-50 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Nueva {index + 1}</span>
                 <button
@@ -348,17 +423,46 @@ export default function ImageMultiSelector({
                   Quitar
                 </button>
               </div>
+
+              {/* Selector de tipo de imagen */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-600 block">Tipo de imagen *</label>
+                <select
+                  value={img.type || ""}
+                  onChange={(e) => handleNewImageTypeChange(index, e.target.value as AedImageType)}
+                  className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    !img.type ? "border-red-300 bg-red-50" : "border-gray-300"
+                  }`}
+                >
+                  <option value="">Seleccionar tipo...</option>
+                  {IMAGE_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {!img.type && <p className="text-xs text-red-600">⚠️ Tipo requerido</p>}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Advertencia si no hay imágenes válidas */}
+      {/* Advertencias */}
       {hasNoValidImages && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-700 text-sm">
             ⚠️ <strong>Atención:</strong> No hay imágenes válidas. Debes marcar al menos una imagen
             como válida o subir nuevas imágenes para continuar.
+          </p>
+        </div>
+      )}
+
+      {totalImagesWithoutType > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-yellow-800 text-sm">
+            ⚠️ <strong>Tipo de imagen requerido:</strong> {totalImagesWithoutType} imagen(es)
+            necesitan que selecciones su tipo antes de continuar.
           </p>
         </div>
       )}

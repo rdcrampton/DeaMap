@@ -114,11 +114,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
         // Agregar nuevas imágenes si se especificaron
         if (addImages && addImages.length > 0) {
+          // Validar que todas las imágenes tengan tipo asignado
+          const imagesWithoutType = addImages.filter((img: any) => !img.type);
+          if (imagesWithoutType.length > 0) {
+            throw new Error(
+              "Todas las imágenes deben tener un tipo asignado. Por favor, selecciona el tipo para cada imagen."
+            );
+          }
+
+          // Validar que los tipos sean válidos según el enum
+          const validTypes = ["FRONT", "LOCATION", "ACCESS", "SIGNAGE", "CONTEXT", "PLATE"];
+          const invalidImages = addImages.filter((img: any) => !validTypes.includes(img.type));
+          if (invalidImages.length > 0) {
+            throw new Error(
+              `Tipo de imagen inválido. Los tipos válidos son: ${validTypes.join(", ")}`
+            );
+          }
+
           await tx.aedImage.createMany({
             data: addImages.map((img: any) => ({
               aed_id: id,
               original_url: img.original_url,
-              type: img.type || "general",
+              type: img.type,
               order: img.order,
               created_at: new Date(),
             })),

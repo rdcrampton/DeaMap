@@ -289,7 +289,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                         addImages: result.newImages?.map((img) => ({
                           original_url: img.url,
                           order: img.order,
-                          type: img.type || "general",
+                          type: img.type, // Tipo siempre debe venir del selector
                         })),
                       }),
                     });

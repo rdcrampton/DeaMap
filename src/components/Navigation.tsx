@@ -2,7 +2,6 @@
 
 import {
   Home,
-  MapPin,
   Menu,
   X,
   LogIn,
@@ -13,6 +12,7 @@ import {
   ClipboardCheck,
   Upload,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -55,8 +55,14 @@ export default function Navigation() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg group-hover:shadow-xl transition-all duration-300">
-              <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            <div className="relative h-10 w-10 sm:h-12 sm:w-12 transition-all duration-300 group-hover:scale-110">
+              <Image
+                src="/favicon.svg"
+                alt="DeaMap Logo"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
             <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               deamap.es
