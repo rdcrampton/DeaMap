@@ -688,3 +688,57 @@ enum UserRole {
   MODERATOR
   USER
 }
+
+// ============================================
+// EXPORT BATCHES - For CSV exports
+// ============================================
+model ExportBatch {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  name                  String
+  description           String?
+
+  // Filters applied
+  filters               Json?                   // Stores status[], sourceOrigin, importBatchId, cityName
+
+  // Export file
+  file_name             String?
+  file_url              String?                 // S3 URL when ready
+  file_size             Int?
+  file_hash             String?
+
+  // Process statistics
+  total_records         Int                     @default(0)
+  successful_records    Int                     @default(0)
+  failed_records        Int                     @default(0)
+
+  // Status
+  status                ExportStatus            @default(PENDING)
+  started_at            DateTime?
+  completed_at          DateTime?
+  duration_seconds      Int?
+
+  // Error handling
+  error_message         String?
+  error_details         Json?
+
+  // Audit
+  exported_by           String                  @db.Uuid
+  ip_address            String?
+
+  created_at            DateTime                @default(now())
+  updated_at            DateTime                @updatedAt
+
+  @@index([status])
+  @@index([created_at])
+  @@index([exported_by])
+  @@index([status, created_at])
+  @@map("export_batches")
+}
+
+enum ExportStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
