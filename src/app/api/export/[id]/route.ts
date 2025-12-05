@@ -9,17 +9,14 @@ import { PrismaExportRepository } from "@/infrastructure/export/repositories/Pri
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-interface RouteContext {
-  params: {
-    id: string;
-  };
-}
-
 /**
  * GET /api/export/[id]
  * Obtener detalles de una exportación
  */
-export async function GET(request: NextRequest, context: RouteContext) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const user = await requireAuth(request);
 
@@ -37,7 +34,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const { id } = context.params;
+    const { id } = await params;
 
     const repository = new PrismaExportRepository(prisma);
     const batch = await repository.getBatchInfo(id);
