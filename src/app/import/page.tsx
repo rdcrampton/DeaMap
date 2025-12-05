@@ -5,7 +5,15 @@
 
 "use client";
 
-import { Upload, ChevronLeft, ChevronRight, ArrowLeft, Download, FileUp, FileDown } from "lucide-react";
+import {
+  Upload,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  Download,
+  FileUp,
+  FileDown,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
@@ -48,7 +56,7 @@ export default function ImportPage() {
     loading: exportLoading,
     error: exportError,
     pagination: exportPagination,
-    refetch: refetchExports
+    refetch: refetchExports,
   } = useExportBatches({
     page: exportPage,
     limit: 20,
@@ -85,25 +93,21 @@ export default function ImportPage() {
   };
 
   const handleCreateExport = async (name: string, filters: ExportFilters) => {
-    try {
-      const response = await fetch("/api/export", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, filters }),
-      });
+    const response = await fetch("/api/export", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name, filters }),
+    });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Error al crear exportación");
-      }
-
-      // Refrescar la lista de exportaciones
-      refetchExports();
-    } catch (error) {
-      throw error;
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Error al crear exportación");
     }
+
+    // Refrescar la lista de exportaciones
+    refetchExports();
   };
 
   const handlePreviousPage = () => {
@@ -252,9 +256,7 @@ export default function ImportPage() {
                 backdropFilter: "blur(20px)",
               }}
             >
-              <h2 className="text-xl font-bold text-gray-900 mb-1">
-                Nueva Importación
-              </h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Nueva Importación</h2>
               <p className="text-sm text-gray-600 mb-4">
                 Importa datos desde archivos CSV con mapeo de columnas y validación
               </p>
@@ -299,10 +301,7 @@ export default function ImportPage() {
                 <div className="border-t border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between">
                   <div className="text-sm text-gray-700">
                     Página {importPage} de {pagination.totalPages}
-                    <span className="hidden sm:inline">
-                      {" "}
-                      ({pagination.total} total)
-                    </span>
+                    <span className="hidden sm:inline"> ({pagination.total} total)</span>
                   </div>
 
                   <div className="flex space-x-2">
@@ -338,9 +337,7 @@ export default function ImportPage() {
                 backdropFilter: "blur(20px)",
               }}
             >
-              <h2 className="text-xl font-bold text-gray-900 mb-1">
-                Nueva Exportación
-              </h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Nueva Exportación</h2>
               <p className="text-sm text-gray-600 mb-4">
                 Exporta datos de DEAs a CSV con filtros personalizados (estado, ciudad, origen)
               </p>
@@ -384,10 +381,7 @@ export default function ImportPage() {
                 <div className="border-t border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between">
                   <div className="text-sm text-gray-700">
                     Página {exportPage} de {exportPagination.totalPages}
-                    <span className="hidden sm:inline">
-                      {" "}
-                      ({exportPagination.total} total)
-                    </span>
+                    <span className="hidden sm:inline"> ({exportPagination.total} total)</span>
                   </div>
 
                   <div className="flex space-x-2">
@@ -417,11 +411,7 @@ export default function ImportPage() {
       </main>
 
       {/* Details Modal */}
-      <ImportDetailsModal
-        batchId={selectedBatchId}
-        isOpen={modalOpen}
-        onClose={handleCloseModal}
-      />
+      <ImportDetailsModal batchId={selectedBatchId} isOpen={modalOpen} onClose={handleCloseModal} />
 
       {/* Export Dialog */}
       <ExportDialog
