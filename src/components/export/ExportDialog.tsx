@@ -15,11 +15,7 @@ interface ExportDialogProps {
   onExport: (name: string, filters: ExportFilters) => Promise<void>;
 }
 
-export default function ExportDialog({
-  isOpen,
-  onClose,
-  onExport,
-}: ExportDialogProps) {
+export default function ExportDialog({ isOpen, onClose, onExport }: ExportDialogProps) {
   const [name, setName] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
   const [sourceOrigin, setSourceOrigin] = useState("");
@@ -46,9 +42,7 @@ export default function ExportDialog({
 
   const handleToggleStatus = (status: string) => {
     setSelectedStatus((prev) =>
-      prev.includes(status)
-        ? prev.filter((s) => s !== status)
-        : [...prev, status]
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
     );
   };
 
@@ -167,7 +161,7 @@ export default function ExportDialog({
             <p className="text-xs text-gray-500 mt-2">
               {selectedStatus.length === 0
                 ? "Se exportarán DEAs de todos los estados"
-                : `Se exportarán DEAs con estado: ${selectedStatus.map(s => statusOptions.find(o => o.value === s)?.label).join(", ")}`}
+                : `Se exportarán DEAs con estado: ${selectedStatus.map((s) => statusOptions.find((o) => o.value === s)?.label).join(", ")}`}
             </p>
           </div>
 
@@ -192,9 +186,7 @@ export default function ExportDialog({
 
           {/* Filtro por ciudad */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ciudad
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Ciudad</label>
             <input
               type="text"
               value={cityName}
@@ -203,16 +195,14 @@ export default function ExportDialog({
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               disabled={loading}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Filtra los DEAs por nombre de ciudad
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Filtra los DEAs por nombre de ciudad</p>
           </div>
 
           {/* Info box */}
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
-              <strong>Información:</strong> La exportación se generará en segundo plano.
-              Recibirás un archivo CSV con formato UTF-8 que podrás descargar cuando esté listo.
+              <strong>Información:</strong> La exportación puede tardar unos segundos. Recibirás un
+              archivo CSV con formato UTF-8 que podrás descargar cuando termine.
             </p>
           </div>
         </div>
@@ -234,7 +224,7 @@ export default function ExportDialog({
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Creando...</span>
+                <span>Exportando...</span>
               </>
             ) : (
               <>

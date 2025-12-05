@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/export
- * Crear nueva exportación (inicia proceso en background)
+ * Crear nueva exportación (proceso síncrono para Vercel serverless)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -86,20 +86,38 @@ export async function POST(request: NextRequest) {
         request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || undefined,
     });
 
-    // Iniciar proceso en background (sin esperar)
+    // Ejecutar exportación de forma síncrona
+    // En Vercel serverless, los procesos en background se terminan cuando la respuesta es enviada
     const useCase = new GenerateExportUseCase(repository, prisma);
-    useCase.execute({ batchId }).catch((error) => {
-      console.error("Background export error:", error);
-    });
+    try {
+      await useCase.execute({ batchId });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Exportación iniciada",
-        batchId,
-      },
-      { status: 202 } // 202 Accepted
-    );
+      // Obtener información actualizada del batch
+      const batchInfo = await repository.getBatchInfo(batchId);
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Exportación completada",
+          batchId,
+          fileUrl: batchInfo?.fileUrl,
+          totalRecords: batchInfo?.totalRecords,
+        },
+        { status: 200 }
+      );
+    } catch (exportError) {
+      console.error("Export execution error:", exportError);
+      // El batch ya se marcó como FAILED en el use case
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Error durante la exportación",
+          batchId,
+          error: exportError instanceof Error ? exportError.message : "Error desconocido",
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Create export error:", error);
     return NextResponse.json({ error: "Error al crear exportación" }, { status: 500 });
