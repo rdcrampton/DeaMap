@@ -13,25 +13,12 @@ import { prisma } from "@/lib/db";
  * GET /api/export/[id]
  * Obtener detalles de una exportación
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireAuth(request);
 
     if (!user) {
-      return NextResponse.json(
-        { error: "No autenticado" },
-        { status: 401 }
-      );
-    }
-
-    if (!user.isVerified) {
-      return NextResponse.json(
-        { error: "Usuario no verificado" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
     const { id } = await params;
@@ -40,10 +27,7 @@ export async function GET(
     const batch = await repository.getBatchInfo(id);
 
     if (!batch) {
-      return NextResponse.json(
-        { error: "Exportación no encontrada" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Exportación no encontrada" }, { status: 404 });
     }
 
     // Verificar que el usuario sea el dueño de la exportación

@@ -21,25 +21,12 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth(request);
 
     if (!user) {
-      return NextResponse.json(
-        { error: "No autenticado" },
-        { status: 401 }
-      );
-    }
-
-    if (!user.isVerified) {
-      return NextResponse.json(
-        { error: "Usuario no verificado" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = Math.min(
-      parseInt(searchParams.get("limit") || "20", 10),
-      100
-    );
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 100);
 
     const repository = new PrismaExportRepository(prisma);
     const result = await repository.listBatches({
@@ -60,10 +47,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("List exports error:", error);
-    return NextResponse.json(
-      { error: "Error al listar exportaciones" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al listar exportaciones" }, { status: 500 });
   }
 }
 
@@ -76,17 +60,7 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth(request);
 
     if (!user) {
-      return NextResponse.json(
-        { error: "No autenticado" },
-        { status: 401 }
-      );
-    }
-
-    if (!user.isVerified) {
-      return NextResponse.json(
-        { error: "Usuario no verificado. Solo usuarios verificados pueden exportar datos." },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
     const body = await request.json();
@@ -98,10 +72,7 @@ export async function POST(request: NextRequest) {
 
     // Validar filtros
     if (filters?.status && !Array.isArray(filters.status)) {
-      return NextResponse.json(
-        { error: "El filtro 'status' debe ser un array" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "El filtro 'status' debe ser un array" }, { status: 400 });
     }
 
     // Crear batch
@@ -112,9 +83,7 @@ export async function POST(request: NextRequest) {
       filters,
       exportedBy: user.userId,
       ipAddress:
-        request.headers.get("x-forwarded-for") ||
-        request.headers.get("x-real-ip") ||
-        undefined,
+        request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || undefined,
     });
 
     // Iniciar proceso en background (sin esperar)
@@ -133,9 +102,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Create export error:", error);
-    return NextResponse.json(
-      { error: "Error al crear exportación" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al crear exportación" }, { status: 500 });
   }
 }
