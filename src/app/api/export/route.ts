@@ -4,6 +4,7 @@
  * GET /api/export - Listar exportaciones
  */
 
+import { waitUntil } from "@vercel/functions";
 import { NextRequest, NextResponse } from "next/server";
 
 import { GenerateExportUseCase } from "@/application/export/use-cases/GenerateExportUseCase";
@@ -53,7 +54,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/export
- * Crear nueva exportación (proceso síncrono para Vercel serverless)
+ * Crear nueva exportación usando Vercel Background Functions (Pro)
+ * El proceso de exportación se ejecuta en background después de enviar la respuesta
  */
 export async function POST(request: NextRequest) {
   try {
@@ -86,38 +88,25 @@ export async function POST(request: NextRequest) {
         request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || undefined,
     });
 
-    // Ejecutar exportación de forma síncrona
-    // En Vercel serverless, los procesos en background se terminan cuando la respuesta es enviada
+    // Ejecutar exportación en background usando waitUntil de Vercel
+    // Con Vercel Pro, esto permite hasta 15 minutos de ejecución
     const useCase = new GenerateExportUseCase(repository, prisma);
-    try {
-      await useCase.execute({ batchId });
+    waitUntil(
+      useCase.execute({ batchId }).catch((error) => {
+        console.error("Background export error:", error);
+        // El batch ya se marca como FAILED en el use case
+      })
+    );
 
-      // Obtener información actualizada del batch
-      const batchInfo = await repository.getBatchInfo(batchId);
-
-      return NextResponse.json(
-        {
-          success: true,
-          message: "Exportación completada",
-          batchId,
-          fileUrl: batchInfo?.fileUrl,
-          totalRecords: batchInfo?.totalRecords,
-        },
-        { status: 200 }
-      );
-    } catch (exportError) {
-      console.error("Export execution error:", exportError);
-      // El batch ya se marcó como FAILED en el use case
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Error durante la exportación",
-          batchId,
-          error: exportError instanceof Error ? exportError.message : "Error desconocido",
-        },
-        { status: 500 }
-      );
-    }
+    // Responder inmediatamente mientras el proceso continúa en background
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Exportación iniciada en segundo plano",
+        batchId,
+      },
+      { status: 202 } // 202 Accepted - indica que la solicitud fue aceptada pero aún se está procesando
+    );
   } catch (error) {
     console.error("Create export error:", error);
     return NextResponse.json({ error: "Error al crear exportación" }, { status: 500 });

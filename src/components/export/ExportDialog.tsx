@@ -201,8 +201,8 @@ export default function ExportDialog({ isOpen, onClose, onExport }: ExportDialog
           {/* Info box */}
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
-              <strong>Información:</strong> La exportación puede tardar unos segundos. Recibirás un
-              archivo CSV con formato UTF-8 que podrás descargar cuando termine.
+              <strong>Información:</strong> La exportación se procesa en segundo plano. Podrás ver
+              el progreso y descargar el archivo CSV cuando termine.
             </p>
           </div>
         </div>
