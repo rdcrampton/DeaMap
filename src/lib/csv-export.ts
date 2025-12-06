@@ -43,85 +43,93 @@ interface AedExportData {
 export function aedsToCsv(aeds: AedExportData[]): string {
   // Definir las columnas del CSV según los requisitos
   const headers = [
-    'provisional_id',
-    'RM_ID',
-    'type',
-    'property',
-    'function',
-    'owner',
-    'name',
-    'type of road',
-    'name of road',
-    'number of road',
-    'zip code',
-    'city',
-    'district',
-    'neighborhood',
-    'latitude',
-    'longitude',
-    '¿opening 24/7?',
-    'opening Mon-Fri',
-    'closing Mon-Fri',
-    'opening Sat',
-    'closing Sat',
-    'opening Sun',
-    'closing Sun',
-    'security guard 24/7',
-    'INCLUDE',
-    'notes',
-    'COO',
+    "provisional_id",
+    "RM_ID",
+    "type",
+    "property",
+    "function",
+    "owner",
+    "name",
+    "type of road",
+    "name of road",
+    "number of road",
+    "zip code",
+    "city",
+    "district",
+    "neighborhood",
+    "latitude",
+    "longitude",
+    "¿opening 24/7?",
+    "opening Mon-Fri",
+    "closing Mon-Fri",
+    "opening Sat",
+    "closing Sat",
+    "opening Sun",
+    "closing Sun",
+    "security guard 24/7",
+    "INCLUDE",
+    "notes",
+    "COO",
   ];
 
   // Crear filas de datos
-  const rows = aeds.map(aed => {
+  const rows = aeds.map((aed) => {
     return [
-      aed.provisional_number ?? '', // provisional_id
-      aed.code ?? '', // RM_ID
-      aed.establishment_type ?? '', // type
-      aed.responsible?.local_ownership ?? '', // property
-      aed.responsible?.local_use ?? '', // function
-      aed.responsible?.name ?? '', // owner
-      aed.name ?? '', // name
-      aed.location?.street_type ?? '', // type of road
-      aed.location?.street_name ?? '', // name of road
-      aed.location?.street_number ?? '', // number of road
-      aed.location?.postal_code ?? '', // zip code
-      aed.location?.city_name ?? '', // city
-      aed.location?.district_name ?? '', // district
-      aed.location?.neighborhood_name ?? '', // neighborhood
-      aed.latitude ?? '', // latitude
-      aed.longitude ?? '', // longitude
-      aed.schedule?.has_24h_surveillance ? 'SÍ' : 'NO', // ¿opening 24/7?
-      aed.schedule?.weekday_opening ?? '', // opening Mon-Fri
-      aed.schedule?.weekday_closing ?? '', // closing Mon-Fri
-      aed.schedule?.saturday_opening ?? '', // opening Sat
-      aed.schedule?.saturday_closing ?? '', // closing Sat
-      aed.schedule?.sunday_opening ?? '', // opening Sun
-      aed.schedule?.sunday_closing ?? '', // closing Sun
-      '', // security guard 24/7 (no data available)
-      '', // INCLUDE (no data available)
-      aed.internal_notes || aed.origin_observations || '', // notes
-      '', // COO (no data available)
+      aed.provisional_number ?? "", // provisional_id
+      aed.code ?? "", // RM_ID
+      aed.establishment_type ?? "", // type
+      aed.responsible?.local_ownership ?? "", // property
+      aed.responsible?.local_use ?? "", // function
+      aed.responsible?.name ?? "", // owner
+      aed.name ?? "", // name
+      aed.location?.street_type ?? "", // type of road
+      aed.location?.street_name ?? "", // name of road
+      aed.location?.street_number ?? "", // number of road
+      aed.location?.postal_code ?? "", // zip code
+      aed.location?.city_name ?? "", // city
+      aed.location?.district_name ?? "", // district
+      aed.location?.neighborhood_name ?? "", // neighborhood
+      aed.latitude ?? "", // latitude
+      aed.longitude ?? "", // longitude
+      aed.schedule?.has_24h_surveillance ? "SÍ" : "NO", // ¿opening 24/7?
+      aed.schedule?.weekday_opening ?? "", // opening Mon-Fri
+      aed.schedule?.weekday_closing ?? "", // closing Mon-Fri
+      aed.schedule?.saturday_opening ?? "", // opening Sat
+      aed.schedule?.saturday_closing ?? "", // closing Sat
+      aed.schedule?.sunday_opening ?? "", // opening Sun
+      aed.schedule?.sunday_closing ?? "", // closing Sun
+      "", // security guard 24/7 (no data available)
+      "", // INCLUDE (no data available)
+      aed.internal_notes || aed.origin_observations || "", // notes
+      "", // COO (no data available)
     ];
   });
 
-  // Función para escapar valores CSV
+  // Función para escapar valores CSV (RFC 4180 compliant)
   const escapeCsvValue = (value: string | number): string => {
     const stringValue = String(value);
-    // Si contiene coma, comillas, saltos de línea, envolver en comillas y duplicar comillas internas
-    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
-      return `"${stringValue.replace(/"/g, '""')}"`;
+
+    // Limpiar caracteres problemáticos: tabs, retornos de carro, y normalizar saltos de línea
+    const cleanValue = stringValue
+      .replace(/\t/g, " ") // Reemplazar tabs con espacios
+      .replace(/\r\n/g, " | ") // Reemplazar CRLF con separador visual
+      .replace(/\r/g, " | ") // Reemplazar CR con separador visual
+      .replace(/\n/g, " | "); // Reemplazar LF con separador visual
+
+    // Si contiene coma o comillas, envolver en comillas y duplicar comillas internas
+    if (cleanValue.includes(",") || cleanValue.includes('"')) {
+      return `"${cleanValue.replace(/"/g, '""')}"`;
     }
-    return stringValue;
+    return cleanValue;
   };
 
   // Generar CSV
   const csvLines = [
-    headers.map(escapeCsvValue).join(','),
-    ...rows.map(row => row.map(escapeCsvValue).join(','))
+    headers.map(escapeCsvValue).join(","),
+    ...rows.map((row) => row.map(escapeCsvValue).join(",")),
   ];
 
-  return csvLines.join('\n');
+  return csvLines.join("\n");
 }
 
 /**
@@ -132,11 +140,11 @@ export function generateExportFilename(filters?: {
   sourceOrigin?: string;
   importBatchId?: string;
 }): string {
-  const timestamp = new Date().toISOString().split('T')[0];
-  const parts = ['deas', timestamp];
+  const timestamp = new Date().toISOString().split("T")[0];
+  const parts = ["deas", timestamp];
 
   if (filters?.status && filters.status.length > 0) {
-    parts.push(filters.status.join('-').toLowerCase());
+    parts.push(filters.status.join("-").toLowerCase());
   }
 
   if (filters?.sourceOrigin) {
@@ -144,10 +152,10 @@ export function generateExportFilename(filters?: {
   }
 
   if (filters?.importBatchId) {
-    parts.push('batch');
+    parts.push("batch");
   }
 
-  return `${parts.join('_')}.csv`;
+  return `${parts.join("_")}.csv`;
 }
 
 /**
@@ -155,6 +163,6 @@ export function generateExportFilename(filters?: {
  */
 export function createCsvBlob(csvContent: string): Blob {
   // Agregar BOM (Byte Order Mark) para UTF-8 para mejor compatibilidad con Excel
-  const BOM = '\uFEFF';
-  return new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const BOM = "\uFEFF";
+  return new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
 }
