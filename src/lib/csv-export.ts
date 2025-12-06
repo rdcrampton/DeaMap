@@ -38,10 +38,80 @@ interface AedExportData {
 }
 
 /**
+ * Parsea el contenido de notas para extraer información estructurada
+ */
+function parseNotesContent(notes: string): {
+  legacyId: string;
+  reviewedBy: string;
+  reviewerEmail: string;
+  reviewPeriod: string;
+  imageVerification: string;
+  addressValidation: string;
+  otherNotes: string;
+} {
+  const result = {
+    legacyId: "",
+    reviewedBy: "",
+    reviewerEmail: "",
+    reviewPeriod: "",
+    imageVerification: "",
+    addressValidation: "",
+    otherNotes: "",
+  };
+
+  if (!notes) return result;
+
+  // Extraer Legacy ID
+  const legacyIdMatch = notes.match(/Legacy ID:\s*(\d+)/);
+  if (legacyIdMatch) result.legacyId = legacyIdMatch[1];
+
+  // Extraer Reviewed by
+  const reviewedByMatch = notes.match(/Reviewed by:\s*([^\n]+)/);
+  if (reviewedByMatch) result.reviewedBy = reviewedByMatch[1].trim();
+
+  // Extraer Email
+  const emailMatch = notes.match(/Email:\s*([^\n]+)/);
+  if (emailMatch) result.reviewerEmail = emailMatch[1].trim();
+
+  // Extraer Review period
+  const reviewPeriodMatch = notes.match(/Review period:\s*([^\n]+)/);
+  if (reviewPeriodMatch) result.reviewPeriod = reviewPeriodMatch[1].trim();
+
+  // Extraer Image verification
+  const imageVerificationMatch = notes.match(/Image verification:\s*([^\n]+)/);
+  if (imageVerificationMatch) result.imageVerification = imageVerificationMatch[1].trim();
+
+  // Extraer Address validation
+  const addressValidationMatch = notes.match(/Address validation:\s*([^\n]+)/);
+  if (addressValidationMatch) result.addressValidation = addressValidationMatch[1].trim();
+
+  // Extraer notas adicionales (todo lo que no sea datos estructurados)
+  const otherNotes = notes
+    .replace(/=== LEGACY MIGRATION DATA ===/g, "")
+    .replace(/--- Review Information ---/g, "")
+    .replace(/--- Validation Status ---/g, "")
+    .replace(/Provisional Number:\s*\d+/g, "")
+    .replace(/Legacy ID:\s*\d+/g, "")
+    .replace(/Reviewed by:\s*[^\n]+/g, "")
+    .replace(/Email:\s*[^\n]+/g, "")
+    .replace(/Review period:\s*[^\n]+/g, "")
+    .replace(/Image verification:\s*[^\n]+/g, "")
+    .replace(/Address validation:\s*[^\n]+/g, "")
+    .replace(/[\n\r]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  result.otherNotes = otherNotes;
+
+  return result;
+}
+
+/**
  * Convierte un array de AEDs a formato CSV con las columnas requeridas
+ * Usa punto y coma (;) como separador para compatibilidad con Excel
  */
 export function aedsToCsv(aeds: AedExportData[]): string {
-  // Definir las columnas del CSV según los requisitos
+  // Definir las columnas del CSV según los requisitos + columnas adicionales para información estructurada
   const headers = [
     "provisional_id",
     "RM_ID",
@@ -70,10 +140,20 @@ export function aedsToCsv(aeds: AedExportData[]): string {
     "INCLUDE",
     "notes",
     "COO",
+    // Columnas adicionales para información estructurada
+    "legacy_id",
+    "reviewed_by",
+    "reviewer_email",
+    "review_period",
+    "image_verification",
+    "address_validation",
   ];
 
   // Crear filas de datos
   const rows = aeds.map((aed) => {
+    const notesContent = aed.internal_notes || aed.origin_observations || "";
+    const parsedNotes = parseNotesContent(notesContent);
+
     return [
       aed.provisional_number ?? "", // provisional_id
       aed.code ?? "", // RM_ID
@@ -100,33 +180,40 @@ export function aedsToCsv(aeds: AedExportData[]): string {
       aed.schedule?.sunday_closing ?? "", // closing Sun
       "", // security guard 24/7 (no data available)
       "", // INCLUDE (no data available)
-      aed.internal_notes || aed.origin_observations || "", // notes
+      parsedNotes.otherNotes, // notes (solo notas adicionales)
       "", // COO (no data available)
+      // Columnas adicionales
+      parsedNotes.legacyId, // legacy_id
+      parsedNotes.reviewedBy, // reviewed_by
+      parsedNotes.reviewerEmail, // reviewer_email
+      parsedNotes.reviewPeriod, // review_period
+      parsedNotes.imageVerification, // image_verification
+      parsedNotes.addressValidation, // address_validation
     ];
   });
 
-  // Función para escapar valores CSV (RFC 4180 compliant)
+  // Función para escapar valores CSV (RFC 4180 compliant, usando ; como separador)
   const escapeCsvValue = (value: string | number): string => {
     const stringValue = String(value);
 
     // Limpiar caracteres problemáticos: tabs, retornos de carro, y normalizar saltos de línea
     const cleanValue = stringValue
       .replace(/\t/g, " ") // Reemplazar tabs con espacios
-      .replace(/\r\n/g, " | ") // Reemplazar CRLF con separador visual
-      .replace(/\r/g, " | ") // Reemplazar CR con separador visual
-      .replace(/\n/g, " | "); // Reemplazar LF con separador visual
+      .replace(/\r\n/g, " ") // Reemplazar CRLF con espacio
+      .replace(/\r/g, " ") // Reemplazar CR con espacio
+      .replace(/\n/g, " "); // Reemplazar LF con espacio
 
-    // Si contiene coma o comillas, envolver en comillas y duplicar comillas internas
-    if (cleanValue.includes(",") || cleanValue.includes('"')) {
+    // Si contiene punto y coma o comillas, envolver en comillas y duplicar comillas internas
+    if (cleanValue.includes(";") || cleanValue.includes('"')) {
       return `"${cleanValue.replace(/"/g, '""')}"`;
     }
     return cleanValue;
   };
 
-  // Generar CSV
+  // Generar CSV con separador punto y coma (;)
   const csvLines = [
-    headers.map(escapeCsvValue).join(","),
-    ...rows.map((row) => row.map(escapeCsvValue).join(",")),
+    headers.map(escapeCsvValue).join(";"),
+    ...rows.map((row) => row.map(escapeCsvValue).join(";")),
   ];
 
   return csvLines.join("\n");
