@@ -5,6 +5,12 @@
   "functions": {
     "src/app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "src/app/api/export/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/import/route.ts": {
+      "maxDuration": 300
     }
   },
   "rewrites": [
