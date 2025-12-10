@@ -41,6 +41,8 @@
     "test:all": "npm run test:unit && npm run test:integration",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
     "migrate:legacy": "tsx scripts/legacy-migration/migrate-legacy-deas.ts",
     "prepare": "husky"
   },

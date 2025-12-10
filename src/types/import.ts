@@ -15,7 +15,6 @@ export interface ImportBatch {
   failed_records: number;
   warning_records: number;
   status: ImportStatus;
-  started_at: string | null;
   completed_at: string | null;
   duration_seconds: number | null;
   imported_by: string;

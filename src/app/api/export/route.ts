@@ -66,10 +66,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, filters } = body as {
+    const { name, description, filters, format } = body as {
       name?: string;
       description?: string;
       filters?: ExportFilters;
+      format?: "legacy" | "import_format";
     };
 
     // Validar filtros
@@ -92,10 +93,15 @@ export async function POST(request: NextRequest) {
     // Con Vercel Pro, esto permite hasta 15 minutos de ejecución
     const useCase = new GenerateExportUseCase(repository, prisma);
     waitUntil(
-      useCase.execute({ batchId }).catch((error) => {
-        console.error("Background export error:", error);
-        // El batch ya se marca como FAILED en el use case
-      })
+      useCase
+        .execute({
+          batchId,
+          format: format || "import_format", // Por defecto usar formato de importación
+        })
+        .catch((error) => {
+          console.error("Background export error:", error);
+          // El batch ya se marca como FAILED en el use case
+        })
     );
 
     // Responder inmediatamente mientras el proceso continúa en background

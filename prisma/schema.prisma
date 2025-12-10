@@ -31,13 +31,23 @@ model Aed {
   import_batch_id           String?                  @db.Uuid
   external_reference        String?
 
-  // Observations and notes
-  origin_observations       String?
-  validation_observations   String?
-  internal_notes            String?
+  // Observations and notes (SIMPLIFIED)
+  public_notes              String?  // NEW: Public information visible to all users
+  internal_notes            String?  // Consolidated: includes origin_observations
+  validation_notes          String?  // NEW: Renamed from validation_observations
   requires_attention        Boolean                  @default(false)
   attention_reason          String?
   rejection_reason          String?
+
+  // DEPRECATED - Will be removed in future version (kept for migration)
+  origin_observations       String?  /// @deprecated Merged into internal_notes
+  validation_observations   String?  /// @deprecated Use validation_notes instead
+
+  // Verification and accessibility (ADDED)
+  last_verified_at          DateTime?  // Last physical verification date
+  verification_method       String?    // "field_visit", "phone_call", "email", "photo_verification"
+  is_publicly_accessible    Boolean    @default(true)  // If accessible to general public
+  installation_date         DateTime?  // Physical installation date
 
   // General status
   status                    AedStatus                @default(DRAFT)
@@ -71,10 +81,11 @@ model Aed {
   @@index([created_at])
   @@index([responsible_id])
   @@index([establishment_type])
-  @@index([sequence])
   @@index([source_origin])
   @@index([import_batch_id])
   @@index([requires_attention])
+  @@index([last_verified_at])  // NEW: For maintenance queries
+  @@index([is_publicly_accessible, status])  // NEW: For public map filtering
   // ⭐ CRITICAL: Spatial index for proximity searches
   @@index([latitude, longitude], map: "idx_aeds_coordinates")
   @@index([status, latitude, longitude], map: "idx_aeds_published_coordinates")
@@ -150,7 +161,6 @@ model ImportBatch {
 
   // Status
   status                ImportStatus            @default(PENDING)
-  started_at            DateTime?
   completed_at          DateTime?
   duration_seconds      Int?
 
@@ -251,7 +261,7 @@ model ImportCheckpoint {
   record_index        Int
   record_reference    String?
   record_hash         String?
-  
+
   status              CheckpointStatus
   error_message       String?
   processing_time_ms  Int?
@@ -301,15 +311,17 @@ model AedLocation {
   neighborhood_code       String?
   neighborhood_name       String?
 
-  // Access information
-  access_description      String?
-  visible_references      String?
+  // Access information (SIMPLIFIED)
   floor                   String?
   specific_location       String?
+  access_instructions     String?  // NEW: Combines access_description + visible_references + access_warnings
+  public_notes            String?  // NEW: Combines location_observations + general public info
 
-  // Observations
-  location_observations   String?
-  access_warnings         String?
+  // DEPRECATED - Will be removed in future version (kept for migration)
+  access_description      String?  /// @deprecated Use access_instructions instead
+  visible_references      String?  /// @deprecated Use access_instructions instead
+  access_warnings         String?  /// @deprecated Use access_instructions instead
+  location_observations   String?  /// @deprecated Use public_notes instead
 
   aed                     Aed?
   address_validation      AedAddressValidation?
@@ -320,6 +332,7 @@ model AedLocation {
   @@index([postal_code])
   @@index([latitude, longitude], map: "idx_location_spatial")
   @@index([city_code, district_code])
+  @@index([city_code, postal_code])  // NEW: For city-specific searches
   @@map("aed_locations")
 }
 

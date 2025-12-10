@@ -63,7 +63,6 @@ export async function processImportAsync(
       where: { id: batchId },
       data: {
         status: "IN_PROGRESS",
-        started_at: isResume ? undefined : new Date(),
         last_heartbeat: new Date(),
       },
     });
