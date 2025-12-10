@@ -39,7 +39,6 @@ export class PrismaImportRepository implements IImportRepository {
       totalRecords?: number;
       successfulRecords?: number;
       failedRecords?: number;
-      startedAt?: Date;
       completedAt?: Date;
     }
   ): Promise<void> {
@@ -50,7 +49,6 @@ export class PrismaImportRepository implements IImportRepository {
         total_records: stats?.totalRecords,
         successful_records: stats?.successfulRecords,
         failed_records: stats?.failedRecords,
-        started_at: stats?.startedAt,
         completed_at: stats?.completedAt,
       },
     });
@@ -73,7 +71,7 @@ export class PrismaImportRepository implements IImportRepository {
       successfulRecords: batch.successful_records,
       failedRecords: batch.failed_records,
       createdAt: batch.created_at,
-      startedAt: batch.started_at,
+      startedAt: batch.started_at ?? null,
       completedAt: batch.completed_at,
     };
   }

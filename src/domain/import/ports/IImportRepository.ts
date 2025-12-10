@@ -23,7 +23,7 @@ export interface ImportBatchInfo {
   successfulRecords: number;
   failedRecords: number;
   createdAt: Date;
-  startedAt: Date | null;
+  startedAt?: Date | null;
   completedAt: Date | null;
 }
 
@@ -63,7 +63,6 @@ export interface IImportRepository {
       totalRecords?: number;
       successfulRecords?: number;
       failedRecords?: number;
-      startedAt?: Date;
       completedAt?: Date;
     }
   ): Promise<void>;

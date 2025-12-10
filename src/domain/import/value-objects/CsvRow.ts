@@ -5,11 +5,10 @@
 
 export interface CsvRowData {
   Id: string;
-  "Hora de inicio": string;
-  "Hora de finalización": string;
   "Correo electrónico": string;
   Nombre: string;
   "Número provisional DEA": string;
+  "Referencia externa": string;
   "Tipo de establecimiento": string;
   "Titularidad del local": string;
   "Uso del local": string;
@@ -21,6 +20,8 @@ export interface CsvRowData {
   "Complemento de dirección": string;
   "Código postal": string;
   Distrito: string;
+  Planta: string;
+  "Ubicación específica": string;
   "Coordenadas-Latitud (norte)": string;
   "Coordenadas-Longitud (oeste, por lo tanto, negativa)": string;
   "Horario de apertura del establecimiento": string;
@@ -33,7 +34,16 @@ export interface CsvRowData {
   "¿Tiene vigilante 24 horas al día que pueda facilitar el desfibrilador en caso necesario aunque esté cerrado?": string;
   "Foto 1": string;
   "Foto 2": string;
+
+  // NEW SIMPLIFIED FIELDS
+  "Instrucciones de acceso": string;
+  "Comentarios públicos": string;
+
+  // DEPRECATED - Mantener para compatibilidad durante transición
   "Descripción acceso": string;
+  "Referencias visibles": string;
+  "Advertencias acceso": string;
+  "Observaciones ubicación": string;
   "Comentario libre": string;
 }
 
@@ -179,11 +189,7 @@ export class CsvRow {
    * Solo son obligatorios: nombre, nombre de calle y número de calle
    */
   hasMinimumRequiredFields(): boolean {
-    return !!(
-      this.proposedName &&
-      this.streetName &&
-      this.streetNumber
-    );
+    return !!(this.proposedName && this.streetName && this.streetNumber);
   }
 
   /**

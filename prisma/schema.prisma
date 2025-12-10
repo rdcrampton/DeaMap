@@ -31,28 +31,28 @@ model Aed {
   import_batch_id           String?                  @db.Uuid
   external_reference        String?
 
-  // Observations and notes
-  origin_observations       String?
-  validation_observations   String?
-  internal_notes            String?
+  // Observations and notes (SIMPLIFIED)
+  public_notes              String?  // NEW: Public information visible to all users
+  internal_notes            String?  // Consolidated: includes origin_observations
+  validation_notes          String?  // NEW: Renamed from validation_observations
   requires_attention        Boolean                  @default(false)
   attention_reason          String?
   rejection_reason          String?
+
+  // DEPRECATED - Will be removed in future version (kept for migration)
+  origin_observations       String?  /// @deprecated Merged into internal_notes
+  validation_observations   String?  /// @deprecated Use validation_notes instead
+
+  // Verification and accessibility (ADDED)
+  last_verified_at          DateTime?  // Last physical verification date
+  verification_method       String?    // "field_visit", "phone_call", "email", "photo_verification"
+  is_publicly_accessible    Boolean    @default(true)  // If accessible to general public
+  installation_date         DateTime?  // Physical installation date
 
   // General status
   status                    AedStatus                @default(DRAFT)
   status_metadata           Json?
   published_at              DateTime?
-
-  // ⭐ PUBLICATION SYSTEM - Controls what data is publicly visible
-  publication_mode          PublicationMode          @default(LOCATION_ONLY)
-  publication_requested_at  DateTime?
-  publication_approved_at   DateTime?
-  publication_approved_by   String?                  @db.Uuid
-  publication_notes         String?
-
-  // ⭐ OWNERSHIP - Owner of the DEA (establishment owner)
-  owner_user_id             String?                  @db.Uuid
 
   // Creation sequence
   sequence                  Int                      @default(autoincrement())
@@ -70,12 +70,6 @@ model Aed {
   validations               AedValidation[]
   code_history              AedCodeHistory[]
   status_changes            AedStatusChange[]
-  publication_history       AedPublicationHistory[]
-  assignments               AedOrganizationAssignment[]
-  org_verifications         AedOrganizationVerification[]
-  change_proposals          AedChangeProposal[]
-  ownership_claims          AedOwnershipClaim[]
-  field_changes             AedFieldChange[]
 
   created_at                DateTime                 @default(now())
   updated_at                DateTime                 @updatedAt
@@ -87,15 +81,14 @@ model Aed {
   @@index([created_at])
   @@index([responsible_id])
   @@index([establishment_type])
-  @@index([sequence])
   @@index([source_origin])
   @@index([import_batch_id])
   @@index([requires_attention])
-  @@index([owner_user_id])
+  @@index([last_verified_at])  // NEW: For maintenance queries
+  @@index([is_publicly_accessible, status])  // NEW: For public map filtering
   // ⭐ CRITICAL: Spatial index for proximity searches
   @@index([latitude, longitude], map: "idx_aeds_coordinates")
   @@index([status, latitude, longitude], map: "idx_aeds_published_coordinates")
-  @@index([status, publication_mode], map: "idx_aeds_status_publication")
   // PostGIS spatial index (created via migration)
   @@map("aeds")
 }
@@ -124,13 +117,6 @@ enum SourceOrigin {
   FIELD_VERIFICATION
 }
 
-enum PublicationMode {
-  NONE          // Not visible publicly
-  LOCATION_ONLY // Only location data (city, postal code, district, street, number, floor)
-  BASIC_INFO    // Location + schedule + establishment type
-  FULL          // Full information: photos, responsible, contact, descriptions, etc.
-}
-
 // ============================================
 // STATUS CHANGE HISTORY
 // ============================================
@@ -150,36 +136,6 @@ model AedStatusChange {
   @@index([aed_id, created_at])
   @@index([new_status])
   @@map("aed_status_changes")
-}
-
-// ============================================
-// PUBLICATION CHANGE HISTORY
-// ============================================
-model AedPublicationHistory {
-  id                  String            @id @default(uuid()) @db.Uuid
-  aed_id              String            @db.Uuid
-
-  previous_mode       PublicationMode?
-  new_mode            PublicationMode
-
-  changed_by          String?           @db.Uuid
-  changed_by_role     String?
-  change_reason       String?
-
-  // Approval workflow (optional)
-  requires_approval   Boolean           @default(false)
-  approved_by         String?           @db.Uuid
-  approved_at         DateTime?
-  approval_notes      String?
-
-  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-
-  created_at          DateTime          @default(now())
-
-  @@index([aed_id, created_at])
-  @@index([new_mode])
-  @@index([changed_by])
-  @@map("aed_publication_history")
 }
 
 // ============================================
@@ -205,7 +161,6 @@ model ImportBatch {
 
   // Status
   status                ImportStatus            @default(PENDING)
-  started_at            DateTime?
   completed_at          DateTime?
   duration_seconds      Int?
 
@@ -306,7 +261,7 @@ model ImportCheckpoint {
   record_index        Int
   record_reference    String?
   record_hash         String?
-  
+
   status              CheckpointStatus
   error_message       String?
   processing_time_ms  Int?
@@ -356,15 +311,17 @@ model AedLocation {
   neighborhood_code       String?
   neighborhood_name       String?
 
-  // Access information
-  access_description      String?
-  visible_references      String?
+  // Access information (SIMPLIFIED)
   floor                   String?
   specific_location       String?
+  access_instructions     String?  // NEW: Combines access_description + visible_references + access_warnings
+  public_notes            String?  // NEW: Combines location_observations + general public info
 
-  // Observations
-  location_observations   String?
-  access_warnings         String?
+  // DEPRECATED - Will be removed in future version (kept for migration)
+  access_description      String?  /// @deprecated Use access_instructions instead
+  visible_references      String?  /// @deprecated Use access_instructions instead
+  access_warnings         String?  /// @deprecated Use access_instructions instead
+  location_observations   String?  /// @deprecated Use public_notes instead
 
   aed                     Aed?
   address_validation      AedAddressValidation?
@@ -375,6 +332,7 @@ model AedLocation {
   @@index([postal_code])
   @@index([latitude, longitude], map: "idx_location_spatial")
   @@index([city_code, district_code])
+  @@index([city_code, postal_code])  // NEW: For city-specific searches
   @@map("aed_locations")
 }
 
@@ -797,336 +755,3 @@ enum ExportStatus {
   FAILED
   CANCELLED
 }
-
-// ============================================
-// ORGANIZATIONS - Groups that manage AEDs
-// ============================================
-model Organization {
-  id                  String                          @id @default(uuid()) @db.Uuid
-  type                OrganizationType
-  name                String
-  code                String?                         @unique // e.g. "PROTE_MADRID"
-
-  // Contact & Location
-  email               String?
-  phone               String?
-
-  // ⭐ Geographic scope
-  scope_type          OrgScopeType                    @default(CITY)
-  city_code           String?                         // Municipality code
-  city_name           String?
-  district_codes      String[]                        // Array of district codes
-
-  // Settings
-  require_approval    Boolean                         @default(true) // Requires external approval?
-  approval_authority  String?                         // e.g. "Ayuntamiento de Madrid"
-
-  // Verification badge
-  badge_name          String?                         // e.g. "Verificado por SAMUR"
-  badge_icon          String?                         // Icon URL
-  badge_color         String?                         // Badge color
-
-  // Hierarchy
-  parent_org_id       String?                         @db.Uuid
-  parent_org          Organization?                   @relation("OrgHierarchy", fields: [parent_org_id], references: [id])
-  child_orgs          Organization[]                  @relation("OrgHierarchy")
-
-  is_active           Boolean                         @default(true)
-
-  members             OrganizationMember[]
-  aed_assignments     AedOrganizationAssignment[]
-  verifications       AedOrganizationVerification[]
-
-  created_at          DateTime                        @default(now())
-  updated_at          DateTime                        @updatedAt
-
-  @@index([city_code])
-  @@index([scope_type])
-  @@index([type])
-  @@index([is_active])
-  @@map("organizations")
-}
-
-enum OrganizationType {
-  CIVIL_PROTECTION       // Protección Civil
-  CERTIFIED_COMPANY      // Empresa homologada/certificada
-  VOLUNTEER_GROUP        // Grupo de voluntarios
-  MUNICIPALITY           // Ayuntamiento
-  HEALTH_SERVICE         // Servicio de salud
-  OWNER                  // Propietario del establecimiento
-}
-
-enum OrgScopeType {
-  NATIONAL      // National scope
-  REGIONAL      // Regional (Comunidad autónoma)
-  CITY          // Municipality/city
-  DISTRICT      // District within city
-  CUSTOM        // Custom area
-}
-
-// ============================================
-// ORGANIZATION MEMBERS - Who belongs to what
-// ============================================
-model OrganizationMember {
-  id                  String           @id @default(uuid()) @db.Uuid
-  organization_id     String           @db.Uuid
-  user_id             String           @db.Uuid
-
-  role                OrgMemberRole    @default(MEMBER)
-
-  // Permissions
-  can_verify          Boolean          @default(true)
-  can_edit            Boolean          @default(false)
-  can_approve         Boolean          @default(false)
-  can_manage_members  Boolean          @default(false)
-
-  joined_at           DateTime         @default(now())
-
-  organization        Organization     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-
-  @@unique([organization_id, user_id])
-  @@index([user_id])
-  @@index([organization_id])
-  @@map("organization_members")
-}
-
-enum OrgMemberRole {
-  OWNER       // Owner of the organization
-  ADMIN       // Administrator
-  VERIFIER    // Can perform verifications
-  MEMBER      // Basic member
-  VIEWER      // Read-only
-}
-
-// ============================================
-// AED ORGANIZATION ASSIGNMENT - Who manages what AED
-// ============================================
-model AedOrganizationAssignment {
-  id                      String                @id @default(uuid()) @db.Uuid
-  aed_id                  String                @db.Uuid
-  organization_id         String                @db.Uuid
-
-  // Assignment type - Only ONE ACTIVE per type
-  assignment_type         AssignmentType        @default(VERIFICATION)
-
-  // Status
-  status                  AssignmentStatus      @default(ACTIVE)
-
-  // Publication control per organization
-  publication_mode        PublicationMode       @default(LOCATION_ONLY)
-  approved_for_full       Boolean               @default(false)
-  approved_by_authority   Boolean               @default(false) // Approved by municipality?
-  approval_notes          String?
-
-  // Assignment metadata
-  assigned_by             String?               @db.Uuid
-  assigned_at             DateTime              @default(now())
-  revoked_at              DateTime?
-  revoked_by              String?               @db.Uuid
-  revoked_reason          String?
-
-  aed                     Aed                   @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-  organization            Organization          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-
-  @@unique([aed_id, assignment_type, status], name: "unique_active_assignment_per_type")
-  @@index([aed_id, status])
-  @@index([organization_id, status])
-  @@index([assignment_type])
-  @@map("aed_organization_assignments")
-}
-
-enum AssignmentType {
-  CIVIL_PROTECTION      // Only 1 active prote per AED
-  CERTIFIED_COMPANY     // Multiple companies can have active assignments
-  OWNERSHIP             // Only 1 owner
-  MAINTENANCE           // Only 1 maintenance company
-  VERIFICATION          // General verification
-}
-
-enum AssignmentStatus {
-  ACTIVE
-  REVOKED
-  COMPLETED
-  PENDING_APPROVAL
-}
-
-// ============================================
-// AED ORGANIZATION VERIFICATION - Verification history
-// ============================================
-model AedOrganizationVerification {
-  id                  String            @id @default(uuid()) @db.Uuid
-  aed_id              String            @db.Uuid
-  organization_id     String            @db.Uuid
-
-  verification_type   VerificationType
-
-  // Verification details
-  verified_by         String            @db.Uuid  // User ID
-  verified_at         DateTime          @default(now())
-
-  // What was verified
-  verified_address    Boolean           @default(false)
-  verified_schedule   Boolean           @default(false)
-  verified_photos     Boolean           @default(false)
-  verified_access     Boolean           @default(false)
-  verified_signage    Boolean           @default(false)
-
-  // Certificate (for official reviews)
-  certificate_number  String?
-  certificate_expiry  DateTime?
-
-  // Status - Latest verification tracking
-  is_current          Boolean           @default(true)
-  superseded_by       String?           @db.Uuid  // If there's a more recent verification
-  superseded_at       DateTime?
-
-  notes               String?
-
-  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-  organization        Organization      @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-
-  @@index([aed_id, is_current])
-  @@index([organization_id, verified_at])
-  @@index([is_current])
-  @@map("aed_organization_verifications")
-}
-
-enum VerificationType {
-  INFORMAL           // Informal verification (protes, volunteers)
-  OFFICIAL           // Official certified review
-  SELF_REPORTED      // Self-reported by owner
-  FIELD_INSPECTION   // Field inspection
-}
-
-// ============================================
-// AED CHANGE PROPOSALS - For users without organizations
-// ============================================
-model AedChangeProposal {
-  id                  String                @id @default(uuid()) @db.Uuid
-  aed_id              String                @db.Uuid
-
-  // Who proposed
-  proposed_by         String                @db.Uuid
-  proposed_at         DateTime              @default(now())
-
-  // What changes
-  change_type         ProposalChangeType
-  proposed_changes    Json                  // Diff of proposed changes
-
-  // Images/files attached
-  attached_images     String[]              // URLs
-
-  // Status
-  status              ProposalStatus        @default(PENDING)
-
-  // Review
-  reviewed_by         String?               @db.Uuid
-  reviewed_at         DateTime?
-  review_notes        String?
-
-  aed                 Aed                   @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-
-  @@index([aed_id, status])
-  @@index([proposed_by, status])
-  @@index([status])
-  @@map("aed_change_proposals")
-}
-
-enum ProposalChangeType {
-  UPDATE_SCHEDULE      // Propose schedule change
-  UPDATE_LOCATION      // Correct location
-  ADD_PHOTOS           // Add photos
-  UPDATE_ACCESS        // Update access info
-  REPORT_ISSUE         // Report issue (AED not working, etc)
-}
-
-enum ProposalStatus {
-  PENDING              // Pending review
-  APPROVED             // Approved (changes applied)
-  REJECTED             // Rejected
-  NEEDS_MORE_INFO      // Needs more information
-}
-
-// ============================================
-// AED FIELD CHANGES - Granular audit trail
-// ============================================
-model AedFieldChange {
-  id                  String            @id @default(uuid()) @db.Uuid
-  aed_id              String            @db.Uuid
-
-  // What changed
-  field_name          String            // e.g. "schedule.weekday_opening"
-  old_value           String?
-  new_value           String?
-
-  // Who & when
-  changed_by          String            @db.Uuid
-  changed_by_org      String?           @db.Uuid  // If belongs to an org
-  changed_at          DateTime          @default(now())
-
-  // Source
-  change_source       ChangeSource
-
-  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-
-  @@index([aed_id, changed_at])
-  @@index([field_name])
-  @@index([changed_by])
-  @@map("aed_field_changes")
-}
-
-enum ChangeSource {
-  WEB_UI               // Manual change from UI
-  API                  // Change via API
-  IMPORT               // Mass import
-  VERIFICATION         // During verification process
-  PROPOSAL_APPROVAL    // Proposal approval
-}
-
-// ============================================
-// AED OWNERSHIP CLAIMS - Property claims
-// ============================================
-model AedOwnershipClaim {
-  id                      String            @id @default(uuid()) @db.Uuid
-  aed_id                  String            @db.Uuid
-
-  // Claimant
-  claimed_by              String            @db.Uuid
-  claimed_by_org          String?           @db.Uuid  // If claiming on behalf of org
-  claim_type              ClaimType
-
-  // Evidence
-  evidence_description    String
-  evidence_files          String[]          // Document URLs
-
-  // Status
-  status                  ClaimStatus       @default(PENDING)
-
-  // Review
-  reviewed_by             String?           @db.Uuid
-  reviewed_at             DateTime?
-  review_notes            String?
-
-  created_at              DateTime          @default(now())
-
-  aed                     Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-
-  @@index([aed_id, status])
-  @@index([claimed_by])
-  @@index([status])
-  @@map("aed_ownership_claims")
-}
-
-enum ClaimType {
-  ESTABLISHMENT_OWNER   // Establishment owner
-  EQUIPMENT_OWNER       // DEA equipment owner
-  AUTHORIZED_MANAGER    // Authorized manager
-}
-
-enum ClaimStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  NEEDS_VERIFICATION
-}
-
