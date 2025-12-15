@@ -151,6 +151,7 @@ export class PrismaImportRepository implements IImportRepository {
           : undefined,
         establishment_type: csvRow.establishmentType || undefined,
         status: "DRAFT",
+        publication_mode: "LOCATION_ONLY", // ← Default publication mode for imports
         source_origin: "CSV_IMPORT",
         import_batch_id: batchId,
         external_reference: csvRow.id,

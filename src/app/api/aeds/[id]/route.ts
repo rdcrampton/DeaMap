@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, getUserFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { filterAedByPublicationMode } from "@/lib/publication-filter";
+import type { AedFullData } from "@/lib/publication-filter";
 
 /**
  * GET /api/aeds/[id]
  * Get a single AED by ID with all relationships
+ * Applies publication_mode filtering for non-authenticated users
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+
+    // Check if user is authenticated (optional - don't require auth)
+    const user = await getUserFromRequest(request);
+    const isAuthenticated = user !== null;
 
     const aed = await prisma.aed.findUnique({
       where: { id },
@@ -39,9 +46,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
+    // If user is authenticated, return full data
+    if (isAuthenticated) {
+      return NextResponse.json({
+        success: true,
+        data: aed,
+      });
+    }
+
+    // If not authenticated, filter by publication_mode
+    const filteredAed = filterAedByPublicationMode(aed as unknown as AedFullData);
+
+    if (!filteredAed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "AED not publicly available",
+          message: "This AED is not available for public viewing",
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      data: aed,
+      data: filteredAed,
+      publication_mode: aed.publication_mode,
     });
   } catch (error) {
     console.error("Error fetching AED:", error);

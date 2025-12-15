@@ -44,6 +44,13 @@ model Aed {
   status_metadata           Json?
   published_at              DateTime?
 
+  // ⭐ PUBLICATION SYSTEM - Controls what data is publicly visible
+  publication_mode          PublicationMode          @default(LOCATION_ONLY)
+  publication_requested_at  DateTime?
+  publication_approved_at   DateTime?
+  publication_approved_by   String?                  @db.Uuid
+  publication_notes         String?
+
   // Creation sequence
   sequence                  Int                      @default(autoincrement())
 
@@ -60,6 +67,7 @@ model Aed {
   validations               AedValidation[]
   code_history              AedCodeHistory[]
   status_changes            AedStatusChange[]
+  publication_history       AedPublicationHistory[]
 
   created_at                DateTime                 @default(now())
   updated_at                DateTime                 @updatedAt
@@ -78,6 +86,7 @@ model Aed {
   // ⭐ CRITICAL: Spatial index for proximity searches
   @@index([latitude, longitude], map: "idx_aeds_coordinates")
   @@index([status, latitude, longitude], map: "idx_aeds_published_coordinates")
+  @@index([status, publication_mode], map: "idx_aeds_status_publication")
   // PostGIS spatial index (created via migration)
   @@map("aeds")
 }
@@ -106,6 +115,13 @@ enum SourceOrigin {
   FIELD_VERIFICATION
 }
 
+enum PublicationMode {
+  NONE          // Not visible publicly
+  LOCATION_ONLY // Only location data (city, postal code, district, street, number, floor)
+  BASIC_INFO    // Location + schedule + establishment type
+  FULL          // Full information: photos, responsible, contact, descriptions, etc.
+}
+
 // ============================================
 // STATUS CHANGE HISTORY
 // ============================================
@@ -125,6 +141,36 @@ model AedStatusChange {
   @@index([aed_id, created_at])
   @@index([new_status])
   @@map("aed_status_changes")
+}
+
+// ============================================
+// PUBLICATION CHANGE HISTORY
+// ============================================
+model AedPublicationHistory {
+  id                  String            @id @default(uuid()) @db.Uuid
+  aed_id              String            @db.Uuid
+
+  previous_mode       PublicationMode?
+  new_mode            PublicationMode
+
+  changed_by          String?           @db.Uuid
+  changed_by_role     String?
+  change_reason       String?
+
+  // Approval workflow (optional)
+  requires_approval   Boolean           @default(false)
+  approved_by         String?           @db.Uuid
+  approved_at         DateTime?
+  approval_notes      String?
+
+  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+
+  created_at          DateTime          @default(now())
+
+  @@index([aed_id, created_at])
+  @@index([new_mode])
+  @@index([changed_by])
+  @@map("aed_publication_history")
 }
 
 // ============================================
