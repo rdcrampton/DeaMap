@@ -32,12 +32,15 @@ export interface Organization {
   // Contact
   email: string | null;
   phone: string | null;
+  website: string | null;
+  description: string | null;
 
   // Geographic scope
   scope_type: OrgScopeType;
   city_code: string | null;
   city_name: string | null;
   district_codes: string[];
+  custom_scope_description: string | null;
 
   // Settings
   require_approval: boolean;
@@ -55,6 +58,8 @@ export interface Organization {
 
   created_at: Date;
   updated_at: Date;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 export interface OrganizationWithMembers extends Organization {
@@ -298,16 +303,20 @@ export interface CreateOrganizationRequest {
   code?: string;
   email?: string;
   phone?: string;
+  website?: string;
+  description?: string;
   scope_type?: OrgScopeType;
   city_code?: string;
   city_name?: string;
   district_codes?: string[];
+  custom_scope_description?: string;
   require_approval?: boolean;
   approval_authority?: string;
   badge_name?: string;
   badge_icon?: string;
   badge_color?: string;
   parent_org_id?: string;
+  is_active?: boolean;
 }
 
 export interface UpdateOrganizationRequest extends Partial<CreateOrganizationRequest> {
