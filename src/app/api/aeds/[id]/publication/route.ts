@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import type { PublicationMode } from "@/generated/client";
+import type { PublicationMode } from "@/generated/client/client";
 
 interface UpdatePublicationRequest {
   publication_mode: PublicationMode;
@@ -29,10 +29,7 @@ interface UpdatePublicationRequest {
  * - Updated AED with new publication_mode
  * - Publication history entry created
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Require authentication
     const user = await requireAuth(request);
@@ -165,10 +162,7 @@ export async function PATCH(
  * Response:
  * - Array of publication history entries
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 

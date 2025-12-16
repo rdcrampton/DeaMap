@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { PublicationMode } from "@/generated/client";
-import {
-  getPublicationModeLabel,
-  getPublicationModeDescription,
-} from "@/lib/publication-filter";
+import type { PublicationMode } from "@/generated/client/client";
+import { getPublicationModeLabel, getPublicationModeDescription } from "@/lib/publication-filter";
 
 interface PublicationModeSelectorProps {
   aedId: string;
@@ -95,9 +92,7 @@ export default function PublicationModeSelector({
         throw new Error(data.message || "Error al actualizar modo de publicación");
       }
 
-      setSuccess(
-        `Modo de publicación actualizado a: ${getPublicationModeLabel(selectedMode)}`
-      );
+      setSuccess(`Modo de publicación actualizado a: ${getPublicationModeLabel(selectedMode)}`);
       setReason("");
       setNotes("");
 
@@ -143,9 +138,7 @@ export default function PublicationModeSelector({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Modo de Publicación
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Modo de Publicación</h3>
         <span
           className={`px-3 py-1 rounded-full text-sm font-medium ${
             currentMode === "FULL"
@@ -187,9 +180,7 @@ export default function PublicationModeSelector({
             />
             <div className="ml-3 flex-1">
               <div className="font-medium text-gray-900 dark:text-white">{mode.label}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {mode.description}
-              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">{mode.description}</div>
             </div>
           </label>
         ))}
@@ -268,9 +259,7 @@ export default function PublicationModeSelector({
       {/* History Section */}
       {showHistory && (
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <h4 className="font-medium text-gray-900 dark:text-white mb-3">
-            Historial de cambios
-          </h4>
+          <h4 className="font-medium text-gray-900 dark:text-white mb-3">Historial de cambios</h4>
 
           {loadingHistory ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">Cargando historial...</p>
@@ -285,17 +274,15 @@ export default function PublicationModeSelector({
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-medium text-gray-900 dark:text-white">
-                      {entry.previous_mode ? getPublicationModeLabel(entry.previous_mode) : "—"}{" "}
-                      → {getPublicationModeLabel(entry.new_mode)}
+                      {entry.previous_mode ? getPublicationModeLabel(entry.previous_mode) : "—"} →{" "}
+                      {getPublicationModeLabel(entry.new_mode)}
                     </span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {new Date(entry.created_at).toLocaleString("es-ES")}
                     </span>
                   </div>
                   {entry.change_reason && (
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Razón: {entry.change_reason}
-                    </p>
+                    <p className="text-gray-600 dark:text-gray-400">Razón: {entry.change_reason}</p>
                   )}
                 </div>
               ))}

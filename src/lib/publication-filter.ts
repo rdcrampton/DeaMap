@@ -5,7 +5,7 @@
  * what information is visible to the public.
  */
 
-import type { PublicationMode } from "@/generated/client";
+import type { PublicationMode } from "@/generated/client/client";
 
 /**
  * Complete AED data structure (all fields)
@@ -103,10 +103,7 @@ export type AedFilteredData = Partial<AedFullData>;
  * @param aed - Complete AED data object
  * @returns Filtered AED data according to publication_mode
  */
-export function filterAedByPublicationMode(
-  aed: AedFullData
-): AedFilteredData | null {
-
+export function filterAedByPublicationMode(aed: AedFullData): AedFilteredData | null {
   // NONE: Not visible publicly - return null
   if (aed.publication_mode === "NONE") {
     return null;
@@ -126,27 +123,29 @@ export function filterAedByPublicationMode(
   if (aed.publication_mode === "LOCATION_ONLY") {
     return {
       ...base,
-      location: aed.location ? {
-        id: aed.location.id,
-        city_name: aed.location.city_name,
-        postal_code: aed.location.postal_code,
-        district_name: aed.location.district_name,
-        neighborhood_name: aed.location.neighborhood_name,
-        street_type: aed.location.street_type,
-        street_name: aed.location.street_name,
-        street_number: aed.location.street_number,
-        floor: aed.location.floor,
-        specific_location: aed.location.specific_location,
-        // Explicitly exclude sensitive fields
-        additional_info: null,
-        city_code: null,
-        district_code: null,
-        neighborhood_code: null,
-        access_description: null,
-        visible_references: null,
-        location_observations: null,
-        access_warnings: null,
-      } : null,
+      location: aed.location
+        ? {
+            id: aed.location.id,
+            city_name: aed.location.city_name,
+            postal_code: aed.location.postal_code,
+            district_name: aed.location.district_name,
+            neighborhood_name: aed.location.neighborhood_name,
+            street_type: aed.location.street_type,
+            street_name: aed.location.street_name,
+            street_number: aed.location.street_number,
+            floor: aed.location.floor,
+            specific_location: aed.location.specific_location,
+            // Explicitly exclude sensitive fields
+            additional_info: null,
+            city_code: null,
+            district_code: null,
+            neighborhood_code: null,
+            access_description: null,
+            visible_references: null,
+            location_observations: null,
+            access_warnings: null,
+          }
+        : null,
     };
   }
 
@@ -155,27 +154,31 @@ export function filterAedByPublicationMode(
     return {
       ...base,
       establishment_type: aed.establishment_type,
-      location: aed.location ? {
-        ...aed.location,
-      } : null,
-      schedule: aed.schedule ? {
-        id: aed.schedule.id,
-        description: aed.schedule.description,
-        has_24h_surveillance: aed.schedule.has_24h_surveillance,
-        has_restricted_access: aed.schedule.has_restricted_access,
-        weekday_opening: aed.schedule.weekday_opening,
-        weekday_closing: aed.schedule.weekday_closing,
-        saturday_opening: aed.schedule.saturday_opening,
-        saturday_closing: aed.schedule.saturday_closing,
-        sunday_opening: aed.schedule.sunday_opening,
-        sunday_closing: aed.schedule.sunday_closing,
-        holidays_as_weekday: aed.schedule.holidays_as_weekday,
-        closed_on_holidays: aed.schedule.closed_on_holidays,
-        closed_in_august: aed.schedule.closed_in_august,
-        observations: aed.schedule.observations,
-        schedule_exceptions: aed.schedule.schedule_exceptions,
-        access_instructions: aed.schedule.access_instructions,
-      } : null,
+      location: aed.location
+        ? {
+            ...aed.location,
+          }
+        : null,
+      schedule: aed.schedule
+        ? {
+            id: aed.schedule.id,
+            description: aed.schedule.description,
+            has_24h_surveillance: aed.schedule.has_24h_surveillance,
+            has_restricted_access: aed.schedule.has_restricted_access,
+            weekday_opening: aed.schedule.weekday_opening,
+            weekday_closing: aed.schedule.weekday_closing,
+            saturday_opening: aed.schedule.saturday_opening,
+            saturday_closing: aed.schedule.saturday_closing,
+            sunday_opening: aed.schedule.sunday_opening,
+            sunday_closing: aed.schedule.sunday_closing,
+            holidays_as_weekday: aed.schedule.holidays_as_weekday,
+            closed_on_holidays: aed.schedule.closed_on_holidays,
+            closed_in_august: aed.schedule.closed_in_august,
+            observations: aed.schedule.observations,
+            schedule_exceptions: aed.schedule.schedule_exceptions,
+            access_instructions: aed.schedule.access_instructions,
+          }
+        : null,
     };
   }
 

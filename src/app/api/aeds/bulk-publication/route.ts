@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import type { PublicationMode } from "@/generated/client";
+import type { PublicationMode } from "@/generated/client/client";
 
 interface BulkUpdatePublicationRequest {
   aed_ids: string[];

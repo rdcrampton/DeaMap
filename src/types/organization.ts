@@ -17,7 +17,7 @@ import type {
   ClaimType,
   ClaimStatus,
   PublicationMode,
-} from "@/generated/client";
+} from "@/generated/client/client";
 
 // ============================================
 // ORGANIZATION

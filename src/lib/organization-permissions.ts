@@ -5,10 +5,6 @@
  */
 
 import { prisma } from "@/lib/db";
-import type {
-  OrganizationMember,
-  AedOrganizationAssignment,
-} from "@/types/organization";
 
 /**
  * Check if user can view an AED
@@ -17,10 +13,7 @@ import type {
  * - Admins can view
  * - Public DEAs can be viewed by anyone
  */
-export async function canUserViewAed(
-  userId: string,
-  aedId: string
-): Promise<boolean> {
+export async function canUserViewAed(userId: string, aedId: string): Promise<boolean> {
   // Get AED with owner and assignments
   const aed = await prisma.aed.findUnique({
     where: { id: aedId },
@@ -63,10 +56,7 @@ export async function canUserViewAed(
  * - Members with can_edit permission from assigned organizations
  * - Admins can edit
  */
-export async function canUserEditAed(
-  userId: string,
-  aedId: string
-): Promise<boolean> {
+export async function canUserEditAed(userId: string, aedId: string): Promise<boolean> {
   const aed = await prisma.aed.findUnique({
     where: { id: aedId },
     select: {
@@ -103,10 +93,7 @@ export async function canUserEditAed(
  * Check if user can verify an AED
  * - Members with can_verify permission from assigned organizations
  */
-export async function canUserVerifyAed(
-  userId: string,
-  aedId: string
-): Promise<boolean> {
+export async function canUserVerifyAed(userId: string, aedId: string): Promise<boolean> {
   const assignments = await prisma.aedOrganizationAssignment.findMany({
     where: {
       aed_id: aedId,
@@ -132,10 +119,7 @@ export async function canUserVerifyAed(
  * Check if user can approve publication for an AED
  * - Members with can_approve permission from assigned organizations
  */
-export async function canUserApprovePublication(
-  userId: string,
-  aedId: string
-): Promise<boolean> {
+export async function canUserApprovePublication(userId: string, aedId: string): Promise<boolean> {
   const assignments = await prisma.aedOrganizationAssignment.findMany({
     where: {
       aed_id: aedId,

@@ -71,7 +71,6 @@ export class PrismaImportRepository implements IImportRepository {
       successfulRecords: batch.successful_records,
       failedRecords: batch.failed_records,
       createdAt: batch.created_at,
-      startedAt: batch.started_at ?? null,
       completedAt: batch.completed_at,
     };
   }
