@@ -39,13 +39,15 @@ export default function UsersPage() {
       if (roleFilter) params.append("role", roleFilter);
 
       const response = await fetch(`/api/admin/users?${params.toString()}`);
+
+      if (response.status === 403) {
+        router.push("/");
+        return;
+      }
+
       const data = await response.json();
 
       if (!data.success) {
-        if (response.status === 403) {
-          router.push("/");
-          return;
-        }
         throw new Error(data.error || "Error al cargar usuarios");
       }
 

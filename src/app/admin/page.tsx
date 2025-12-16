@@ -14,11 +14,11 @@ export default function AdminDashboard() {
     fetch("/api/auth/me")
       .then((res) => res.json())
       .then((data) => {
-        if (!data.success || data.data.role !== "ADMIN") {
+        if (!data.user || data.user.role !== "ADMIN") {
           router.push("/");
           return;
         }
-        setUser(data.data);
+        setUser(data.user);
         setLoading(false);
       })
       .catch(() => {

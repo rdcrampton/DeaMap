@@ -38,13 +38,15 @@ export default function OrganizationsPage() {
       if (filter.city_code) params.append("city_code", filter.city_code);
 
       const response = await fetch(`/api/admin/organizations?${params.toString()}`);
+
+      if (response.status === 403) {
+        router.push("/");
+        return;
+      }
+
       const data = await response.json();
 
       if (!data.success) {
-        if (response.status === 403) {
-          router.push("/");
-          return;
-        }
         throw new Error(data.error || "Error al cargar organizaciones");
       }
 
