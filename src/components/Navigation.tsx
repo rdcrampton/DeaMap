@@ -11,6 +11,7 @@ import {
   PlusCircle,
   ClipboardCheck,
   Upload,
+  Settings,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -47,7 +48,17 @@ export default function Navigation() {
     { href: "/import", label: "Importar", icon: Upload },
   ];
 
-  const navLinks = user && user.is_verified ? [...publicNavLinks, ...authNavLinks] : publicNavLinks;
+  const adminNavLinks = [
+    { href: "/admin", label: "Admin", icon: Settings },
+  ];
+
+  let navLinks = publicNavLinks;
+  if (user && user.is_verified) {
+    navLinks = [...publicNavLinks, ...authNavLinks];
+    if (user.role === "ADMIN") {
+      navLinks = [...navLinks, ...adminNavLinks];
+    }
+  }
 
   return (
     <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
