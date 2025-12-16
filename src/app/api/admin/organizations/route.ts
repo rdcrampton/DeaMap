@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where: any = {};
     if (type) where.type = type;
-    if (isActive !== null) where.is_active = isActive === "true";
+    if (isActive) where.is_active = isActive === "true";
     if (cityCode) where.city_code = cityCode;
 
     const organizations = await prisma.organization.findMany({
