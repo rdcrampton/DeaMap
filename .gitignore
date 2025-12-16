@@ -58,3 +58,4 @@ logs/*
 # Prisma generated client
 src/generated/
 scripts/backup_bd.sh
+/*.dump

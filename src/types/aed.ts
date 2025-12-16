@@ -35,11 +35,11 @@ export interface Aed {
     weekday_opening: string | null;
     weekday_closing: string | null;
   } | null;
-  responsible: {
+  responsible?: {
     name: string;
     email: string;
     phone: string | null;
-  };
+  } | null;
   images?: AedImage[];
 }
 
