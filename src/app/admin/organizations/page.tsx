@@ -47,7 +47,10 @@ export default function OrganizationsPage() {
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || "Error al cargar organizaciones");
+        const errorMsg = data.details
+          ? `${data.error}: ${data.details}`
+          : data.error || "Error al cargar organizaciones";
+        throw new Error(errorMsg);
       }
 
       setOrganizations(data.data);
