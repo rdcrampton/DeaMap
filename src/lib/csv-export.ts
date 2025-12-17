@@ -15,6 +15,7 @@ interface AedExportData {
     street_number?: string | null;
     postal_code?: string | null;
     city_name?: string | null;
+    city_code?: string | null;
     district_name?: string | null;
     neighborhood_name?: string | null;
   } | null;
@@ -76,6 +77,7 @@ interface AedImportFormatData {
     city_name?: string | null;
     city_code?: string | null;
     district_name?: string | null;
+    neighborhood_name?: string | null;
     floor?: string | null;
     specific_location?: string | null;
 

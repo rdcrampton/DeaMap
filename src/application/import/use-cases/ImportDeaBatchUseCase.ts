@@ -73,7 +73,6 @@ export class ImportDeaBatchUseCase {
         totalRecords: parseResult.totalRows,
         successfulRecords: 0,
         failedRecords: 0,
-        startedAt: new Date(),
       });
     } else {
       // Crear batch nuevo (modo legacy)
@@ -87,9 +86,7 @@ export class ImportDeaBatchUseCase {
         importedBy,
       });
 
-      await this.repository.updateBatchStatus(batchId, "IN_PROGRESS", {
-        startedAt: new Date(),
-      });
+      await this.repository.updateBatchStatus(batchId, "IN_PROGRESS");
     }
 
     let successCount = 0;

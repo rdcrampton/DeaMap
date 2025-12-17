@@ -172,32 +172,34 @@ export default function AedDetailModal({ aed, isOpen, onClose }: AedDetailModalP
               </div>
             )}
 
-            {/* Responsible */}
-            <div className="flex items-start space-x-3 p-4 rounded-xl bg-green-50">
-              <Building className="w-6 h-6 text-green-500 flex-shrink-0 mt-1" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 mb-2">Responsable</h3>
-                <p className="text-gray-700 font-medium mb-2">{aed.responsible.name}</p>
+            {/* Responsible - Only shown if data is available */}
+            {aed.responsible && (
+              <div className="flex items-start space-x-3 p-4 rounded-xl bg-green-50">
+                <Building className="w-6 h-6 text-green-500 flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 mb-2">Responsable</h3>
+                  <p className="text-gray-700 font-medium mb-2">{aed.responsible.name}</p>
 
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Mail className="w-4 h-4" />
-                    <a href={`mailto:${aed.responsible.email}`} className="hover:text-blue-600">
-                      {aed.responsible.email}
-                    </a>
-                  </div>
-
-                  {aed.responsible.phone && (
+                  <div className="space-y-1">
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <Phone className="w-4 h-4" />
-                      <a href={`tel:${aed.responsible.phone}`} className="hover:text-blue-600">
-                        {aed.responsible.phone}
+                      <Mail className="w-4 h-4" />
+                      <a href={`mailto:${aed.responsible.email}`} className="hover:text-blue-600">
+                        {aed.responsible.email}
                       </a>
                     </div>
-                  )}
+
+                    {aed.responsible.phone && (
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <Phone className="w-4 h-4" />
+                        <a href={`tel:${aed.responsible.phone}`} className="hover:text-blue-600">
+                          {aed.responsible.phone}
+                        </a>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Action Buttons */}

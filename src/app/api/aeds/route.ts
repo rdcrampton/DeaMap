@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
+import { filterAedByPublicationMode } from "@/lib/publication-filter";
+import type { AedFullData } from "@/lib/publication-filter";
 
 /**
  * Types for creating a new AED
@@ -98,6 +100,9 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where = {
       status: "PUBLISHED" as const,
+      publication_mode: {
+        not: "NONE" as const,
+      },
       ...(search && {
         OR: [
           { name: { contains: search, mode: "insensitive" as const } },
@@ -121,6 +126,7 @@ export async function GET(request: NextRequest) {
           latitude: true,
           longitude: true,
           published_at: true,
+          publication_mode: true,
           location: {
             select: {
               street_type: true,
@@ -171,9 +177,14 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
+    // Filter each AED based on its publication_mode
+    const filteredAeds = aeds
+      .map((aed) => filterAedByPublicationMode(aed as unknown as AedFullData))
+      .filter((aed) => aed !== null);
+
     return NextResponse.json({
       success: true,
-      data: aeds,
+      data: filteredAeds,
       pagination: {
         page,
         limit,
@@ -300,7 +311,7 @@ export async function POST(request: NextRequest) {
       scheduleId = schedule.id;
     }
 
-    // Create AED with PENDING_REVIEW status
+    // Create AED with PENDING_REVIEW status and LOCATION_ONLY publication mode by default
     const aed = await prisma.aed.create({
       data: {
         code: body.code,
@@ -313,6 +324,7 @@ export async function POST(request: NextRequest) {
         source_details: body.source_details,
         origin_observations: body.origin_observations,
         status: "PENDING_REVIEW",
+        publication_mode: "LOCATION_ONLY",
         location_id: location.id,
         responsible_id: responsibleId,
         schedule_id: scheduleId,

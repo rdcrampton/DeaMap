@@ -432,7 +432,7 @@ function AedCard({ aed, onClick }: { aed: Aed; onClick: () => void }) {
           )}
 
           {/* Contact */}
-          {aed.responsible.phone && (
+          {aed.responsible && aed.responsible.phone && (
             <div className="flex items-center space-x-2">
               <Phone className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 text-green-500" />
               <p className="text-sm sm:text-base">{aed.responsible.phone}</p>

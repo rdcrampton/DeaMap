@@ -45,6 +45,10 @@ export interface CsvRowData {
   "Advertencias acceso": string;
   "Observaciones ubicación": string;
   "Comentario libre": string;
+
+  // Optional fields that may exist in some CSV formats
+  "Hora de inicio"?: string;
+  "Hora de finalización"?: string;
 }
 
 export class CsvRow {
@@ -177,11 +181,11 @@ export class CsvRow {
   }
 
   get startTime(): string {
-    return this.data["Hora de inicio"];
+    return this.data["Hora de inicio"] || "";
   }
 
   get endTime(): string {
-    return this.data["Hora de finalización"];
+    return this.data["Hora de finalización"] || "";
   }
 
   /**

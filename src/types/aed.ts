@@ -19,6 +19,7 @@ export interface Aed {
   latitude: number;
   longitude: number;
   published_at: string | null;
+  publication_mode: "NONE" | "LOCATION_ONLY" | "BASIC_INFO" | "FULL";
   location: {
     street_type: string;
     street_name: string;
@@ -34,11 +35,11 @@ export interface Aed {
     weekday_opening: string | null;
     weekday_closing: string | null;
   } | null;
-  responsible: {
+  responsible?: {
     name: string;
     email: string;
     phone: string | null;
-  };
+  } | null;
   images?: AedImage[];
 }
 
@@ -77,6 +78,7 @@ export interface AedMapMarker {
   latitude: number;
   longitude: number;
   establishment_type: string;
+  publication_mode: "NONE" | "LOCATION_ONLY" | "BASIC_INFO" | "FULL";
 }
 
 export interface AedsByBoundsResponse {

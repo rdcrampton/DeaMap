@@ -71,7 +71,6 @@ export class PrismaImportRepository implements IImportRepository {
       successfulRecords: batch.successful_records,
       failedRecords: batch.failed_records,
       createdAt: batch.created_at,
-      startedAt: batch.started_at ?? null,
       completedAt: batch.completed_at,
     };
   }
@@ -149,6 +148,7 @@ export class PrismaImportRepository implements IImportRepository {
           : undefined,
         establishment_type: csvRow.establishmentType || undefined,
         status: "DRAFT",
+        publication_mode: "LOCATION_ONLY", // ← Default publication mode for imports
         source_origin: "CSV_IMPORT",
         import_batch_id: batchId,
         external_reference: csvRow.id,

@@ -248,33 +248,41 @@ export default function DeaDetailPage() {
           </div>
         </section>
 
-        {/* Contact Info */}
-        <section className="bg-gray-800 rounded-2xl p-5 mb-4">
-          <h2 className="text-lg font-semibold mb-4">Contacto</h2>
+        {/* Contact Info - Only show if responsible exists */}
+        {aed.responsible && (
+          <section className="bg-gray-800 rounded-2xl p-5 mb-4">
+            <h2 className="text-lg font-semibold mb-4">Contacto</h2>
 
-          <div className="space-y-3 text-sm">
-            <div>
-              <p className="text-gray-400">Responsable</p>
-              <p className="text-white font-medium">{aed.responsible.name}</p>
-            </div>
-
-            {aed.responsible.phone && (
+            <div className="space-y-3 text-sm">
               <div>
-                <p className="text-gray-400">Teléfono</p>
-                <a href={`tel:${aed.responsible.phone}`} className="text-blue-400 hover:underline">
-                  {aed.responsible.phone}
+                <p className="text-gray-400">Responsable</p>
+                <p className="text-white font-medium">{aed.responsible.name}</p>
+              </div>
+
+              {aed.responsible.phone && (
+                <div>
+                  <p className="text-gray-400">Teléfono</p>
+                  <a
+                    href={`tel:${aed.responsible.phone}`}
+                    className="text-blue-400 hover:underline"
+                  >
+                    {aed.responsible.phone}
+                  </a>
+                </div>
+              )}
+
+              <div>
+                <p className="text-gray-400">Email</p>
+                <a
+                  href={`mailto:${aed.responsible.email}`}
+                  className="text-blue-400 hover:underline"
+                >
+                  {aed.responsible.email}
                 </a>
               </div>
-            )}
-
-            <div>
-              <p className="text-gray-400">Email</p>
-              <a href={`mailto:${aed.responsible.email}`} className="text-blue-400 hover:underline">
-                {aed.responsible.email}
-              </a>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Report Problem Button */}
         <button className="w-full bg-transparent border border-red-500 text-red-500 py-3 rounded-lg font-medium hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2 mb-20">

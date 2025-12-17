@@ -27,7 +27,7 @@ export class PostGISClusteringAdapter implements IClusteringService {
     // Query para calcular clusters usando PostGIS
     const clustersQuery = `
       WITH grid_clusters AS (
-        SELECT 
+        SELECT
           ST_SnapToGrid(
             ST_SetSRID(ST_MakePoint(a.longitude, a.latitude), 4326),
             $5
@@ -39,8 +39,9 @@ export class PostGISClusteringAdapter implements IClusteringService {
           MAX(a.longitude) as max_lng,
           array_agg(a.id) as aed_ids
         FROM aeds a
-        WHERE 
+        WHERE
           a.status = 'PUBLISHED'
+          AND a.publication_mode != 'NONE'
           AND a.latitude IS NOT NULL
           AND a.longitude IS NOT NULL
           AND a.latitude BETWEEN $1 AND $2
@@ -48,7 +49,7 @@ export class PostGISClusteringAdapter implements IClusteringService {
         GROUP BY cluster_point
         HAVING COUNT(*) >= $6
       )
-      SELECT 
+      SELECT
         ST_Y(cluster_point) as center_lat,
         ST_X(cluster_point) as center_lng,
         count,
@@ -101,31 +102,34 @@ export class PostGISClusteringAdapter implements IClusteringService {
     // Obtener DEAs individuales (los que no están en clusters)
     const individualQuery = `
       WITH grid_clusters AS (
-        SELECT 
+        SELECT
           ST_SnapToGrid(
             ST_SetSRID(ST_MakePoint(a.longitude, a.latitude), 4326),
             $5
           ) as cluster_point,
           COUNT(*) as count
         FROM aeds a
-        WHERE 
+        WHERE
           a.status = 'PUBLISHED'
+          AND a.publication_mode != 'NONE'
           AND a.latitude IS NOT NULL
           AND a.longitude IS NOT NULL
           AND a.latitude BETWEEN $1 AND $2
           AND a.longitude BETWEEN $3 AND $4
         GROUP BY cluster_point
       )
-      SELECT 
+      SELECT
         a.id,
         a.code,
         a.name,
         a.latitude,
         a.longitude,
-        a.establishment_type
+        a.establishment_type,
+        a.publication_mode
       FROM aeds a
-      WHERE 
+      WHERE
         a.status = 'PUBLISHED'
+        AND a.publication_mode != 'NONE'
         AND a.latitude IS NOT NULL
         AND a.longitude IS NOT NULL
         AND a.latitude BETWEEN $1 AND $2
@@ -134,8 +138,8 @@ export class PostGISClusteringAdapter implements IClusteringService {
           ST_SetSRID(ST_MakePoint(a.longitude, a.latitude), 4326),
           $5
         ) IN (
-          SELECT cluster_point 
-          FROM grid_clusters 
+          SELECT cluster_point
+          FROM grid_clusters
           WHERE count < $6
         )
       ORDER BY a.created_at DESC
@@ -175,16 +179,18 @@ export class PostGISClusteringAdapter implements IClusteringService {
    */
   async getIndividualMarkers(bounds: BoundingBox, limit: number): Promise<AedMapMarker[]> {
     const query = `
-      SELECT 
+      SELECT
         a.id,
         a.code,
         a.name,
         a.latitude,
         a.longitude,
-        a.establishment_type
+        a.establishment_type,
+        a.publication_mode
       FROM aeds a
-      WHERE 
+      WHERE
         a.status = 'PUBLISHED'
+        AND a.publication_mode != 'NONE'
         AND a.latitude IS NOT NULL
         AND a.longitude IS NOT NULL
         AND a.latitude BETWEEN $1 AND $2

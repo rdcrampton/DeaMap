@@ -81,7 +81,7 @@ interface AedForExport {
     position?: string | null;
     department?: string | null;
     observations?: string | null;
-    notes?: string | null;
+    contact_notes?: string | null;
     ownership?: string | null;
     local_ownership?: string | null;
     local_use?: string | null;
@@ -226,7 +226,7 @@ export class GenerateExportUseCase {
               position: aed.responsible.position,
               department: aed.responsible.department,
               observations: aed.responsible.observations,
-              notes: aed.responsible.notes,
+              contact_notes: aed.responsible.contact_notes,
               ownership: aed.responsible.ownership,
               local_ownership: aed.responsible.local_ownership,
               local_use: aed.responsible.local_use,
