@@ -106,8 +106,13 @@ export async function GET(
 
   } catch (error) {
     console.error("Error fetching organization:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to fetch organization" },
+      {
+        success: false,
+        error: "Failed to fetch organization",
+        details: errorMessage
+      },
       { status: 500 }
     );
   }
@@ -208,8 +213,13 @@ export async function PATCH(
 
   } catch (error) {
     console.error("Error updating organization:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to update organization" },
+      {
+        success: false,
+        error: "Failed to update organization",
+        details: errorMessage
+      },
       { status: 500 }
     );
   }
@@ -289,8 +299,13 @@ export async function DELETE(
 
   } catch (error) {
     console.error("Error deleting organization:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to delete organization" },
+      {
+        success: false,
+        error: "Failed to delete organization",
+        details: errorMessage
+      },
       { status: 500 }
     );
   }
