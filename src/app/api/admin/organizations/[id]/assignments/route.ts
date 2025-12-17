@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 
 /**
  * GET /api/admin/organizations/[id]/assignments
- * Get all AED assignments for an organization
+ * Get all AED assignments for an organization with pagination and filtering
  */
 export async function GET(
   request: NextRequest,
@@ -24,6 +24,18 @@ export async function GET(
   }
 
   const { id } = await params;
+  const { searchParams } = new URL(request.url);
+
+  // Pagination params
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "25")));
+  const skip = (page - 1) * limit;
+
+  // Filter params
+  const search = searchParams.get("search") || "";
+  const status = searchParams.get("status") || "";
+  const assignmentType = searchParams.get("assignment_type") || "";
+  const aedStatus = searchParams.get("aed_status") || "";
 
   try {
     // Check if organization exists
@@ -38,8 +50,42 @@ export async function GET(
       );
     }
 
+    // Build where clause with filters
+    const whereClause: any = { organization_id: id };
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    if (assignmentType) {
+      whereClause.assignment_type = assignmentType;
+    }
+
+    // Search and AED status filters require nested conditions
+    if (search || aedStatus) {
+      whereClause.aed = {};
+
+      if (search) {
+        whereClause.aed.OR = [
+          { name: { contains: search, mode: "insensitive" } },
+          { code: { contains: search, mode: "insensitive" } },
+          { location: { city_name: { contains: search, mode: "insensitive" } } },
+          { location: { street_name: { contains: search, mode: "insensitive" } } },
+        ];
+      }
+
+      if (aedStatus) {
+        whereClause.aed.status = aedStatus;
+      }
+    }
+
+    // Get total count for pagination
+    const totalCount = await prisma.aedOrganizationAssignment.count({
+      where: whereClause,
+    });
+
     const assignments = await prisma.aedOrganizationAssignment.findMany({
-      where: { organization_id: id },
+      where: whereClause,
       include: {
         aed: {
           select: {
@@ -58,13 +104,25 @@ export async function GET(
         },
       },
       orderBy: { assigned_at: "desc" },
+      skip,
+      take: limit,
     });
+
+    const totalPages = Math.ceil(totalCount / limit);
 
     return NextResponse.json({
       success: true,
       data: {
         organization_id: id,
         assignments,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1,
+        },
       },
     });
   } catch (error) {

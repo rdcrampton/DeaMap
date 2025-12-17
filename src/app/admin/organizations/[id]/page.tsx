@@ -81,7 +81,21 @@ interface AedAssignment {
     code: string | null;
     name: string;
     status: string;
+    location?: {
+      street_name: string | null;
+      street_number: string | null;
+      city_name: string | null;
+    } | null;
   };
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
 }
 
 interface User {
@@ -123,6 +137,15 @@ export default function OrganizationDetailPage() {
   // Assignments state
   const [assignments, setAssignments] = useState<AedAssignment[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [assignmentsPagination, setAssignmentsPagination] = useState<PaginationInfo | null>(null);
+  const [assignmentsFilters, setAssignmentsFilters] = useState({
+    search: "",
+    status: "",
+    assignment_type: "",
+    aed_status: "",
+    page: 1,
+    limit: 25,
+  });
 
   const fetchOrganization = useCallback(async () => {
     try {
@@ -181,6 +204,31 @@ export default function OrganizationDetailPage() {
     }
   }, [id]);
 
+  const fetchAssignments = useCallback(async (filters = assignmentsFilters) => {
+    try {
+      setLoadingAssignments(true);
+      const params = new URLSearchParams();
+      params.set("page", filters.page.toString());
+      params.set("limit", filters.limit.toString());
+      if (filters.search) params.set("search", filters.search);
+      if (filters.status) params.set("status", filters.status);
+      if (filters.assignment_type) params.set("assignment_type", filters.assignment_type);
+      if (filters.aed_status) params.set("aed_status", filters.aed_status);
+
+      const response = await fetch(`/api/admin/organizations/${id}/assignments?${params.toString()}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setAssignments(data.data.assignments || []);
+        setAssignmentsPagination(data.data.pagination || null);
+      }
+    } catch (err) {
+      console.error("Error fetching assignments:", err);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  }, [id, assignmentsFilters]);
+
   const fetchAvailableUsers = async () => {
     try {
       const response = await fetch("/api/admin/users");
@@ -206,7 +254,10 @@ export default function OrganizationDetailPage() {
     if (activeTab === "members" && members.length === 0) {
       fetchMembers();
     }
-  }, [activeTab, members.length, fetchMembers]);
+    if (activeTab === "aeds") {
+      fetchAssignments();
+    }
+  }, [activeTab, members.length, fetchMembers, fetchAssignments]);
 
   const handleSave = async () => {
     if (!formData) return;
@@ -431,6 +482,52 @@ export default function OrganizationDetailPage() {
       PENDING_APPROVAL: "bg-yellow-100 text-yellow-800",
     };
     return colors[status] || "bg-gray-100 text-gray-800";
+  };
+
+  const getAedStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      ACTIVE: "Activo",
+      INACTIVE: "Inactivo",
+      UNKNOWN: "Desconocido",
+      REMOVED: "Eliminado",
+      PENDING: "Pendiente",
+    };
+    return labels[status] || status;
+  };
+
+  const getAedStatusBadgeColor = (status: string) => {
+    const colors: Record<string, string> = {
+      ACTIVE: "bg-green-100 text-green-800",
+      INACTIVE: "bg-gray-100 text-gray-800",
+      UNKNOWN: "bg-yellow-100 text-yellow-800",
+      REMOVED: "bg-red-100 text-red-800",
+      PENDING: "bg-blue-100 text-blue-800",
+    };
+    return colors[status] || "bg-gray-100 text-gray-800";
+  };
+
+  const formatAddress = (location: AedAssignment["aed"]["location"]) => {
+    if (!location) return "Sin dirección";
+    const parts = [];
+    if (location.street_name) {
+      let street = location.street_name;
+      if (location.street_number) street += ` ${location.street_number}`;
+      parts.push(street);
+    }
+    if (location.city_name) parts.push(location.city_name);
+    return parts.length > 0 ? parts.join(", ") : "Sin dirección";
+  };
+
+  const handleAssignmentsFilterChange = (key: string, value: string) => {
+    const newFilters = { ...assignmentsFilters, [key]: value, page: 1 };
+    setAssignmentsFilters(newFilters);
+    fetchAssignments(newFilters);
+  };
+
+  const handleAssignmentsPageChange = (newPage: number) => {
+    const newFilters = { ...assignmentsFilters, page: newPage };
+    setAssignmentsFilters(newFilters);
+    fetchAssignments(newFilters);
   };
 
   const getScopeLabel = (scope: string) => {
@@ -975,69 +1072,206 @@ export default function OrganizationDetailPage() {
             {/* DEAs Tab */}
             {activeTab === "aeds" && (
               <div>
+                {/* Filters */}
+                <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+                    <input
+                      type="text"
+                      placeholder="Nombre, código, dirección..."
+                      value={assignmentsFilters.search}
+                      onChange={(e) => handleAssignmentsFilterChange("search", e.target.value)}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado Asignación</label>
+                    <select
+                      value={assignmentsFilters.status}
+                      onChange={(e) => handleAssignmentsFilterChange("status", e.target.value)}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="">Todos</option>
+                      <option value="ACTIVE">Activo</option>
+                      <option value="REVOKED">Revocado</option>
+                      <option value="COMPLETED">Completado</option>
+                      <option value="PENDING_APPROVAL">Pendiente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo Asignación</label>
+                    <select
+                      value={assignmentsFilters.assignment_type}
+                      onChange={(e) => handleAssignmentsFilterChange("assignment_type", e.target.value)}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="">Todos</option>
+                      <option value="CIVIL_PROTECTION">Protección Civil</option>
+                      <option value="CERTIFIED_COMPANY">Empresa Certificada</option>
+                      <option value="OWNERSHIP">Propiedad</option>
+                      <option value="MAINTENANCE">Mantenimiento</option>
+                      <option value="VERIFICATION">Verificación</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado DEA</label>
+                    <select
+                      value={assignmentsFilters.aed_status}
+                      onChange={(e) => handleAssignmentsFilterChange("aed_status", e.target.value)}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="">Todos</option>
+                      <option value="ACTIVE">Activo</option>
+                      <option value="INACTIVE">Inactivo</option>
+                      <option value="UNKNOWN">Desconocido</option>
+                      <option value="REMOVED">Eliminado</option>
+                      <option value="PENDING">Pendiente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Por página</label>
+                    <select
+                      value={assignmentsFilters.limit}
+                      onChange={(e) => handleAssignmentsFilterChange("limit", e.target.value)}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Results summary */}
+                {assignmentsPagination && (
+                  <div className="mb-4 text-sm text-gray-600">
+                    Mostrando {assignments.length} de {assignmentsPagination.totalCount} DEAs asignados
+                  </div>
+                )}
+
                 {loadingAssignments ? (
                   <div className="text-center py-8 text-gray-500">Cargando asignaciones...</div>
                 ) : assignments.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    No hay DEAs asignados a esta organización
+                    {assignmentsFilters.search || assignmentsFilters.status || assignmentsFilters.assignment_type || assignmentsFilters.aed_status
+                      ? "No se encontraron DEAs con los filtros seleccionados"
+                      : "No hay DEAs asignados a esta organización"}
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            DEA
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Tipo de Asignación
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Estado
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Fecha Asignación
-                          </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Acciones
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {assignments.map((assignment) => (
-                          <tr key={assignment.id}>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">{assignment.aed.name}</div>
-                                <div className="text-sm text-gray-500">{assignment.aed.code || "Sin código"}</div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm text-gray-900">
-                                {getAssignmentTypeLabel(assignment.assignment_type)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(assignment.status)}`}>
-                                {assignment.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {new Date(assignment.assigned_at).toLocaleDateString("es-ES")}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <Link
-                                href={`/dea/${assignment.aed_id}`}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
-                                Ver DEA
-                              </Link>
-                            </td>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              DEA
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Dirección
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Estado DEA
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Tipo Asignación
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Estado
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Fecha
+                            </th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Acciones
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {assignments.map((assignment) => (
+                            <tr key={assignment.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">{assignment.aed.name}</div>
+                                  <div className="text-xs text-gray-500">{assignment.aed.code || "Sin código"}</div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="text-sm text-gray-900 max-w-xs truncate" title={formatAddress(assignment.aed.location)}>
+                                  {formatAddress(assignment.aed.location)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getAedStatusBadgeColor(assignment.aed.status)}`}>
+                                  {getAedStatusLabel(assignment.aed.status)}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className="text-sm text-gray-900">
+                                  {getAssignmentTypeLabel(assignment.assignment_type)}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(assignment.status)}`}>
+                                  {assignment.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                {new Date(assignment.assigned_at).toLocaleDateString("es-ES")}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                <Link
+                                  href={`/dea/${assignment.aed_id}`}
+                                  className="text-blue-600 hover:text-blue-900"
+                                >
+                                  Ver
+                                </Link>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    {assignmentsPagination && assignmentsPagination.totalPages > 1 && (
+                      <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
+                        <div className="text-sm text-gray-700">
+                          Página {assignmentsPagination.page} de {assignmentsPagination.totalPages}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAssignmentsPageChange(1)}
+                            disabled={!assignmentsPagination.hasPrevPage}
+                            className="px-3 py-1 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Primera
+                          </button>
+                          <button
+                            onClick={() => handleAssignmentsPageChange(assignmentsPagination.page - 1)}
+                            disabled={!assignmentsPagination.hasPrevPage}
+                            className="px-3 py-1 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Anterior
+                          </button>
+                          <button
+                            onClick={() => handleAssignmentsPageChange(assignmentsPagination.page + 1)}
+                            disabled={!assignmentsPagination.hasNextPage}
+                            className="px-3 py-1 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Siguiente
+                          </button>
+                          <button
+                            onClick={() => handleAssignmentsPageChange(assignmentsPagination.totalPages)}
+                            disabled={!assignmentsPagination.hasNextPage}
+                            className="px-3 py-1 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Última
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
