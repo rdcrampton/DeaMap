@@ -1073,8 +1073,8 @@ export default function OrganizationDetailPage() {
             {activeTab === "aeds" && (
               <div>
                 {/* Filters */}
-                <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  <div>
+                <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="lg:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
                     <input
                       type="text"
@@ -1085,36 +1085,7 @@ export default function OrganizationDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado Asignación</label>
-                    <select
-                      value={assignmentsFilters.status}
-                      onChange={(e) => handleAssignmentsFilterChange("status", e.target.value)}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-                    >
-                      <option value="">Todos</option>
-                      <option value="ACTIVE">Activo</option>
-                      <option value="REVOKED">Revocado</option>
-                      <option value="COMPLETED">Completado</option>
-                      <option value="PENDING_APPROVAL">Pendiente</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo Asignación</label>
-                    <select
-                      value={assignmentsFilters.assignment_type}
-                      onChange={(e) => handleAssignmentsFilterChange("assignment_type", e.target.value)}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-                    >
-                      <option value="">Todos</option>
-                      <option value="CIVIL_PROTECTION">Protección Civil</option>
-                      <option value="CERTIFIED_COMPANY">Empresa Certificada</option>
-                      <option value="OWNERSHIP">Propiedad</option>
-                      <option value="MAINTENANCE">Mantenimiento</option>
-                      <option value="VERIFICATION">Verificación</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado DEA</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
                     <select
                       value={assignmentsFilters.aed_status}
                       onChange={(e) => handleAssignmentsFilterChange("aed_status", e.target.value)}
@@ -1154,7 +1125,7 @@ export default function OrganizationDetailPage() {
                   <div className="text-center py-8 text-gray-500">Cargando asignaciones...</div>
                 ) : assignments.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    {assignmentsFilters.search || assignmentsFilters.status || assignmentsFilters.assignment_type || assignmentsFilters.aed_status
+                    {assignmentsFilters.search || assignmentsFilters.aed_status
                       ? "No se encontraron DEAs con los filtros seleccionados"
                       : "No hay DEAs asignados a esta organización"}
                   </div>
@@ -1171,16 +1142,10 @@ export default function OrganizationDetailPage() {
                               Dirección
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Estado DEA
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Tipo Asignación
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Estado
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Fecha
+                              Fecha Asignación
                             </th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Acciones
@@ -1204,16 +1169,6 @@ export default function OrganizationDetailPage() {
                               <td className="px-4 py-3 whitespace-nowrap">
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getAedStatusBadgeColor(assignment.aed.status)}`}>
                                   {getAedStatusLabel(assignment.aed.status)}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 whitespace-nowrap">
-                                <span className="text-sm text-gray-900">
-                                  {getAssignmentTypeLabel(assignment.assignment_type)}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 whitespace-nowrap">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(assignment.status)}`}>
-                                  {assignment.status}
                                 </span>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
