@@ -43,16 +43,50 @@ export async function POST(request: NextRequest) {
       ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "updated_by" UUID;
     `);
 
+    // Add missing fields to organization_members table
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "organization_members" ADD COLUMN IF NOT EXISTS "notes" TEXT;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "organization_members" ADD COLUMN IF NOT EXISTS "added_by" UUID;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "organization_members" ADD COLUMN IF NOT EXISTS "updated_by" UUID;
+    `);
+
+    // Add foreign key for organization_members -> users (if not exists)
+    await prisma.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+          IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint WHERE conname = 'organization_members_user_id_fkey'
+          ) THEN
+              ALTER TABLE "organization_members" ADD CONSTRAINT "organization_members_user_id_fkey"
+              FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          END IF;
+      END $$;
+    `);
+
     return NextResponse.json({
       success: true,
       message: "Migrations executed successfully",
-      columns_added: [
-        "website",
-        "description",
-        "custom_scope_description",
-        "created_by",
-        "updated_by"
-      ]
+      columns_added: {
+        organizations: [
+          "website",
+          "description",
+          "custom_scope_description",
+          "created_by",
+          "updated_by"
+        ],
+        organization_members: [
+          "notes",
+          "added_by",
+          "updated_by",
+          "user_id_fkey (foreign key)"
+        ]
+      }
     });
 
   } catch (error) {
@@ -84,8 +118,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Check if columns exist by querying the information schema
-    const result = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(`
+    // Check if columns exist in organizations table
+    const orgResult = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(`
       SELECT column_name
       FROM information_schema.columns
       WHERE table_name = 'organizations'
@@ -93,15 +127,44 @@ export async function GET(request: NextRequest) {
       ORDER BY column_name;
     `);
 
-    const existingColumns = result.map(row => row.column_name);
-    const requiredColumns = ['website', 'description', 'custom_scope_description', 'created_by', 'updated_by'];
-    const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
+    // Check if columns exist in organization_members table
+    const memberResult = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'organization_members'
+      AND column_name IN ('notes', 'added_by', 'updated_by')
+      ORDER BY column_name;
+    `);
+
+    // Check if foreign key exists
+    const fkResult = await prisma.$queryRawUnsafe<Array<{ conname: string }>>(`
+      SELECT conname
+      FROM pg_constraint
+      WHERE conname = 'organization_members_user_id_fkey';
+    `);
+
+    const existingOrgColumns = orgResult.map(row => row.column_name);
+    const requiredOrgColumns = ['website', 'description', 'custom_scope_description', 'created_by', 'updated_by'];
+    const missingOrgColumns = requiredOrgColumns.filter(col => !existingOrgColumns.includes(col));
+
+    const existingMemberColumns = memberResult.map(row => row.column_name);
+    const requiredMemberColumns = ['notes', 'added_by', 'updated_by'];
+    const missingMemberColumns = requiredMemberColumns.filter(col => !existingMemberColumns.includes(col));
+
+    const hasForeignKey = fkResult.length > 0;
 
     return NextResponse.json({
       success: true,
-      existing_columns: existingColumns,
-      missing_columns: missingColumns,
-      migration_needed: missingColumns.length > 0
+      organizations: {
+        existing_columns: existingOrgColumns,
+        missing_columns: missingOrgColumns
+      },
+      organization_members: {
+        existing_columns: existingMemberColumns,
+        missing_columns: missingMemberColumns,
+        has_user_foreign_key: hasForeignKey
+      },
+      migration_needed: missingOrgColumns.length > 0 || missingMemberColumns.length > 0 || !hasForeignKey
     });
 
   } catch (error) {
