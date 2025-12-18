@@ -17,16 +17,19 @@ interface RouteParams {
 /**
  * Construye la configuración del adapter a partir de los datos almacenados
  * Mapea los campos del formulario a los esperados por el adapter
+ * Soporta tanto URLs directas de JSON como APIs CKAN tradicionales
  */
 function buildAdapterConfig(
   type: DataSourceType,
   configData: Record<string, unknown>
 ): DataSourceConfig {
-  // Extraer baseUrl desde apiEndpoint si es necesario
+  const apiEndpoint = configData.apiEndpoint as string | undefined;
+
+  // Extraer baseUrl desde apiEndpoint si es necesario (para API CKAN tradicional)
   let baseUrl = configData.baseUrl as string | undefined;
-  if (!baseUrl && configData.apiEndpoint) {
+  if (!baseUrl && apiEndpoint) {
     try {
-      const url = new URL(configData.apiEndpoint as string);
+      const url = new URL(apiEndpoint);
       baseUrl = `${url.protocol}//${url.host}`;
     } catch {
       baseUrl = undefined;
@@ -35,6 +38,8 @@ function buildAdapterConfig(
 
   return {
     type,
+    // Pasar apiEndpoint para soportar URLs directas de JSON
+    apiEndpoint,
     baseUrl,
     resourceId: configData.resourceId as string | undefined,
     fieldMappings: configData.fieldMapping as Record<string, string> | undefined,

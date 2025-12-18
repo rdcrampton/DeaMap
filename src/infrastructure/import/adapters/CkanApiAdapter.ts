@@ -1,6 +1,7 @@
 /**
  * Adapter: API CKAN (datos.comunidad.madrid)
  * Capa de Infraestructura - Implementa IDataSourceAdapter para APIs CKAN
+ * Soporta tanto la API datastore_search como descarga directa de JSON
  */
 
 import type {
@@ -15,7 +16,7 @@ import {
 } from "@/domain/import/value-objects/ValidationResult";
 
 /**
- * Respuesta de la API CKAN
+ * Respuesta de la API CKAN datastore_search
  */
 interface CkanResponse {
   success: boolean;
@@ -32,6 +33,15 @@ interface CkanResponse {
     message: string;
     __type: string;
   };
+}
+
+/**
+ * Respuesta de descarga directa de JSON (formato Madrid)
+ */
+interface DirectJsonResponse {
+  data?: Record<string, unknown>[];
+  records?: Record<string, unknown>[];
+  // También puede ser un array directo
 }
 
 /**
@@ -64,13 +74,129 @@ export class CkanApiAdapter implements IDataSourceAdapter {
   private readonly maxRetries = 3;
   private readonly retryDelayMs = 1000;
 
-  async *fetchRecords(config: DataSourceConfig): AsyncGenerator<ImportRecord> {
-    this.validateCkanConfig(config);
+  /**
+   * Detecta si la URL es una descarga directa de JSON
+   */
+  private isDirectJsonUrl(url: string | undefined): boolean {
+    if (!url) return false;
+    return url.endsWith(".json") || url.includes("/download/");
+  }
 
+  /**
+   * Obtiene la URL efectiva para fetching
+   * Prioriza apiEndpoint si es una URL directa JSON
+   */
+  private getEffectiveUrl(config: DataSourceConfig): { url: string; isDirect: boolean } {
+    // Si hay apiEndpoint y es una URL JSON directa, usarla
+    if (config.apiEndpoint && this.isDirectJsonUrl(config.apiEndpoint)) {
+      return { url: config.apiEndpoint, isDirect: true };
+    }
+
+    // Si no, usar el patrón CKAN tradicional
+    if (config.baseUrl && config.resourceId) {
+      return {
+        url: this.buildSearchUrl(
+          config.baseUrl,
+          config.resourceId,
+          config.pageSize || this.defaultPageSize,
+          0
+        ),
+        isDirect: false,
+      };
+    }
+
+    throw new Error("Se requiere apiEndpoint (URL JSON directa) o baseUrl + resourceId (API CKAN)");
+  }
+
+  /**
+   * Detecta el campo de ID externo basado en los campos disponibles
+   */
+  private detectExternalIdField(records: Record<string, unknown>[]): string {
+    if (records.length === 0) return "id";
+    const firstRecord = records[0];
+    const keys = Object.keys(firstRecord);
+
+    // Buscar campos comunes de ID
+    const idCandidates = ["id_dea", "codigo_dea", "id", "external_id", "dea_id"];
+    for (const candidate of idCandidates) {
+      if (keys.includes(candidate)) return candidate;
+    }
+
+    return keys[0] || "id";
+  }
+
+  async *fetchRecords(config: DataSourceConfig): AsyncGenerator<ImportRecord> {
+    const fieldMappings = config.fieldMappings || MADRID_FIELD_MAPPINGS;
+    const { url, isDirect } = this.getEffectiveUrl(config);
+
+    if (isDirect) {
+      // Descarga directa de JSON
+      yield* this.fetchRecordsFromDirectJson(url, fieldMappings);
+    } else {
+      // API CKAN tradicional
+      yield* this.fetchRecordsFromCkanApi(config, fieldMappings);
+    }
+  }
+
+  /**
+   * Fetch records desde una URL JSON directa
+   */
+  private async *fetchRecordsFromDirectJson(
+    url: string,
+    fieldMappings: Record<string, string>
+  ): AsyncGenerator<ImportRecord> {
+    console.log(`📥 Fetching records from direct JSON URL: ${url}`);
+
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Determinar el array de registros
+    let records: Record<string, unknown>[];
+    if (Array.isArray(data)) {
+      records = data;
+    } else if (data.data && Array.isArray(data.data)) {
+      records = data.data;
+    } else if (data.records && Array.isArray(data.records)) {
+      records = data.records;
+    } else {
+      throw new Error(
+        "Formato JSON no reconocido: se esperaba un array o un objeto con 'data' o 'records'"
+      );
+    }
+
+    const externalIdField = this.detectExternalIdField(records);
+    console.log(
+      `📋 Found ${records.length} records, using '${externalIdField}' as external ID field`
+    );
+
+    for (let rowIndex = 0; rowIndex < records.length; rowIndex++) {
+      yield ImportRecord.fromApiRecord(records[rowIndex], fieldMappings, rowIndex, externalIdField);
+
+      if ((rowIndex + 1) % 1000 === 0) {
+        console.log(`📥 Processed ${rowIndex + 1} records...`);
+      }
+    }
+
+    console.log(`✅ Finished processing ${records.length} records from direct JSON`);
+  }
+
+  /**
+   * Fetch records desde API CKAN tradicional
+   */
+  private async *fetchRecordsFromCkanApi(
+    config: DataSourceConfig,
+    fieldMappings: Record<string, string>
+  ): AsyncGenerator<ImportRecord> {
     const baseUrl = config.baseUrl!;
     const resourceId = config.resourceId!;
     const pageSize = config.pageSize || this.defaultPageSize;
-    const fieldMappings = config.fieldMappings || MADRID_FIELD_MAPPINGS;
 
     let offset = 0;
     let rowIndex = 0;
@@ -110,10 +236,26 @@ export class CkanApiAdapter implements IDataSourceAdapter {
   }
 
   async getRecordCount(config: DataSourceConfig): Promise<number> {
-    this.validateCkanConfig(config);
+    const { url, isDirect } = this.getEffectiveUrl(config);
 
-    const url = this.buildSearchUrl(config.baseUrl!, config.resourceId!, 0, 0);
-    const response = await this.fetchWithRetry(url);
+    if (isDirect) {
+      // Para JSON directo, necesitamos descargar todo el archivo para contar
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const records = this.extractRecordsFromJson(data);
+      return records.length;
+    }
+
+    // API CKAN tradicional
+    const searchUrl = this.buildSearchUrl(config.baseUrl!, config.resourceId!, 0, 0);
+    const response = await this.fetchWithRetry(searchUrl);
 
     if (!response.success) {
       throw new Error(`CKAN API error: ${response.error?.message || "Unknown error"}`);
@@ -122,18 +264,59 @@ export class CkanApiAdapter implements IDataSourceAdapter {
     return response.result.total;
   }
 
+  /**
+   * Extrae los registros de una respuesta JSON
+   */
+  private extractRecordsFromJson(data: unknown): Record<string, unknown>[] {
+    if (Array.isArray(data)) {
+      return data;
+    }
+    if (typeof data === "object" && data !== null) {
+      const obj = data as DirectJsonResponse;
+      if (obj.data && Array.isArray(obj.data)) {
+        return obj.data;
+      }
+      if (obj.records && Array.isArray(obj.records)) {
+        return obj.records;
+      }
+    }
+    return [];
+  }
+
   async validateConfig(config: DataSourceConfig): Promise<ValidationResult> {
     const issues: ValidationIssue[] = [];
 
-    if (!config.baseUrl) {
+    // Verificar si es URL directa o API CKAN
+    const hasDirectUrl = config.apiEndpoint && this.isDirectJsonUrl(config.apiEndpoint);
+    const hasCkanConfig = config.baseUrl && config.resourceId;
+
+    if (!hasDirectUrl && !hasCkanConfig) {
       issues.push({
         row: 0,
-        field: "baseUrl",
+        field: "config",
         value: "",
         severity: "CRITICAL",
-        message: "La URL base de la API es requerida",
+        message: "Se requiere apiEndpoint (URL JSON directa) o baseUrl + resourceId (API CKAN)",
       });
-    } else {
+    }
+
+    // Validar URL directa si existe
+    if (config.apiEndpoint) {
+      try {
+        new URL(config.apiEndpoint);
+      } catch {
+        issues.push({
+          row: 0,
+          field: "apiEndpoint",
+          value: config.apiEndpoint,
+          severity: "CRITICAL",
+          message: "El endpoint de la API no es una URL válida",
+        });
+      }
+    }
+
+    // Validar baseUrl si existe
+    if (config.baseUrl) {
       try {
         new URL(config.baseUrl);
       } catch {
@@ -147,22 +330,17 @@ export class CkanApiAdapter implements IDataSourceAdapter {
       }
     }
 
-    if (!config.resourceId) {
-      issues.push({
-        row: 0,
-        field: "resourceId",
-        value: "",
-        severity: "CRITICAL",
-        message: "El ID del recurso es requerido",
-      });
-    } else if (!/^[0-9a-f-]{36}$/i.test(config.resourceId)) {
-      issues.push({
-        row: 0,
-        field: "resourceId",
-        value: config.resourceId,
-        severity: "WARNING",
-        message: "El ID del recurso no parece ser un UUID válido",
-      });
+    // Validar resourceId si se está usando API CKAN (no URL directa)
+    if (!hasDirectUrl && config.resourceId) {
+      if (!/^[0-9a-f-]{36}$/i.test(config.resourceId)) {
+        issues.push({
+          row: 0,
+          field: "resourceId",
+          value: config.resourceId,
+          severity: "WARNING",
+          message: "El ID del recurso no parece ser un UUID válido",
+        });
+      }
     }
 
     if (config.pageSize && (config.pageSize < 1 || config.pageSize > 1000)) {
@@ -179,16 +357,35 @@ export class CkanApiAdapter implements IDataSourceAdapter {
   }
 
   async getPreview(config: DataSourceConfig, limit: number = 5): Promise<ImportRecord[]> {
-    this.validateCkanConfig(config);
+    const { url, isDirect } = this.getEffectiveUrl(config);
+    const fieldMappings = config.fieldMappings || MADRID_FIELD_MAPPINGS;
 
-    const url = this.buildSearchUrl(config.baseUrl!, config.resourceId!, limit, 0);
-    const response = await this.fetchWithRetry(url);
+    if (isDirect) {
+      // Descarga directa de JSON
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const records = this.extractRecordsFromJson(data).slice(0, limit);
+      const externalIdField = this.detectExternalIdField(records);
+
+      return records.map((record, index) =>
+        ImportRecord.fromApiRecord(record, fieldMappings, index, externalIdField)
+      );
+    }
+
+    // API CKAN tradicional
+    const searchUrl = this.buildSearchUrl(config.baseUrl!, config.resourceId!, limit, 0);
+    const response = await this.fetchWithRetry(searchUrl);
 
     if (!response.success) {
       throw new Error(`CKAN API error: ${response.error?.message || "Unknown error"}`);
     }
-
-    const fieldMappings = config.fieldMappings || MADRID_FIELD_MAPPINGS;
 
     return response.result.records.map((record, index) =>
       ImportRecord.fromApiRecord(record, fieldMappings, index, "codigo_dea")
@@ -208,9 +405,41 @@ export class CkanApiAdapter implements IDataSourceAdapter {
         };
       }
 
-      const url = this.buildSearchUrl(config.baseUrl!, config.resourceId!, 1, 0);
-      const response = await this.fetchWithRetry(url);
+      const { url, isDirect } = this.getEffectiveUrl(config);
       const responseTimeMs = Date.now() - startTime;
+
+      if (isDirect) {
+        // Test descarga directa de JSON
+        const response = await fetch(url, {
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          return {
+            success: false,
+            message: `Error HTTP: ${response.status} ${response.statusText}`,
+            responseTimeMs: Date.now() - startTime,
+          };
+        }
+
+        const data = await response.json();
+        const records = this.extractRecordsFromJson(data);
+
+        // Obtener campos disponibles del primer registro
+        const sampleFields = records.length > 0 ? Object.keys(records[0]) : [];
+
+        return {
+          success: true,
+          message: `Conexión exitosa. ${records.length} registros disponibles (JSON directo).`,
+          recordCount: records.length,
+          sampleFields,
+          responseTimeMs: Date.now() - startTime,
+        };
+      }
+
+      // API CKAN tradicional
+      const searchUrl = this.buildSearchUrl(config.baseUrl!, config.resourceId!, 1, 0);
+      const response = await this.fetchWithRetry(searchUrl);
 
       if (!response.success) {
         return {
@@ -228,7 +457,7 @@ export class CkanApiAdapter implements IDataSourceAdapter {
         message: `Conexión exitosa. ${response.result.total} registros disponibles.`,
         recordCount: response.result.total,
         sampleFields,
-        responseTimeMs,
+        responseTimeMs: Date.now() - startTime,
       };
     } catch (error) {
       return {
@@ -280,18 +509,6 @@ export class CkanApiAdapter implements IDataSourceAdapter {
         return this.fetchWithRetry(url, attempt + 1);
       }
       throw error;
-    }
-  }
-
-  /**
-   * Valida la configuración CKAN
-   */
-  private validateCkanConfig(config: DataSourceConfig): void {
-    if (!config.baseUrl) {
-      throw new Error("baseUrl is required for CKAN API source");
-    }
-    if (!config.resourceId) {
-      throw new Error("resourceId is required for CKAN API source");
     }
   }
 
