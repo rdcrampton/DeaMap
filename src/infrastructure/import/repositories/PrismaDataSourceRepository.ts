@@ -244,8 +244,8 @@ export class PrismaDataSourceRepository implements IDataSourceRepository {
       pageSize: rawConfig.pageSize,
       // Normalizar fieldMapping -> fieldMappings
       fieldMappings: rawConfig.fieldMappings || rawConfig.fieldMapping,
-      // Para JSON_FILE
-      fileUrl: rawConfig.fileUrl,
+      // Para JSON_FILE - fileUrl puede ser usado como alternativa a apiEndpoint
+      fileUrl: rawConfig.fileUrl || rawConfig.apiEndpoint,
       jsonPath: rawConfig.jsonPath,
       // Para REST_API
       authToken: rawConfig.authToken,

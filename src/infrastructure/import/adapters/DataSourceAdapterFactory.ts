@@ -10,6 +10,7 @@ import type {
 } from "@/domain/import/ports/IDataSourceAdapter";
 import { CsvDataSourceAdapter } from "./CsvDataSourceAdapter";
 import { CkanApiAdapter } from "./CkanApiAdapter";
+import { JsonFileAdapter } from "./JsonFileAdapter";
 import type { CsvParserAdapter } from "../parsers/CsvParserAdapter";
 
 export class DataSourceAdapterFactory implements IDataSourceAdapterFactory {
@@ -18,8 +19,7 @@ export class DataSourceAdapterFactory implements IDataSourceAdapterFactory {
   constructor(csvParser?: CsvParserAdapter) {
     this.adapters = new Map<DataSourceType, IDataSourceAdapter>([
       ["CKAN_API", new CkanApiAdapter()],
-      // Añadir más adapters aquí cuando se implementen:
-      // ["JSON_FILE", new JsonFileAdapter()],
+      ["JSON_FILE", new JsonFileAdapter()],
       // ["REST_API", new RestApiAdapter()],
     ]);
 
@@ -64,6 +64,8 @@ export class DataSourceAdapterFactory implements IDataSourceAdapterFactory {
     switch (type) {
       case "CKAN_API":
         return new CkanApiAdapter();
+      case "JSON_FILE":
+        return new JsonFileAdapter();
       default:
         throw new Error(`API adapter not available for type: ${type}`);
     }

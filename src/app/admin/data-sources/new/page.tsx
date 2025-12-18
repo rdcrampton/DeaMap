@@ -26,6 +26,25 @@ const DEFAULT_CKAN_FIELD_MAPPING: FieldMapping = {
   status: "estado",
 };
 
+// Mapeo para el formato JSON de la Comunidad de Madrid
+const MADRID_JSON_FIELD_MAPPING: FieldMapping = {
+  externalId: "codigo_dea",
+  streetType: "direccion_via_codigo",
+  streetName: "direccion_via_nombre",
+  streetNumber: "direccion_portal_numero",
+  floor: "direccion_piso",
+  additionalInfo: "direccion_puerta",
+  specificLocation: "direccion_ubicacion",
+  postalCode: "direccion_codigo_postal",
+  latitude: "direccion_latitud",
+  longitude: "direccion_longitud",
+  cityCode: "municipio_codigo",
+  city: "municipio_nombre",
+  establishmentType: "tipo_establecimiento",
+  ownershipType: "tipo_titularidad",
+  accessSchedule: "horario_acceso",
+};
+
 const SOURCE_ORIGINS = [
   { value: "EXTERNAL_API", label: "API Externa" },
   { value: "HEALTH_API", label: "API de Salud" },
@@ -49,15 +68,20 @@ export default function NewDataSourcePage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
-    type: "CKAN_API",
+    type: "JSON_FILE",
     description: "",
+    // Para CKAN_API
     apiEndpoint: "",
     resourceId: "",
+    // Para JSON_FILE
+    fileUrl: "",
+    jsonPath: "data",
+    // Común
     syncFrequency: "MANUAL",
     isActive: true,
     sourceOrigin: "EXTERNAL_API",
     regionCode: "MAD",
-    fieldMapping: DEFAULT_CKAN_FIELD_MAPPING,
+    fieldMapping: MADRID_JSON_FIELD_MAPPING,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,15 +104,34 @@ export default function NewDataSourcePage() {
       }
     }
 
+    if (form.type === "JSON_FILE") {
+      if (!form.fileUrl.trim()) {
+        setError("La URL del archivo JSON es obligatoria");
+        return;
+      }
+    }
+
     try {
       setLoading(true);
 
       // Construir el objeto config según el tipo
-      const config = {
-        apiEndpoint: form.apiEndpoint || null,
-        resourceId: form.resourceId || null,
+      let config: Record<string, unknown> = {
         fieldMapping: form.fieldMapping,
       };
+
+      if (form.type === "CKAN_API") {
+        config = {
+          ...config,
+          apiEndpoint: form.apiEndpoint || null,
+          resourceId: form.resourceId || null,
+        };
+      } else if (form.type === "JSON_FILE") {
+        config = {
+          ...config,
+          fileUrl: form.fileUrl || null,
+          jsonPath: form.jsonPath || null,
+        };
+      }
 
       const response = await fetch("/api/admin/data-sources", {
         method: "POST",
@@ -136,6 +179,20 @@ export default function NewDataSourcePage() {
         "https://datos.comunidad.madrid/catalogo/dataset/7265fe82-f01b-41e7-b252-b8bae92daa5e/resource/fba1b963-3aa3-42d2-8316-1228d2be69c9/download/desfibriladores_acceso_publico.json",
       resourceId: "fba1b963-3aa3-42d2-8316-1228d2be69c9",
       fieldMapping: DEFAULT_CKAN_FIELD_MAPPING,
+    });
+  };
+
+  const loadMadridJsonConfig = () => {
+    setForm({
+      ...form,
+      name: "DEAs Comunidad de Madrid",
+      type: "JSON_FILE",
+      fileUrl:
+        "https://datos.comunidad.madrid/catalogo/dataset/d2478503-a4ae-4753-9540-9200071803c4/resource/42d08814-3361-4c2a-93fe-36664abc7953/download/desfibriladores_externos_fuera_ambito_sanitario.json",
+      jsonPath: "data",
+      sourceOrigin: "EXTERNAL_API",
+      regionCode: "MAD",
+      fieldMapping: MADRID_JSON_FIELD_MAPPING,
     });
   };
 
@@ -298,11 +355,61 @@ export default function NewDataSourcePage() {
             </div>
           </div>
 
-          {/* API Configuration */}
+          {/* JSON File Configuration */}
+          {form.type === "JSON_FILE" && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium text-gray-900">Configuración de Archivo JSON</h2>
+                <button
+                  type="button"
+                  onClick={loadMadridJsonConfig}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  Cargar configuración de Madrid
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="fileUrl" className="block text-sm font-medium text-gray-700">
+                    URL del archivo JSON *
+                  </label>
+                  <input
+                    type="url"
+                    id="fileUrl"
+                    value={form.fileUrl}
+                    onChange={(e) => setForm({ ...form, fileUrl: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="https://datos.comunidad.madrid/.../archivo.json"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="jsonPath" className="block text-sm font-medium text-gray-700">
+                    Ruta al array de datos
+                  </label>
+                  <input
+                    type="text"
+                    id="jsonPath"
+                    value={form.jsonPath}
+                    onChange={(e) => setForm({ ...form, jsonPath: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
+                    placeholder="data"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Propiedad del JSON que contiene el array de registros. Ej: &quot;data&quot;,
+                    &quot;records&quot;, &quot;result.items&quot;
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CKAN API Configuration */}
           {(form.type === "CKAN_API" || form.type === "REST_API") && (
             <div className="bg-white shadow rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-gray-900">Configuración de API</h2>
+                <h2 className="text-lg font-medium text-gray-900">Configuración de API CKAN</h2>
                 {form.type === "CKAN_API" && (
                   <button
                     type="button"
