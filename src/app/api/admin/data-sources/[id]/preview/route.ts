@@ -15,6 +15,34 @@ interface RouteParams {
 }
 
 /**
+ * Construye la configuración del adapter a partir de los datos almacenados
+ * Mapea los campos del formulario a los esperados por el adapter
+ */
+function buildAdapterConfig(
+  type: DataSourceType,
+  configData: Record<string, unknown>
+): DataSourceConfig {
+  // Extraer baseUrl desde apiEndpoint si es necesario
+  let baseUrl = configData.baseUrl as string | undefined;
+  if (!baseUrl && configData.apiEndpoint) {
+    try {
+      const url = new URL(configData.apiEndpoint as string);
+      baseUrl = `${url.protocol}//${url.host}`;
+    } catch {
+      baseUrl = undefined;
+    }
+  }
+
+  return {
+    type,
+    baseUrl,
+    resourceId: configData.resourceId as string | undefined,
+    fieldMappings: configData.fieldMapping as Record<string, string> | undefined,
+    pageSize: configData.pageSize as number | undefined,
+  };
+}
+
+/**
  * GET /api/admin/data-sources/[id]/preview
  * Obtiene una muestra de datos de la fuente externa
  */
@@ -46,10 +74,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Construir configuración
     const configData = dataSource.config as Record<string, unknown>;
-    const config: DataSourceConfig = {
-      type: dataSource.type as DataSourceType,
-      ...configData,
-    };
+    const config = buildAdapterConfig(dataSource.type as DataSourceType, configData);
 
     // Validar configuración
     const validation = await adapter.validateConfig(config);
@@ -162,10 +187,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Construir configuración
     const configData = dataSource.config as Record<string, unknown>;
-    const config: DataSourceConfig = {
-      type: dataSource.type as DataSourceType,
-      ...configData,
-    };
+    const config = buildAdapterConfig(dataSource.type as DataSourceType, configData);
 
     // Probar conexión
     const result = await adapter.testConnection(config);
