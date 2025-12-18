@@ -1,0 +1,359 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+interface FieldMapping {
+  [key: string]: string;
+}
+
+const DEFAULT_CKAN_FIELD_MAPPING: FieldMapping = {
+  externalId: "id_dea",
+  name: "nombre_dea",
+  address: "direccion",
+  locality: "municipio",
+  province: "provincia",
+  postalCode: "codigo_postal",
+  latitude: "latitud",
+  longitude: "longitud",
+  locationDescription: "ubicacion",
+  accessibility: "accesibilidad_horaria",
+  schedule: "horario_atencion",
+  contactPhone: "telefono_contacto",
+  responsibleEntity: "entidad_responsable",
+  installationDate: "fecha_alta",
+  status: "estado",
+};
+
+export default function NewDataSourcePage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    type: "CKAN_API",
+    description: "",
+    apiEndpoint: "",
+    resourceId: "",
+    syncFrequency: "MANUAL",
+    isActive: true,
+    fieldMapping: DEFAULT_CKAN_FIELD_MAPPING,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!form.name.trim()) {
+      setError("El nombre es obligatorio");
+      return;
+    }
+
+    if (form.type === "CKAN_API") {
+      if (!form.apiEndpoint.trim()) {
+        setError("El endpoint de la API es obligatorio para CKAN");
+        return;
+      }
+      if (!form.resourceId.trim()) {
+        setError("El Resource ID es obligatorio para CKAN");
+        return;
+      }
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await fetch("/api/admin/data-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          type: form.type,
+          description: form.description || null,
+          apiEndpoint: form.apiEndpoint || null,
+          resourceId: form.resourceId || null,
+          syncFrequency: form.syncFrequency,
+          isActive: form.isActive,
+          fieldMapping: form.fieldMapping,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Error al crear la fuente de datos");
+      }
+
+      router.push(`/admin/data-sources/${data.data.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateFieldMapping = (field: string, value: string) => {
+    setForm({
+      ...form,
+      fieldMapping: {
+        ...form.fieldMapping,
+        [field]: value,
+      },
+    });
+  };
+
+  const loadDefaultCkanMapping = () => {
+    setForm({
+      ...form,
+      apiEndpoint:
+        "https://datos.comunidad.madrid/catalogo/dataset/7265fe82-f01b-41e7-b252-b8bae92daa5e/resource/fba1b963-3aa3-42d2-8316-1228d2be69c9/download/desfibriladores_acceso_publico.json",
+      resourceId: "fba1b963-3aa3-42d2-8316-1228d2be69c9",
+      fieldMapping: DEFAULT_CKAN_FIELD_MAPPING,
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <Link
+            href="/admin/data-sources"
+            className="text-sm text-blue-600 hover:text-blue-800 mb-2 inline-block"
+          >
+            ← Volver a fuentes de datos
+          </Link>
+          <h1 className="text-3xl font-bold text-gray-900">Nueva Fuente de Datos</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Configura una nueva fuente de datos externa para importar DEAs automáticamente
+          </p>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Info */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Información Básica</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  Nombre *
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="ej. DEAs Comunidad de Madrid"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="type" className="block text-sm font-medium text-gray-700">
+                  Tipo
+                </label>
+                <select
+                  id="type"
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="CKAN_API">API CKAN</option>
+                  <option value="REST_API">API REST</option>
+                  <option value="CSV_FILE">Archivo CSV</option>
+                  <option value="JSON_FILE">Archivo JSON</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                  Descripción
+                </label>
+                <textarea
+                  id="description"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  rows={3}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Descripción de la fuente de datos..."
+                />
+              </div>
+
+              <div>
+                <label htmlFor="syncFrequency" className="block text-sm font-medium text-gray-700">
+                  Frecuencia de Sincronización
+                </label>
+                <select
+                  id="syncFrequency"
+                  value={form.syncFrequency}
+                  onChange={(e) => setForm({ ...form, syncFrequency: e.target.value })}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="MANUAL">Manual</option>
+                  <option value="DAILY">Diaria</option>
+                  <option value="WEEKLY">Semanal</option>
+                  <option value="MONTHLY">Mensual</option>
+                </select>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={form.isActive}
+                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700">
+                  Activar fuente de datos
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* API Configuration */}
+          {(form.type === "CKAN_API" || form.type === "REST_API") && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium text-gray-900">Configuración de API</h2>
+                {form.type === "CKAN_API" && (
+                  <button
+                    type="button"
+                    onClick={loadDefaultCkanMapping}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Cargar configuración de Madrid
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="apiEndpoint" className="block text-sm font-medium text-gray-700">
+                    Endpoint de la API *
+                  </label>
+                  <input
+                    type="url"
+                    id="apiEndpoint"
+                    value={form.apiEndpoint}
+                    onChange={(e) => setForm({ ...form, apiEndpoint: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="https://datos.comunidad.madrid/..."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="resourceId" className="block text-sm font-medium text-gray-700">
+                    Resource ID *
+                  </label>
+                  <input
+                    type="text"
+                    id="resourceId"
+                    value={form.resourceId}
+                    onChange={(e) => setForm({ ...form, resourceId: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
+                    placeholder="fba1b963-3aa3-42d2-8316-1228d2be69c9"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Identificador único del recurso en el catálogo de datos
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Field Mapping */}
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Mapeo de Campos</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Configura cómo los campos de la fuente externa se mapean a los campos internos del
+              sistema
+            </p>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {Object.entries(form.fieldMapping).map(([internal, external]) => (
+                <div key={internal}>
+                  <label
+                    htmlFor={`field-${internal}`}
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    {internal}
+                  </label>
+                  <input
+                    type="text"
+                    id={`field-${internal}`}
+                    value={external}
+                    onChange={(e) => updateFieldMapping(internal, e.target.value)}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3">
+            <Link
+              href="/admin/data-sources"
+              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Cancelar
+            </Link>
+            <button
+              type="submit"
+              disabled={loading}
+              className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white
+                ${loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Creando...
+                </>
+              ) : (
+                "Crear Fuente de Datos"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
