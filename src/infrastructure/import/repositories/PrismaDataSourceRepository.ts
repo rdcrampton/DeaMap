@@ -230,14 +230,37 @@ export class PrismaDataSourceRepository implements IDataSourceRepository {
 
   /**
    * Mapea el modelo de Prisma a la configuración de dominio
+   * Construye un DataSourceConfig completo incluyendo el type
    */
   private mapToConfig(ds: any): ExternalDataSourceConfig {
+    // Construir DataSourceConfig completo con type y campos normalizados
+    const rawConfig = ds.config || {};
+    const config = {
+      type: ds.type,
+      // Para CKAN_API / REST_API
+      apiEndpoint: rawConfig.apiEndpoint,
+      baseUrl: rawConfig.baseUrl,
+      resourceId: rawConfig.resourceId,
+      pageSize: rawConfig.pageSize,
+      // Normalizar fieldMapping -> fieldMappings
+      fieldMappings: rawConfig.fieldMappings || rawConfig.fieldMapping,
+      // Para JSON_FILE
+      fileUrl: rawConfig.fileUrl,
+      jsonPath: rawConfig.jsonPath,
+      // Para REST_API
+      authToken: rawConfig.authToken,
+      headers: rawConfig.headers,
+      // Para CSV_FILE
+      filePath: rawConfig.filePath,
+      columnMappings: rawConfig.columnMappings,
+    };
+
     return {
       id: ds.id,
       name: ds.name,
       description: ds.description || undefined,
       type: ds.type,
-      config: ds.config,
+      config,
       sourceOrigin: ds.source_origin,
       regionCode: ds.region_code,
       matchingStrategy: ds.matching_strategy,
