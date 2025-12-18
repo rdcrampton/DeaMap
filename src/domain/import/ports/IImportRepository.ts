@@ -81,4 +81,41 @@ export interface IImportRepository {
    * Registra un error de importación
    */
   logImportError(error: ImportErrorData): Promise<void>;
+
+  // ============================================
+  // MÉTODOS PARA SYNC CON FUENTES EXTERNAS
+  // ============================================
+
+  /**
+   * Busca un AED por su referencia externa (codigo_dea, etc.)
+   */
+  findAedByExternalReference(
+    externalRef: string
+  ): Promise<{ id: string; contentHash?: string | null } | null>;
+
+  /**
+   * Actualiza campos específicos de un AED (para sync parcial)
+   */
+  updateAedFields(aedId: string, fields: Record<string, unknown>): Promise<void>;
+
+  /**
+   * Actualiza el hash de contenido de un AED
+   */
+  updateAedContentHash(aedId: string, hash: string): Promise<void>;
+
+  /**
+   * Marca un AED como inactivo (eliminado de fuente externa)
+   */
+  deactivateAed(aedId: string, reason: string): Promise<void>;
+
+  /**
+   * Obtiene todos los external_reference de una fuente de datos
+   * Para detectar cuáles ya no existen en la fuente
+   */
+  getExternalReferencesForDataSource(dataSourceId: string): Promise<string[]>;
+
+  /**
+   * Actualiza la fecha de último sync de un AED
+   */
+  updateAedLastSyncedAt(aedId: string, syncedAt: Date): Promise<void>;
 }

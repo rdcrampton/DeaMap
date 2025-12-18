@@ -76,6 +76,13 @@ model Aed {
   responsible               AedResponsible?          @relation(fields: [responsible_id], references: [id])
   schedule                  AedSchedule?             @relation(fields: [schedule_id], references: [id])
   import_batch              ImportBatch?             @relation(fields: [import_batch_id], references: [id])
+
+  // External data source tracking (for syncs)
+  data_source_id            String?                  @db.Uuid
+  data_source               ExternalDataSource?      @relation("AedDataSource", fields: [data_source_id], references: [id])
+  last_synced_at            DateTime?                // Last sync with external source
+  sync_content_hash         String?                  // Hash to detect changes
+
   images                    AedImage[]
   validations               AedValidation[]
   code_history              AedCodeHistory[]
@@ -102,6 +109,8 @@ model Aed {
   @@index([import_batch_id])
   @@index([requires_attention])
   @@index([owner_user_id])
+  @@index([data_source_id])
+  @@index([external_reference])
   @@index([last_verified_at])  // NEW: For maintenance queries
   @@index([is_publicly_accessible, status])  // NEW: For public map filtering
   // ⭐ CRITICAL: Spatial index for proximity searches
@@ -235,6 +244,10 @@ model ImportBatch {
   imported_by           String
   ip_address            String?
 
+  // External data source (for syncs)
+  data_source_id        String?                 @db.Uuid
+  data_source           ExternalDataSource?     @relation("DataSourceBatches", fields: [data_source_id], references: [id])
+
   aeds                  Aed[]
   errors                ImportError[]
   checkpoints           ImportCheckpoint[]
@@ -246,6 +259,7 @@ model ImportBatch {
   @@index([created_at])
   @@index([imported_by])
   @@index([status, last_heartbeat])
+  @@index([data_source_id])
   @@map("import_batches")
 }
 
@@ -339,6 +353,73 @@ enum CheckpointStatus {
   SUCCESS
   FAILED
   SKIPPED
+}
+
+// ============================================
+// EXTERNAL DATA SOURCES - For API/JSON imports
+// ============================================
+model ExternalDataSource {
+  id                        String              @id @default(uuid()) @db.Uuid
+  name                      String              @unique
+  description               String?
+  type                      DataSourceType
+
+  // Configuration (JSON with type-specific settings)
+  config                    Json
+
+  // Matching configuration
+  matching_strategy         MatchingStrategy    @default(HYBRID)
+  matching_threshold        Int                 @default(75)
+
+  // Scheduling
+  is_active                 Boolean             @default(true)
+  sync_frequency            SyncFrequency       @default(MANUAL)
+  last_sync_at              DateTime?
+  next_scheduled_sync_at    DateTime?
+
+  // Behavior
+  auto_deactivate_missing   Boolean             @default(false)
+  auto_update_fields        String[]            @default([])
+
+  // Scope
+  source_origin             SourceOrigin
+  region_code               String              // "MAD", "CAT", "AND", etc.
+
+  // Relations
+  import_batches            ImportBatch[]       @relation("DataSourceBatches")
+  managed_aeds              Aed[]               @relation("AedDataSource")
+
+  // Audit
+  created_at                DateTime            @default(now())
+  updated_at                DateTime            @updatedAt
+  created_by                String?             @db.Uuid
+
+  @@index([is_active])
+  @@index([sync_frequency])
+  @@index([next_scheduled_sync_at])
+  @@index([region_code])
+  @@map("external_data_sources")
+}
+
+enum DataSourceType {
+  CSV_FILE
+  CKAN_API
+  JSON_FILE
+  REST_API
+}
+
+enum MatchingStrategy {
+  BY_EXTERNAL_CODE
+  BY_COORDINATES
+  BY_ADDRESS
+  HYBRID
+}
+
+enum SyncFrequency {
+  MANUAL
+  DAILY
+  WEEKLY
+  MONTHLY
 }
 
 // ============================================

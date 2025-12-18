@@ -200,4 +200,135 @@ export class PrismaImportRepository implements IImportRepository {
       },
     });
   }
+
+  // ============================================
+  // MÉTODOS PARA SYNC CON FUENTES EXTERNAS
+  // ============================================
+
+  async findAedByExternalReference(
+    externalRef: string
+  ): Promise<{ id: string; contentHash?: string | null } | null> {
+    const aed = await this.prisma.aed.findFirst({
+      where: {
+        external_reference: externalRef,
+      },
+      select: {
+        id: true,
+        sync_content_hash: true,
+      },
+    });
+
+    if (!aed) return null;
+
+    return {
+      id: aed.id,
+      contentHash: aed.sync_content_hash,
+    };
+  }
+
+  async updateAedFields(aedId: string, fields: Record<string, unknown>): Promise<void> {
+    // Mapear campos del dominio a campos de la base de datos
+    const dbFields: Record<string, unknown> = {};
+
+    // Campos del AED principal
+    if (fields.name !== undefined) dbFields.name = fields.name;
+    if (fields.establishmentType !== undefined)
+      dbFields.establishment_type = fields.establishmentType;
+    if (fields.latitude !== undefined) dbFields.latitude = fields.latitude;
+    if (fields.longitude !== undefined) dbFields.longitude = fields.longitude;
+
+    // Actualizar AED
+    if (Object.keys(dbFields).length > 0) {
+      await this.prisma.aed.update({
+        where: { id: aedId },
+        data: {
+          ...dbFields,
+          updated_at: new Date(),
+        },
+      });
+    }
+
+    // Si hay campos de location, actualizar location
+    const locationFields: Record<string, unknown> = {};
+    if (fields.streetType !== undefined) locationFields.street_type = fields.streetType;
+    if (fields.streetName !== undefined) locationFields.street_name = fields.streetName;
+    if (fields.streetNumber !== undefined) locationFields.street_number = fields.streetNumber;
+    if (fields.postalCode !== undefined) locationFields.postal_code = fields.postalCode;
+    if (fields.floor !== undefined) locationFields.floor = fields.floor;
+    if (fields.specificLocation !== undefined)
+      locationFields.specific_location = fields.specificLocation;
+    if (fields.city !== undefined) locationFields.city_name = fields.city;
+    if (fields.cityCode !== undefined) locationFields.city_code = fields.cityCode;
+
+    if (Object.keys(locationFields).length > 0) {
+      const aed = await this.prisma.aed.findUnique({
+        where: { id: aedId },
+        select: { location_id: true },
+      });
+
+      if (aed?.location_id) {
+        await this.prisma.aedLocation.update({
+          where: { id: aed.location_id },
+          data: locationFields,
+        });
+      }
+    }
+  }
+
+  async updateAedContentHash(aedId: string, hash: string): Promise<void> {
+    await this.prisma.aed.update({
+      where: { id: aedId },
+      data: {
+        sync_content_hash: hash,
+        last_synced_at: new Date(),
+      },
+    });
+  }
+
+  async deactivateAed(aedId: string, reason: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      // Actualizar estado del AED
+      await tx.aed.update({
+        where: { id: aedId },
+        data: {
+          status: "INACTIVE",
+          internal_notes: reason,
+          updated_at: new Date(),
+        },
+      });
+
+      // Registrar cambio de estado
+      await tx.aedStatusChange.create({
+        data: {
+          aed_id: aedId,
+          previous_status: "PUBLISHED", // Asumimos que estaba publicado
+          new_status: "INACTIVE",
+          reason: reason,
+        },
+      });
+    });
+  }
+
+  async getExternalReferencesForDataSource(dataSourceId: string): Promise<string[]> {
+    const aeds = await this.prisma.aed.findMany({
+      where: {
+        data_source_id: dataSourceId,
+        external_reference: { not: null },
+      },
+      select: {
+        external_reference: true,
+      },
+    });
+
+    return aeds.map((aed) => aed.external_reference).filter((ref): ref is string => ref !== null);
+  }
+
+  async updateAedLastSyncedAt(aedId: string, syncedAt: Date): Promise<void> {
+    await this.prisma.aed.update({
+      where: { id: aedId },
+      data: {
+        last_synced_at: syncedAt,
+      },
+    });
+  }
 }
