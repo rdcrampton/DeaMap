@@ -26,6 +26,23 @@ const DEFAULT_CKAN_FIELD_MAPPING: FieldMapping = {
   status: "estado",
 };
 
+const SOURCE_ORIGINS = [
+  { value: "EXTERNAL_API", label: "API Externa" },
+  { value: "HEALTH_API", label: "API de Salud" },
+  { value: "CIVIL_PROTECTION_API", label: "API Protección Civil" },
+  { value: "FIRE_DEPARTMENT_API", label: "API Bomberos" },
+];
+
+const REGION_CODES = [
+  { value: "MAD", label: "Madrid" },
+  { value: "CAT", label: "Cataluña" },
+  { value: "AND", label: "Andalucía" },
+  { value: "VAL", label: "Valencia" },
+  { value: "GAL", label: "Galicia" },
+  { value: "PVA", label: "País Vasco" },
+  { value: "ESP", label: "Nacional (España)" },
+];
+
 export default function NewDataSourcePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -38,6 +55,8 @@ export default function NewDataSourcePage() {
     resourceId: "",
     syncFrequency: "MANUAL",
     isActive: true,
+    sourceOrigin: "EXTERNAL_API",
+    regionCode: "MAD",
     fieldMapping: DEFAULT_CKAN_FIELD_MAPPING,
   });
 
@@ -64,6 +83,13 @@ export default function NewDataSourcePage() {
     try {
       setLoading(true);
 
+      // Construir el objeto config según el tipo
+      const config = {
+        apiEndpoint: form.apiEndpoint || null,
+        resourceId: form.resourceId || null,
+        fieldMapping: form.fieldMapping,
+      };
+
       const response = await fetch("/api/admin/data-sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -71,11 +97,11 @@ export default function NewDataSourcePage() {
           name: form.name,
           type: form.type,
           description: form.description || null,
-          apiEndpoint: form.apiEndpoint || null,
-          resourceId: form.resourceId || null,
           syncFrequency: form.syncFrequency,
           isActive: form.isActive,
-          fieldMapping: form.fieldMapping,
+          sourceOrigin: form.sourceOrigin,
+          regionCode: form.regionCode,
+          config,
         }),
       });
 
@@ -200,6 +226,44 @@ export default function NewDataSourcePage() {
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="Descripción de la fuente de datos..."
                 />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="sourceOrigin" className="block text-sm font-medium text-gray-700">
+                    Origen *
+                  </label>
+                  <select
+                    id="sourceOrigin"
+                    value={form.sourceOrigin}
+                    onChange={(e) => setForm({ ...form, sourceOrigin: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    {SOURCE_ORIGINS.map((origin) => (
+                      <option key={origin.value} value={origin.value}>
+                        {origin.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="regionCode" className="block text-sm font-medium text-gray-700">
+                    Región *
+                  </label>
+                  <select
+                    id="regionCode"
+                    value={form.regionCode}
+                    onChange={(e) => setForm({ ...form, regionCode: e.target.value })}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    {REGION_CODES.map((region) => (
+                      <option key={region.value} value={region.value}>
+                        {region.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
