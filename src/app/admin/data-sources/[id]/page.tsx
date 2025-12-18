@@ -34,7 +34,7 @@ interface PreviewRecord {
 interface SyncResult {
   batchId: string;
   status: string;
-  summary: {
+  stats: {
     created: number;
     updated: number;
     skipped: number;
@@ -811,26 +811,24 @@ export default function DataSourceDetailPage() {
                     </div>
                     <div>
                       <dt className="text-gray-500">Creados</dt>
-                      <dd className="text-green-600 font-semibold">{syncResult.summary.created}</dd>
+                      <dd className="text-green-600 font-semibold">{syncResult.stats.created}</dd>
                     </div>
                     <div>
                       <dt className="text-gray-500">Actualizados</dt>
-                      <dd className="text-blue-600 font-semibold">{syncResult.summary.updated}</dd>
+                      <dd className="text-blue-600 font-semibold">{syncResult.stats.updated}</dd>
                     </div>
                     <div>
                       <dt className="text-gray-500">Omitidos</dt>
-                      <dd className="text-gray-600 font-semibold">{syncResult.summary.skipped}</dd>
+                      <dd className="text-gray-600 font-semibold">{syncResult.stats.skipped}</dd>
                     </div>
                     <div>
                       <dt className="text-gray-500">Desactivados</dt>
-                      <dd className="text-red-600 font-semibold">
-                        {syncResult.summary.deactivated}
-                      </dd>
+                      <dd className="text-red-600 font-semibold">{syncResult.stats.deactivated}</dd>
                     </div>
-                    {syncResult.summary.errors > 0 && (
+                    {syncResult.stats.errors > 0 && (
                       <div className="col-span-2">
                         <dt className="text-gray-500">Errores</dt>
-                        <dd className="text-red-600 font-semibold">{syncResult.summary.errors}</dd>
+                        <dd className="text-red-600 font-semibold">{syncResult.stats.errors}</dd>
                       </div>
                     )}
                   </dl>
