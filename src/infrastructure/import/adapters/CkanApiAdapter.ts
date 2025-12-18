@@ -36,15 +36,6 @@ interface CkanResponse {
 }
 
 /**
- * Respuesta de descarga directa de JSON (formato Madrid)
- */
-interface DirectJsonResponse {
-  data?: Record<string, unknown>[];
-  records?: Record<string, unknown>[];
-  // También puede ser un array directo
-}
-
-/**
  * Mapeo predefinido de campos para la API de Madrid
  */
 export const MADRID_FIELD_MAPPINGS: Record<string, string> = {
@@ -266,20 +257,68 @@ export class CkanApiAdapter implements IDataSourceAdapter {
 
   /**
    * Extrae los registros de una respuesta JSON
+   * Soporta múltiples formatos: CKAN API, JSON directo, GeoJSON
    */
   private extractRecordsFromJson(data: unknown): Record<string, unknown>[] {
+    console.log("🔍 Extracting records from JSON data...");
+
+    // Raw array
     if (Array.isArray(data)) {
+      console.log(`✅ Found direct array with ${data.length} records`);
       return data;
     }
+
     if (typeof data === "object" && data !== null) {
-      const obj = data as DirectJsonResponse;
+      const obj = data as any;
+
+      // CKAN API standard format: { success: true, result: { records: [...] } }
+      if (obj.result?.records && Array.isArray(obj.result.records)) {
+        console.log(
+          `✅ Found CKAN result.records format with ${obj.result.records.length} records`
+        );
+        return obj.result.records;
+      }
+
+      // Direct data array
       if (obj.data && Array.isArray(obj.data)) {
+        console.log(`✅ Found data array with ${obj.data.length} records`);
         return obj.data;
       }
+
+      // Direct records array
       if (obj.records && Array.isArray(obj.records)) {
+        console.log(`✅ Found records array with ${obj.records.length} records`);
         return obj.records;
       }
+
+      // GeoJSON format: { features: [{ properties: {...}, geometry: {...} }] }
+      if (obj.features && Array.isArray(obj.features)) {
+        console.log(`✅ Found GeoJSON features with ${obj.features.length} records`);
+        return obj.features.map((f: any) => {
+          // Extract properties and flatten geometry coordinates
+          const record = { ...f.properties };
+          if (f.geometry?.type === "Point" && Array.isArray(f.geometry.coordinates)) {
+            record.longitude = f.geometry.coordinates[0];
+            record.latitude = f.geometry.coordinates[1];
+          }
+          return record;
+        });
+      }
+
+      // Check if it might be a serialized JSON string
+      const keys = Object.keys(obj);
+      console.log(
+        `⚠️ Unknown JSON structure. Keys: ${keys.slice(0, 5).join(", ")}${keys.length > 5 ? "..." : ""}`
+      );
+
+      // Log first record sample for debugging
+      if (keys.length > 0) {
+        console.log("📋 First key sample:", keys[0]);
+        console.log("📋 First value sample:", JSON.stringify(obj[keys[0]]).substring(0, 200));
+      }
     }
+
+    console.log("❌ No valid records array found in JSON data");
     return [];
   }
 

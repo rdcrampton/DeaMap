@@ -34,13 +34,17 @@ export function buildDataSourceConfig(
     }
   }
 
+  // Extract field mappings - support both singular and plural forms
+  const fieldMapping = (configData as any).fieldMapping as Record<string, string> | undefined;
+  const fieldMappings = (configData as any).fieldMappings as Record<string, string> | undefined;
+
   return {
     type,
     // Pasar apiEndpoint para soportar URLs directas de JSON
     apiEndpoint,
     baseUrl,
     resourceId: (configData as any).resourceId as string | undefined,
-    fieldMappings: (configData as any).fieldMapping as Record<string, string> | undefined,
+    fieldMappings: fieldMappings || fieldMapping, // Support both forms
     pageSize: (configData as any).pageSize as number | undefined,
   };
 }
