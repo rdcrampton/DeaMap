@@ -5,6 +5,7 @@
 
 import { CsvRow } from "../value-objects/CsvRow";
 import { DynamicCsvRow } from "../value-objects/DynamicCsvRow";
+import type { ImportRecord } from "../value-objects/ImportRecord";
 
 export interface CreateImportBatchData {
   name: string;
@@ -13,6 +14,7 @@ export interface CreateImportBatchData {
   fileName?: string;
   totalRecords: number;
   importedBy: string;
+  dataSourceId?: string; // ID de fuente externa (para syncs)
 }
 
 export interface ImportBatchInfo {
@@ -118,4 +120,9 @@ export interface IImportRepository {
    * Actualiza la fecha de último sync de un AED
    */
   updateAedLastSyncedAt(aedId: string, syncedAt: Date): Promise<void>;
+
+  /**
+   * Crea un AED desde un ImportRecord (para fuentes externas)
+   */
+  createAedFromImportRecord(record: ImportRecord, dataSourceId: string): Promise<string>;
 }

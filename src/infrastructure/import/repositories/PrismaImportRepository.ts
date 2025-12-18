@@ -12,6 +12,7 @@ import {
   CreateAedFromCsvData,
   ImportErrorData,
 } from "@/domain/import/ports/IImportRepository";
+import type { ImportRecord } from "@/domain/import/value-objects/ImportRecord";
 
 export class PrismaImportRepository implements IImportRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -26,6 +27,7 @@ export class PrismaImportRepository implements IImportRepository {
         total_records: data.totalRecords,
         imported_by: data.importedBy,
         status: "PENDING",
+        data_source_id: data.dataSourceId,
       },
     });
 
@@ -330,5 +332,77 @@ export class PrismaImportRepository implements IImportRepository {
         last_synced_at: syncedAt,
       },
     });
+  }
+
+  async createAedFromImportRecord(record: ImportRecord, dataSourceId: string): Promise<string> {
+    // Crear el AED con todas sus relaciones en una transacción
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Crear location
+      const location = await tx.aedLocation.create({
+        data: {
+          street_type: record.streetType ?? undefined,
+          street_name: record.streetName ?? undefined,
+          street_number: record.streetNumber ?? undefined,
+          additional_info: record.additionalInfo ?? undefined,
+          postal_code: record.postalCode ?? undefined,
+          floor: record.floor ?? undefined,
+          specific_location: record.specificLocation ?? undefined,
+          city_name: record.city ?? undefined,
+          city_code: record.cityCode ?? undefined,
+          district_name: record.district ?? undefined,
+          latitude: record.latitude ?? undefined,
+          longitude: record.longitude ?? undefined,
+          access_description: record.accessDescription ?? undefined,
+        },
+      });
+
+      // 2. Crear schedule (si hay datos de horario)
+      const hasScheduleData =
+        record.scheduleDescription || record.accessSchedule || record.weekdayOpening;
+
+      let scheduleId: string | undefined;
+      if (hasScheduleData) {
+        const schedule = await tx.aedSchedule.create({
+          data: {
+            description: record.scheduleDescription || record.accessSchedule || undefined,
+            weekday_opening: record.weekdayOpening ?? undefined,
+            weekday_closing: record.weekdayClosing ?? undefined,
+            saturday_opening: record.saturdayOpening ?? undefined,
+            saturday_closing: record.saturdayClosing ?? undefined,
+            sunday_opening: record.sundayOpening ?? undefined,
+            sunday_closing: record.sundayClosing ?? undefined,
+          },
+        });
+        scheduleId = schedule.id;
+      }
+
+      // 3. Crear AED
+      const name = record.name || `DEA ${record.externalId || record.rowIndex}`;
+
+      const aed = await tx.aed.create({
+        data: {
+          name,
+          establishment_type: record.establishmentType ?? undefined,
+          status: "DRAFT",
+          publication_mode: "LOCATION_ONLY",
+          source_origin: "EXTERNAL_API",
+          external_reference: record.externalId,
+          latitude: record.latitude ?? undefined,
+          longitude: record.longitude ?? undefined,
+          location_id: location.id,
+          schedule_id: scheduleId,
+          data_source_id: dataSourceId,
+          sync_content_hash: record.contentHash,
+          last_synced_at: new Date(),
+          requires_attention: true,
+          attention_reason: "Imported from external API - Pending verification",
+          origin_observations: JSON.stringify(record.toJSON()),
+        },
+      });
+
+      return aed.id;
+    });
+
+    return result;
   }
 }
