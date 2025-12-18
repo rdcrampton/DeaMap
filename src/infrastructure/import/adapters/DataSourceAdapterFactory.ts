@@ -15,14 +15,18 @@ import type { CsvParserAdapter } from "../parsers/CsvParserAdapter";
 export class DataSourceAdapterFactory implements IDataSourceAdapterFactory {
   private readonly adapters: Map<DataSourceType, IDataSourceAdapter>;
 
-  constructor(csvParser: CsvParserAdapter) {
+  constructor(csvParser?: CsvParserAdapter) {
     this.adapters = new Map<DataSourceType, IDataSourceAdapter>([
-      ["CSV_FILE", new CsvDataSourceAdapter(csvParser)],
       ["CKAN_API", new CkanApiAdapter()],
       // Añadir más adapters aquí cuando se implementen:
       // ["JSON_FILE", new JsonFileAdapter()],
       // ["REST_API", new RestApiAdapter()],
     ]);
+
+    // CSV adapter requiere un parser
+    if (csvParser) {
+      this.adapters.set("CSV_FILE", new CsvDataSourceAdapter(csvParser));
+    }
   }
 
   create(type: DataSourceType): IDataSourceAdapter {
@@ -50,5 +54,25 @@ export class DataSourceAdapterFactory implements IDataSourceAdapterFactory {
    */
   registerAdapter(type: DataSourceType, adapter: IDataSourceAdapter): void {
     this.adapters.set(type, adapter);
+  }
+
+  /**
+   * Método estático para obtener un adapter de API (sin necesidad de CSV parser)
+   * Útil para endpoints que solo trabajan con APIs externas
+   */
+  static getApiAdapter(type: DataSourceType): IDataSourceAdapter {
+    switch (type) {
+      case "CKAN_API":
+        return new CkanApiAdapter();
+      default:
+        throw new Error(`API adapter not available for type: ${type}`);
+    }
+  }
+
+  /**
+   * Método estático para crear la factory con todos los adapters disponibles
+   */
+  static createDefault(csvParser?: CsvParserAdapter): DataSourceAdapterFactory {
+    return new DataSourceAdapterFactory(csvParser);
   }
 }
