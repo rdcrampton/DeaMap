@@ -177,7 +177,7 @@ export default function DataSourceDetailPage() {
         throw new Error(data.error || "Error al cargar preview");
       }
 
-      setPreview(data.data.records);
+      setPreview(data.data.preview?.records || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar preview");
     } finally {
