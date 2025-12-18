@@ -441,7 +441,7 @@ export default function OrganizationDetailPage() {
     return labels[type] || type;
   };
 
-  const getRoleLabel = (role: string) => {
+  const _getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
       OWNER: "Propietario",
       ADMIN: "Administrador",
@@ -463,7 +463,7 @@ export default function OrganizationDetailPage() {
     return colors[role] || "bg-gray-100 text-gray-800";
   };
 
-  const getAssignmentTypeLabel = (type: string) => {
+  const _getAssignmentTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
       CIVIL_PROTECTION: "Protección Civil",
       CERTIFIED_COMPANY: "Empresa Certificada",
@@ -474,7 +474,7 @@ export default function OrganizationDetailPage() {
     return labels[type] || type;
   };
 
-  const getStatusBadgeColor = (status: string) => {
+  const _getStatusBadgeColor = (status: string) => {
     const colors: Record<string, string> = {
       ACTIVE: "bg-green-100 text-green-800",
       REVOKED: "bg-red-100 text-red-800",
