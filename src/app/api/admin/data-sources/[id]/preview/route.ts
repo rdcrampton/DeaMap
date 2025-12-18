@@ -7,44 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { DataSourceAdapterFactory } from "@/infrastructure/import/adapters/DataSourceAdapterFactory";
-import type { DataSourceConfig, DataSourceType } from "@/domain/import/ports/IDataSourceAdapter";
+import { buildDataSourceConfig } from "@/infrastructure/import/adapters/buildAdapterConfig";
+import type { DataSourceType } from "@/domain/import/ports/IDataSourceAdapter";
 import type { ImportRecord } from "@/domain/import/value-objects/ImportRecord";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
-}
-
-/**
- * Construye la configuración del adapter a partir de los datos almacenados
- * Mapea los campos del formulario a los esperados por el adapter
- * Soporta tanto URLs directas de JSON como APIs CKAN tradicionales
- */
-function buildAdapterConfig(
-  type: DataSourceType,
-  configData: Record<string, unknown>
-): DataSourceConfig {
-  const apiEndpoint = configData.apiEndpoint as string | undefined;
-
-  // Extraer baseUrl desde apiEndpoint si es necesario (para API CKAN tradicional)
-  let baseUrl = configData.baseUrl as string | undefined;
-  if (!baseUrl && apiEndpoint) {
-    try {
-      const url = new URL(apiEndpoint);
-      baseUrl = `${url.protocol}//${url.host}`;
-    } catch {
-      baseUrl = undefined;
-    }
-  }
-
-  return {
-    type,
-    // Pasar apiEndpoint para soportar URLs directas de JSON
-    apiEndpoint,
-    baseUrl,
-    resourceId: configData.resourceId as string | undefined,
-    fieldMappings: configData.fieldMapping as Record<string, string> | undefined,
-    pageSize: configData.pageSize as number | undefined,
-  };
 }
 
 /**
@@ -79,7 +47,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Construir configuración
     const configData = dataSource.config as Record<string, unknown>;
-    const config = buildAdapterConfig(dataSource.type as DataSourceType, configData);
+    const config = buildDataSourceConfig(dataSource.type as DataSourceType, configData);
 
     // Validar configuración
     const validation = await adapter.validateConfig(config);
@@ -192,7 +160,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Construir configuración
     const configData = dataSource.config as Record<string, unknown>;
-    const config = buildAdapterConfig(dataSource.type as DataSourceType, configData);
+    const config = buildDataSourceConfig(dataSource.type as DataSourceType, configData);
 
     // Probar conexión
     const result = await adapter.testConnection(config);

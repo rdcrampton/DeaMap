@@ -54,6 +54,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Fuente de datos no encontrada" }, { status: 404 });
     }
 
+    // Extraer apiEndpoint y resourceId desde config para mostrar en el frontend
+    const config = dataSource.config as Record<string, unknown> | null;
+    const apiEndpoint = config?.apiEndpoint as string | null;
+    const resourceId = config?.resourceId as string | null;
+    const fieldMapping = config?.fieldMapping as Record<string, string> | null;
+
     // Formatear respuesta
     const response = {
       id: dataSource.id,
@@ -61,6 +67,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       description: dataSource.description,
       type: dataSource.type,
       config: dataSource.config,
+      apiEndpoint, // Extraído del config para facilitar acceso
+      resourceId, // Extraído del config para facilitar acceso
+      fieldMapping, // Extraído del config para facilitar acceso
       isActive: dataSource.is_active,
       matchingStrategy: dataSource.matching_strategy,
       matchingThreshold: dataSource.matching_threshold,

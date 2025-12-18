@@ -13,13 +13,14 @@ import type { IImportRepository } from "@/domain/import/ports/IImportRepository"
 import type { IDataSourceRepository } from "@/domain/import/ports/IDataSourceRepository";
 import type { ICheckpointService } from "@/domain/import/ports/ICheckpointService";
 import type { IHeartbeatService } from "@/domain/import/ports/IHeartbeatService";
-import type { IDataSourceAdapter, DataSourceConfig } from "@/domain/import/ports/IDataSourceAdapter";
+import type { IDataSourceAdapter } from "@/domain/import/ports/IDataSourceAdapter";
 import type { ImportRecord } from "@/domain/import/value-objects/ImportRecord";
 import {
   ReconciliationAction,
   type ReconciliationActionType,
 } from "@/domain/import/value-objects/ReconciliationAction";
 import { Checkpoint } from "@/domain/import/value-objects/CheckpointData";
+import { buildDataSourceConfig } from "@/infrastructure/import/adapters/buildAdapterConfig";
 
 // ============================================
 // Request & Response Types
@@ -152,9 +153,7 @@ export class ProcessExternalSourceUseCase {
 
       // 5. Obtener adapter y configuración
       const adapter = this.adapterFactory(dataSource.type);
-      const config: DataSourceConfig = {
-        ...dataSource.config,
-      };
+      const config = buildDataSourceConfig(dataSource.type as any, dataSource.config);
 
       // 6. Obtener conteo total (para progreso)
       const fetchStart = Date.now();
@@ -226,12 +225,7 @@ export class ProcessExternalSourceUseCase {
 
           // Guardar checkpoint de error
           await this.checkpointService.save(
-            Checkpoint.failed(
-              batchId,
-              recordIndex,
-              errorMessage,
-              record.externalId || undefined
-            )
+            Checkpoint.failed(batchId, recordIndex, errorMessage, record.externalId || undefined)
           );
 
           // Log error
@@ -398,10 +392,7 @@ export class ProcessExternalSourceUseCase {
           await this.importRepository.updateAedFields(action.matchedAedId, fieldsData);
 
           // Actualizar hash de contenido
-          await this.importRepository.updateAedContentHash(
-            action.matchedAedId,
-            record.contentHash
-          );
+          await this.importRepository.updateAedContentHash(action.matchedAedId, record.contentHash);
 
           // Actualizar timestamp de última sincronización
           await this.importRepository.updateAedLastSyncedAt(action.matchedAedId, new Date());
