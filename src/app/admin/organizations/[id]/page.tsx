@@ -486,22 +486,22 @@ export default function OrganizationDetailPage() {
 
   const getAedStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
-      ACTIVE: "Activo",
+      DRAFT: "Borrador",
+      PENDING_REVIEW: "Pendiente revisión",
+      PUBLISHED: "Publicado",
       INACTIVE: "Inactivo",
-      UNKNOWN: "Desconocido",
-      REMOVED: "Eliminado",
-      PENDING: "Pendiente",
+      REJECTED: "Rechazado",
     };
     return labels[status] || status;
   };
 
   const getAedStatusBadgeColor = (status: string) => {
     const colors: Record<string, string> = {
-      ACTIVE: "bg-green-100 text-green-800",
-      INACTIVE: "bg-gray-100 text-gray-800",
-      UNKNOWN: "bg-yellow-100 text-yellow-800",
-      REMOVED: "bg-red-100 text-red-800",
-      PENDING: "bg-blue-100 text-blue-800",
+      DRAFT: "bg-gray-100 text-gray-800",
+      PENDING_REVIEW: "bg-yellow-100 text-yellow-800",
+      PUBLISHED: "bg-green-100 text-green-800",
+      INACTIVE: "bg-red-100 text-red-800",
+      REJECTED: "bg-red-100 text-red-800",
     };
     return colors[status] || "bg-gray-100 text-gray-800";
   };
@@ -1092,11 +1092,11 @@ export default function OrganizationDetailPage() {
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                     >
                       <option value="">Todos</option>
-                      <option value="ACTIVE">Activo</option>
+                      <option value="PUBLISHED">Publicado</option>
+                      <option value="PENDING_REVIEW">Pendiente revisión</option>
+                      <option value="DRAFT">Borrador</option>
                       <option value="INACTIVE">Inactivo</option>
-                      <option value="UNKNOWN">Desconocido</option>
-                      <option value="REMOVED">Eliminado</option>
-                      <option value="PENDING">Pendiente</option>
+                      <option value="REJECTED">Rechazado</option>
                     </select>
                   </div>
                   <div>
