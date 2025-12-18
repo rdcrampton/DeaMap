@@ -45,29 +45,49 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "La fuente de datos no está activa" }, { status: 400 });
     }
 
-    // Verificar que no hay otra sincronización en progreso
-    const inProgressBatch = await prisma.importBatch.findFirst({
-      where: {
-        data_source_id: id,
-        status: "IN_PROGRESS",
-      },
-    });
+    // Verificar si se debe continuar un batch existente
+    const continueBatchId = body.continueBatchId as string | undefined;
+    let existingBatchId: string | undefined;
 
-    if (inProgressBatch) {
-      return NextResponse.json(
-        {
-          error: "Ya hay una sincronización en progreso",
-          batchId: inProgressBatch.id,
+    if (continueBatchId) {
+      // Verificar que el batch existe y está en progreso
+      const batchToResume = await prisma.importBatch.findUnique({
+        where: { id: continueBatchId, data_source_id: id },
+      });
+
+      if (!batchToResume) {
+        return NextResponse.json({ error: "Batch no encontrado" }, { status: 404 });
+      }
+
+      if (batchToResume.status !== "IN_PROGRESS") {
+        return NextResponse.json({ error: "El batch no está en progreso" }, { status: 400 });
+      }
+
+      existingBatchId = continueBatchId;
+    } else {
+      // Si no se especifica batch, verificar que no hay otro en progreso
+      const inProgressBatch = await prisma.importBatch.findFirst({
+        where: {
+          data_source_id: id,
+          status: "IN_PROGRESS",
         },
-        { status: 409 }
-      );
+      });
+
+      if (inProgressBatch) {
+        // Si hay un batch en progreso, continuarlo automáticamente
+        existingBatchId = inProgressBatch.id;
+        console.log(`🔄 Continuando batch existente: ${existingBatchId}`);
+      }
     }
 
     // Configurar opciones de sincronización
+    // Por defecto, procesar solo 100 registros por invocación para evitar timeouts
+    const batchSize = body.batchSize ? parseInt(body.batchSize) : 100;
+
     const options = {
       dryRun: body.dryRun === true,
       forceFullSync: body.forceFullSync === true,
-      maxRecords: body.maxRecords ? parseInt(body.maxRecords) : undefined,
+      maxRecords: batchSize,
       deactivateMissing: body.deactivateMissing ?? dataSource.auto_deactivate_missing,
       updateExistingFields: body.updateExistingFields ?? dataSource.auto_update_fields,
     };
@@ -92,12 +112,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       adapterFactory
     );
 
-    // Ejecutar sincronización
+    // Ejecutar sincronización (creará nuevo batch o continuará el existente)
     const result = await useCase.execute({
       dataSourceId: id,
       importedBy: user.userId,
-      options,
+      options: {
+        ...options,
+        existingBatchId, // Pasar el batch existente para continuar
+      },
     });
+
+    // Obtener información de progreso después de procesar este batch
+    const batchInfo = await prisma.importBatch.findUnique({
+      where: { id: result.batchId },
+      select: {
+        total_records: true,
+        successful_records: true,
+        failed_records: true,
+        last_checkpoint_index: true,
+        status: true,
+      },
+    });
+
+    const totalRecords = batchInfo?.total_records || 0;
+    const processedRecords = (batchInfo?.last_checkpoint_index ?? -1) + 1;
+    const hasMore = batchInfo?.status === "IN_PROGRESS" && processedRecords < totalRecords;
+    const progress = totalRecords > 0 ? Math.round((processedRecords / totalRecords) * 100) : 0;
 
     return NextResponse.json({
       success: result.success,
@@ -109,10 +149,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         duration: result.duration,
         errors: result.errors.slice(0, 10), // Limitar errores en respuesta
         totalErrors: result.errors.length,
+        progress: {
+          total: totalRecords,
+          processed: processedRecords,
+          percentage: progress,
+          hasMore,
+          status: batchInfo?.status || "UNKNOWN",
+        },
       },
-      message: result.success
-        ? `Sincronización completada: ${result.stats.created} creados, ${result.stats.updated} actualizados`
-        : `Sincronización completada con ${result.stats.failed} errores`,
+      message: hasMore
+        ? `Batch procesado: ${processedRecords}/${totalRecords} registros (${progress}%)`
+        : result.success
+          ? `Sincronización completada: ${result.stats.created} creados, ${result.stats.updated} actualizados`
+          : `Sincronización completada con ${result.stats.failed} errores`,
     });
   } catch (error) {
     console.error("Error during sync:", error);

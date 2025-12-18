@@ -11,6 +11,9 @@
     },
     "src/app/api/import/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/admin/data-sources/[id]/sync/route.ts": {
+      "maxDuration": 300
     }
   },
   "rewrites": [

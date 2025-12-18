@@ -40,6 +40,7 @@ export interface ProcessingOptions {
   heartbeatIntervalMs?: number; // Intervalo de heartbeat (ms)
   updateExistingFields?: string[]; // Campos a actualizar en registros existentes
   deactivateMissing?: boolean; // Desactivar registros no encontrados en fuente
+  existingBatchId?: string; // ID de batch existente para continuar sincronización
 }
 
 export interface ProcessExternalSourceResponse {
@@ -111,18 +112,24 @@ export class ProcessExternalSourceUseCase {
       throw new Error(`Data source is not active: ${dataSource.name}`);
     }
 
-    // 2. Crear batch de importación
-    const batchId = await this.importRepository.createBatch({
-      name: `Sync: ${dataSource.name} - ${new Date().toISOString()}`,
-      description: `Automatic sync from ${dataSource.type}`,
-      sourceOrigin: dataSource.sourceOrigin,
-      fileName: dataSource.name,
-      totalRecords: 0, // Se actualizará durante el proceso
-      importedBy,
-      dataSourceId,
-    });
+    // 2. Crear o recuperar batch de importación
+    let batchId: string;
 
-    console.log(`📦 Created import batch: ${batchId}`);
+    if (options.existingBatchId) {
+      batchId = options.existingBatchId;
+      console.log(`📦 Resuming existing import batch: ${batchId}`);
+    } else {
+      batchId = await this.importRepository.createBatch({
+        name: `Sync: ${dataSource.name} - ${new Date().toISOString()}`,
+        description: `Automatic sync from ${dataSource.type}`,
+        sourceOrigin: dataSource.sourceOrigin,
+        fileName: dataSource.name,
+        totalRecords: 0, // Se actualizará durante el proceso
+        importedBy,
+        dataSourceId,
+      });
+      console.log(`📦 Created import batch: ${batchId}`);
+    }
 
     // 3. Iniciar heartbeat
     if (!dryRun) {
