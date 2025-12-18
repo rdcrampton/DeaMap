@@ -25,6 +25,10 @@ export class JsonFileAdapter implements IDataSourceAdapter {
   private readonly maxRetries = 3;
   private readonly retryDelayMs = 1000;
 
+  // Cache para evitar descargas múltiples del mismo archivo
+  private dataCache: Map<string, { data: unknown; timestamp: number }> = new Map();
+  private readonly cacheTtlMs = 5 * 60 * 1000; // 5 minutos
+
   /**
    * Obtiene la URL del archivo JSON
    */
@@ -131,10 +135,8 @@ export class JsonFileAdapter implements IDataSourceAdapter {
     const url = this.getFileUrl(config);
     const fieldMappings = config.fieldMappings || {};
 
-    console.log(`📥 Descargando JSON desde: ${url}`);
-
-    const response = await this.fetchWithRetry(url);
-    const data = await response.json();
+    // Usar caché para evitar descarga doble
+    const data = await this.getCachedData(url);
 
     const records = this.extractRecordsFromPath(data, config.jsonPath);
     const externalIdField = this.detectExternalIdField(records);
@@ -155,8 +157,8 @@ export class JsonFileAdapter implements IDataSourceAdapter {
   async getRecordCount(config: DataSourceConfig): Promise<number> {
     const url = this.getFileUrl(config);
 
-    const response = await this.fetchWithRetry(url);
-    const data = await response.json();
+    // Usar caché para evitar descarga doble
+    const data = await this.getCachedData(url);
 
     const records = this.extractRecordsFromPath(data, config.jsonPath);
     return records.length;
@@ -211,8 +213,8 @@ export class JsonFileAdapter implements IDataSourceAdapter {
     const url = this.getFileUrl(config);
     const fieldMappings = config.fieldMappings || {};
 
-    const response = await this.fetchWithRetry(url);
-    const data = await response.json();
+    // Usar caché para evitar descarga doble
+    const data = await this.getCachedData(url);
 
     const records = this.extractRecordsFromPath(data, config.jsonPath).slice(0, limit);
     const externalIdField = this.detectExternalIdField(records);
@@ -236,17 +238,9 @@ export class JsonFileAdapter implements IDataSourceAdapter {
       }
 
       const url = this.getFileUrl(config);
-      const response = await this.fetchWithRetry(url);
 
-      if (!response.ok) {
-        return {
-          success: false,
-          message: `Error HTTP: ${response.status} ${response.statusText}`,
-          responseTimeMs: Date.now() - startTime,
-        };
-      }
-
-      const data = await response.json();
+      // Usar caché para evitar descarga doble
+      const data = await this.getCachedData(url);
       const records = this.extractRecordsFromPath(data, config.jsonPath);
 
       // Obtener campos disponibles del primer registro
@@ -296,5 +290,52 @@ export class JsonFileAdapter implements IDataSourceAdapter {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Obtiene datos del JSON con caché para evitar descargas múltiples
+   * @param url - URL del archivo JSON
+   * @returns Datos JSON parseados
+   */
+  private async getCachedData(url: string): Promise<unknown> {
+    const cached = this.dataCache.get(url);
+    const now = Date.now();
+
+    // Si hay datos en caché y no han expirado, usarlos
+    if (cached && now - cached.timestamp < this.cacheTtlMs) {
+      console.log(`📦 Usando datos en caché para: ${url}`);
+      return cached.data;
+    }
+
+    // Descargar y cachear
+    console.log(`📥 Descargando JSON desde: ${url}`);
+    const response = await this.fetchWithRetry(url);
+    const data = await response.json();
+
+    // Guardar en caché
+    this.dataCache.set(url, { data, timestamp: now });
+    console.log(`💾 Datos cacheados para: ${url}`);
+
+    return data;
+  }
+
+  /**
+   * Limpia la caché (útil después de una sincronización completa)
+   */
+  clearCache(): void {
+    this.dataCache.clear();
+    console.log(`🧹 Caché limpiada`);
+  }
+
+  /**
+   * Limpia entradas expiradas de la caché
+   */
+  private cleanExpiredCache(): void {
+    const now = Date.now();
+    for (const [url, cached] of this.dataCache) {
+      if (now - cached.timestamp >= this.cacheTtlMs) {
+        this.dataCache.delete(url);
+      }
+    }
   }
 }
