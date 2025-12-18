@@ -8,41 +8,44 @@ interface FieldMapping {
   [key: string]: string;
 }
 
+// Mapeo genérico para APIs CKAN
+// Formato: campo_fuente → campo_sistema
 const DEFAULT_CKAN_FIELD_MAPPING: FieldMapping = {
-  externalId: "id_dea",
-  name: "nombre_dea",
-  address: "direccion",
-  locality: "municipio",
-  province: "provincia",
-  postalCode: "codigo_postal",
-  latitude: "latitud",
-  longitude: "longitud",
-  locationDescription: "ubicacion",
-  accessibility: "accesibilidad_horaria",
-  schedule: "horario_atencion",
-  contactPhone: "telefono_contacto",
-  responsibleEntity: "entidad_responsable",
-  installationDate: "fecha_alta",
-  status: "estado",
+  id_dea: "externalId",
+  nombre_dea: "name",
+  direccion: "address",
+  municipio: "locality",
+  provincia: "province",
+  codigo_postal: "postalCode",
+  latitud: "latitude",
+  longitud: "longitude",
+  ubicacion: "locationDescription",
+  accesibilidad_horaria: "accessibility",
+  horario_atencion: "schedule",
+  telefono_contacto: "contactPhone",
+  entidad_responsable: "responsibleEntity",
+  fecha_alta: "installationDate",
+  estado: "status",
 };
 
 // Mapeo para el formato JSON de la Comunidad de Madrid
+// Formato: campo_fuente → campo_sistema
 const MADRID_JSON_FIELD_MAPPING: FieldMapping = {
-  externalId: "codigo_dea",
-  streetType: "direccion_via_codigo",
-  streetName: "direccion_via_nombre",
-  streetNumber: "direccion_portal_numero",
-  floor: "direccion_piso",
-  additionalInfo: "direccion_puerta",
-  specificLocation: "direccion_ubicacion",
-  postalCode: "direccion_codigo_postal",
-  latitude: "direccion_latitud",
-  longitude: "direccion_longitud",
-  cityCode: "municipio_codigo",
-  city: "municipio_nombre",
-  establishmentType: "tipo_establecimiento",
-  ownershipType: "tipo_titularidad",
-  accessSchedule: "horario_acceso",
+  codigo_dea: "externalId",
+  direccion_via_codigo: "streetType",
+  direccion_via_nombre: "streetName",
+  direccion_portal_numero: "streetNumber",
+  direccion_piso: "floor",
+  direccion_puerta: "additionalInfo",
+  direccion_ubicacion: "specificLocation",
+  direccion_codigo_postal: "postalCode",
+  direccion_latitud: "latitude",
+  direccion_longitud: "longitude",
+  municipio_codigo: "cityCode",
+  municipio_nombre: "city",
+  tipo_establecimiento: "establishmentType",
+  tipo_titularidad: "ownershipType",
+  horario_acceso: "accessSchedule",
 };
 
 const SOURCE_ORIGINS = [
