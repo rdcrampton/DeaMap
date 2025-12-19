@@ -22,6 +22,7 @@ interface DataSource {
   filterConfig: Record<string, unknown> | null;
   isActive: boolean;
   syncFrequency: string;
+  defaultPublicationMode: string;
   lastSyncAt: string | null;
   lastSyncStatus: string | null;
   totalRecordsSync: number;
@@ -91,6 +92,7 @@ export default function DataSourceDetailPage() {
     description: "",
     isActive: true,
     syncFrequency: "MANUAL",
+    defaultPublicationMode: "LOCATION_ONLY",
   });
 
   const fetchDataSource = useCallback(async () => {
@@ -120,6 +122,7 @@ export default function DataSourceDetailPage() {
         description: data.data.description || "",
         isActive: data.data.isActive,
         syncFrequency: data.data.syncFrequency,
+        defaultPublicationMode: data.data.defaultPublicationMode || "LOCATION_ONLY",
       });
       setError(null);
     } catch (err) {
@@ -464,6 +467,27 @@ export default function DataSourceDetailPage() {
                     <option value="WEEKLY">Semanal</option>
                     <option value="MONTHLY">Mensual</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Modo de Publicación por Defecto
+                  </label>
+                  <select
+                    value={editForm.defaultPublicationMode}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, defaultPublicationMode: e.target.value })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    <option value="NONE">Ninguno - No publicar</option>
+                    <option value="LOCATION_ONLY">Solo ubicación</option>
+                    <option value="BASIC_INFO">Info básica (ubicación + horario + tipo)</option>
+                    <option value="FULL">Información completa</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Nivel de información que se publicará automáticamente al importar desde esta
+                    fuente
+                  </p>
                 </div>
                 <div className="flex items-center">
                   <input

@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
         matching_threshold: body.matchingThreshold || 75,
         is_active: body.isActive !== false,
         sync_frequency: body.syncFrequency || "MANUAL",
+        default_publication_mode: body.defaultPublicationMode || "LOCATION_ONLY",
         auto_deactivate_missing: body.autoDeactivateMissing || false,
         auto_update_fields: body.autoUpdateFields || [],
         source_origin: body.sourceOrigin,

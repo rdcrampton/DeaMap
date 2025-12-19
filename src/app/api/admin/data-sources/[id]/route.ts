@@ -89,6 +89,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       matchingStrategy: dataSource.matching_strategy,
       matchingThreshold: dataSource.matching_threshold,
       syncFrequency: dataSource.sync_frequency,
+      defaultPublicationMode: dataSource.default_publication_mode,
       lastSyncAt: dataSource.last_sync_at,
       nextScheduledSyncAt: dataSource.next_scheduled_sync_at,
       autoDeactivateMissing: dataSource.auto_deactivate_missing,
@@ -168,6 +169,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (body.matchingThreshold !== undefined)
       updateData.matching_threshold = body.matchingThreshold;
     if (body.syncFrequency !== undefined) updateData.sync_frequency = body.syncFrequency;
+    if (body.defaultPublicationMode !== undefined)
+      updateData.default_publication_mode = body.defaultPublicationMode;
     if (body.autoDeactivateMissing !== undefined)
       updateData.auto_deactivate_missing = body.autoDeactivateMissing;
     if (body.autoUpdateFields !== undefined) updateData.auto_update_fields = body.autoUpdateFields;
