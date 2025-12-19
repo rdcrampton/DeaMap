@@ -9,8 +9,15 @@ interface DataSource {
   name: string;
   type: string;
   description: string | null;
+  // Campos específicos de CKAN_API
   apiEndpoint: string | null;
   resourceId: string | null;
+  // Campos específicos de JSON_FILE
+  fileUrl: string | null;
+  jsonPath: string | null;
+  // Campos específicos de CSV_FILE
+  filePath: string | null;
+  // Campos comunes
   fieldMapping: Record<string, string> | null;
   filterConfig: Record<string, unknown> | null;
   isActive: boolean;
@@ -630,18 +637,53 @@ export default function DataSourceDetailPage() {
             </div>
             <div className="px-6 py-4">
               <dl className="space-y-4">
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">Endpoint API</dt>
-                  <dd className="mt-1 text-sm text-gray-900 break-all">
-                    {dataSource.apiEndpoint || "N/A"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">Resource ID</dt>
-                  <dd className="mt-1 text-sm text-gray-900 font-mono">
-                    {dataSource.resourceId || "N/A"}
-                  </dd>
-                </div>
+                {/* Campos específicos de CKAN_API */}
+                {dataSource.type === "CKAN_API" && (
+                  <>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Endpoint API</dt>
+                      <dd className="mt-1 text-sm text-gray-900 break-all">
+                        {dataSource.apiEndpoint || "N/A"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Resource ID</dt>
+                      <dd className="mt-1 text-sm text-gray-900 font-mono">
+                        {dataSource.resourceId || "N/A"}
+                      </dd>
+                    </div>
+                  </>
+                )}
+
+                {/* Campos específicos de JSON_FILE */}
+                {dataSource.type === "JSON_FILE" && (
+                  <>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">URL del Archivo</dt>
+                      <dd className="mt-1 text-sm text-gray-900 break-all">
+                        {dataSource.fileUrl || "N/A"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">JSON Path</dt>
+                      <dd className="mt-1 text-sm text-gray-900 font-mono">
+                        {dataSource.jsonPath || "N/A"}
+                      </dd>
+                    </div>
+                  </>
+                )}
+
+                {/* Campos específicos de CSV_FILE */}
+                {dataSource.type === "CSV_FILE" && (
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Ruta del Archivo</dt>
+                    <dd className="mt-1 text-sm text-gray-900 break-all">
+                      {dataSource.filePath || "N/A"}
+                    </dd>
+                  </div>
+                )}
+
+                {/* Campos comunes a todos los tipos */}
                 <div>
                   <dt className="text-sm font-medium text-gray-500">
                     Frecuencia de Sincronización
