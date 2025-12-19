@@ -28,7 +28,7 @@ model Aed {
   // Origin and traceability
   source_origin             SourceOrigin             @default(WEB_FORM)
   source_details            String?
-  import_batch_id           String?                  @db.Uuid
+  batch_job_id              String?                  @db.Uuid
   external_reference        String?
 
   // Observations and notes (SIMPLIFIED)
@@ -75,7 +75,7 @@ model Aed {
   location                  AedLocation              @relation(fields: [location_id], references: [id])
   responsible               AedResponsible?          @relation(fields: [responsible_id], references: [id])
   schedule                  AedSchedule?             @relation(fields: [schedule_id], references: [id])
-  import_batch              ImportBatch?             @relation(fields: [import_batch_id], references: [id])
+  batch_job                 BatchJob?                @relation("AedBatchJob", fields: [batch_job_id], references: [id])
 
   // External data source tracking (for syncs)
   data_source_id            String?                  @db.Uuid
@@ -106,7 +106,7 @@ model Aed {
   @@index([establishment_type])
   @@index([sequence])
   @@index([source_origin])
-  @@index([import_batch_id])
+  @@index([batch_job_id])
   @@index([requires_attention])
   @@index([owner_user_id])
   @@index([data_source_id])
@@ -204,156 +204,11 @@ model AedPublicationHistory {
 }
 
 // ============================================
-// BATCH IMPORTS - For mass uploads
+// LEGACY BATCH IMPORTS - DEPRECATED
+// Use BatchJob system instead (see bottom of file)
 // ============================================
-model ImportBatch {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  name                  String
-  description           String?
-  source_origin         SourceOrigin
-
-  // Source file
-  file_name             String?
-  file_url              String?
-  file_hash             String?
-  file_size             Int?
-
-  // Process statistics
-  total_records         Int                     @default(0)
-  successful_records    Int                     @default(0)
-  failed_records        Int                     @default(0)
-  warning_records       Int                     @default(0)
-
-  // Status
-  status                ImportStatus            @default(PENDING)
-  completed_at          DateTime?
-  duration_seconds      Int?
-
-  // Recovery & Resume
-  last_heartbeat        DateTime?
-  last_checkpoint_index Int                     @default(0)
-  resumed_count         Int                     @default(0)
-  cancelled_manually    Boolean                 @default(false)
-
-  // Metadata
-  import_parameters     Json?
-  error_summary         Json?
-  detailed_log          String?
-
-  // Audit
-  imported_by           String
-  ip_address            String?
-
-  // External data source (for syncs)
-  data_source_id        String?                 @db.Uuid
-  data_source           ExternalDataSource?     @relation("DataSourceBatches", fields: [data_source_id], references: [id])
-
-  aeds                  Aed[]
-  errors                ImportError[]
-  checkpoints           ImportCheckpoint[]
-
-  created_at            DateTime                @default(now())
-
-  @@index([status])
-  @@index([source_origin])
-  @@index([created_at])
-  @@index([imported_by])
-  @@index([status, last_heartbeat])
-  @@index([data_source_id])
-  @@map("import_batches")
-}
-
-enum ImportStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  COMPLETED_WITH_ERRORS
-  FAILED
-  CANCELLED
-  INTERRUPTED
-  RESUMING
-}
-
-// ============================================
-// IMPORT ERROR LOG
-// ============================================
-model ImportError {
-  id                  String              @id @default(uuid()) @db.Uuid
-  import_batch_id     String              @db.Uuid
-  row_number          Int?
-  record_reference    String?
-
-  error_type          ImportErrorType
-  affected_field      String?
-  original_value      String?
-  error_message       String
-  severity            ErrorSeverity
-
-  // Context
-  row_data            Json?
-  correction_suggestion String?
-
-  import_batch        ImportBatch         @relation(fields: [import_batch_id], references: [id], onDelete: Cascade)
-
-  created_at          DateTime            @default(now())
-
-  @@index([import_batch_id])
-  @@index([error_type])
-  @@index([severity])
-  @@map("import_errors")
-}
-
-enum ImportErrorType {
-  VALIDATION
-  FORMAT
-  DUPLICATE_DATA
-  MISSING_DATA
-  INVALID_DATA
-  RELATION_NOT_FOUND
-  INVALID_COORDINATES
-  ADDRESS_NOT_FOUND
-  SYSTEM_ERROR
-}
-
-enum ErrorSeverity {
-  INFO
-  WARNING
-  ERROR
-  CRITICAL
-}
-
-// ============================================
-// IMPORT CHECKPOINTS - For resumable imports
-// ============================================
-model ImportCheckpoint {
-  id                  String              @id @default(uuid()) @db.Uuid
-  import_batch_id     String              @db.Uuid
-  record_index        Int
-  record_reference    String?
-  record_hash         String?
-
-  status              CheckpointStatus
-  error_message       String?
-  processing_time_ms  Int?
-
-  // Context data
-  record_data         Json?
-
-  import_batch        ImportBatch         @relation(fields: [import_batch_id], references: [id], onDelete: Cascade)
-
-  created_at          DateTime            @default(now())
-
-  @@unique([import_batch_id, record_index])
-  @@index([import_batch_id, status])
-  @@index([record_hash])
-  @@map("import_checkpoints")
-}
-
-enum CheckpointStatus {
-  SUCCESS
-  FAILED
-  SKIPPED
-}
+// Models ImportBatch, ImportError, ImportCheckpoint have been
+// replaced by BatchJob, BatchJobError, BatchJobCheckpoint
 
 // ============================================
 // EXTERNAL DATA SOURCES - For API/JSON imports
@@ -386,7 +241,6 @@ model ExternalDataSource {
   region_code               String              // "MAD", "CAT", "AND", etc.
 
   // Relations
-  import_batches            ImportBatch[]       @relation("DataSourceBatches")
   managed_aeds              Aed[]               @relation("AedDataSource")
   batch_jobs                BatchJob[]          @relation("BatchJobDataSource")
 
@@ -844,58 +698,9 @@ enum UserRole {
 }
 
 // ============================================
-// EXPORT BATCHES - For CSV exports
+// LEGACY EXPORT BATCHES - DEPRECATED
+// Use BatchJob system instead with AED_CSV_EXPORT or AED_JSON_EXPORT type
 // ============================================
-model ExportBatch {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  name                  String
-  description           String?
-
-  // Filters applied
-  filters               Json?                   // Stores status[], sourceOrigin, importBatchId, cityName
-
-  // Export file
-  file_name             String?
-  file_url              String?                 // S3 URL when ready
-  file_size             Int?
-  file_hash             String?
-
-  // Process statistics
-  total_records         Int                     @default(0)
-  successful_records    Int                     @default(0)
-  failed_records        Int                     @default(0)
-
-  // Status
-  status                ExportStatus            @default(PENDING)
-  started_at            DateTime?
-  completed_at          DateTime?
-  duration_seconds      Int?
-
-  // Error handling
-  error_message         String?
-  error_details         Json?
-
-  // Audit
-  exported_by           String                  @db.Uuid
-  ip_address            String?
-
-  created_at            DateTime                @default(now())
-  updated_at            DateTime                @updatedAt
-
-  @@index([status])
-  @@index([created_at])
-  @@index([exported_by])
-  @@index([status, created_at])
-  @@map("export_batches")
-}
-
-enum ExportStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  FAILED
-  CANCELLED
-}
 
 // ============================================
 // ORGANIZATIONS - Groups that manage AEDs
@@ -1297,6 +1102,7 @@ model BatchJob {
   checkpoints           BatchJobCheckpoint[]
   errors                BatchJobError[]
   artifacts             BatchJobArtifact[]
+  created_aeds          Aed[]                   @relation("AedBatchJob")
 
   created_at            DateTime                @default(now())
   updated_at            DateTime                @updatedAt
