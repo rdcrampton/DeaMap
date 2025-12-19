@@ -32,6 +32,7 @@ const DEFAULT_CKAN_FIELD_MAPPING: FieldMapping = {
 // Formato: campo_fuente → campo_sistema
 const MADRID_JSON_FIELD_MAPPING: FieldMapping = {
   codigo_dea: "externalId",
+  nombre_establecimiento: "name", // Nombre del establecimiento (si existe en datos)
   direccion_via_codigo: "streetType",
   direccion_via_nombre: "streetName",
   direccion_portal_numero: "streetNumber",

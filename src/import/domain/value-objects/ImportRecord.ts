@@ -164,7 +164,55 @@ export class ImportRecord {
 
   // Identificación
   get name(): string | null {
-    return this.normalizedData.proposedName ?? this.normalizedData.name ?? null;
+    // Primero intentar con campos mapeados
+    const mappedName = this.normalizedData.proposedName ?? this.normalizedData.name;
+    if (mappedName) return mappedName;
+
+    // Generación automática basada en externalId o dirección
+    // Si hay código externo válido (no generado automáticamente), usarlo
+    if (
+      this.externalId &&
+      !this.externalId.startsWith("row-") &&
+      !this.externalId.startsWith("api-") &&
+      !this.externalId.startsWith("json-")
+    ) {
+      return this.externalId;
+    }
+
+    // Generar nombre desde dirección
+    return this.generateNameFromAddress();
+  }
+
+  /**
+   * Genera un nombre automático desde la dirección
+   * Formato: "Calle xxxxx, numero, ciudad, provincia"
+   */
+  private generateNameFromAddress(): string | null {
+    const parts: string[] = [];
+
+    // Tipo de vía + nombre de vía
+    if (this.streetType && this.streetName) {
+      parts.push(`${this.streetType} ${this.streetName}`);
+    } else if (this.streetName) {
+      parts.push(this.streetName);
+    }
+
+    // Número
+    if (this.streetNumber) {
+      parts.push(this.streetNumber);
+    }
+
+    // Ciudad
+    if (this.city) {
+      parts.push(this.city);
+    }
+
+    // Si no tenemos suficiente información, devolver null
+    if (parts.length === 0) {
+      return null;
+    }
+
+    return parts.join(", ");
   }
 
   get establishmentType(): string | null {
