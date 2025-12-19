@@ -388,6 +388,7 @@ model ExternalDataSource {
   // Relations
   import_batches            ImportBatch[]       @relation("DataSourceBatches")
   managed_aeds              Aed[]               @relation("AedDataSource")
+  batch_jobs                BatchJob[]          @relation("BatchJobDataSource")
 
   // Audit
   created_at                DateTime            @default(now())
@@ -1236,4 +1237,223 @@ enum ClaimStatus {
   APPROVED
   REJECTED
   NEEDS_VERIFICATION
+}
+
+// ============================================
+// BATCH JOBS - Generic batch processing system
+// ============================================
+model BatchJob {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  type                  BatchJobType
+  name                  String
+  description           String?
+
+  // Status and progress
+  status                BatchJobStatus          @default(PENDING)
+
+  // Configuration (JSON with type-specific settings)
+  config                Json
+
+  // Progress tracking
+  total_records         Int                     @default(0)
+  processed_records     Int                     @default(0)
+  successful_records    Int                     @default(0)
+  failed_records        Int                     @default(0)
+  skipped_records       Int                     @default(0)
+  warning_records       Int                     @default(0)
+  current_chunk         Int                     @default(0)
+  total_chunks          Int                     @default(0)
+
+  // Result (populated after completion)
+  result                Json?
+  error_summary         Json?
+
+  // Timestamps
+  started_at            DateTime?
+  completed_at          DateTime?
+  duration_seconds      Int?
+
+  // Recovery & Resume
+  last_heartbeat        DateTime?
+  last_checkpoint_index Int                     @default(-1)
+  resume_count          Int                     @default(0)
+
+  // Ownership and context
+  created_by            String                  @db.Uuid
+  organization_id       String?                 @db.Uuid
+  parent_job_id         String?                 @db.Uuid
+  parent_job            BatchJob?               @relation("JobHierarchy", fields: [parent_job_id], references: [id])
+  child_jobs            BatchJob[]              @relation("JobHierarchy")
+
+  // External references
+  data_source_id        String?                 @db.Uuid
+  data_source           ExternalDataSource?     @relation("BatchJobDataSource", fields: [data_source_id], references: [id])
+
+  // Metadata and tags
+  metadata              Json?
+  tags                  String[]                @default([])
+
+  // Relations
+  checkpoints           BatchJobCheckpoint[]
+  errors                BatchJobError[]
+  artifacts             BatchJobArtifact[]
+
+  created_at            DateTime                @default(now())
+  updated_at            DateTime                @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([created_by])
+  @@index([organization_id])
+  @@index([created_at])
+  @@index([status, last_heartbeat])
+  @@index([data_source_id])
+  @@index([parent_job_id])
+  @@map("batch_jobs")
+}
+
+enum BatchJobType {
+  // Import operations
+  AED_CSV_IMPORT
+  AED_EXTERNAL_SYNC
+
+  // Export operations
+  AED_CSV_EXPORT
+  AED_JSON_EXPORT
+
+  // Bulk operations
+  BULK_AED_UPDATE
+  BULK_AED_DELETE
+  BULK_STATUS_CHANGE
+
+  // Verification operations
+  BULK_VERIFICATION
+
+  // Maintenance operations
+  DATA_CLEANUP
+  IMAGE_OPTIMIZATION
+
+  // Report generation
+  REPORT_GENERATION
+}
+
+enum BatchJobStatus {
+  PENDING              // Job created, waiting to start
+  QUEUED               // Job queued for processing
+  IN_PROGRESS          // Currently processing
+  PAUSED               // Paused by user, can be resumed
+  WAITING              // Waiting for next chunk invocation
+  COMPLETED            // Successfully completed
+  COMPLETED_WITH_WARNINGS // Completed but with some warnings
+  FAILED               // Failed completely
+  CANCELLED            // Cancelled by user
+  INTERRUPTED          // Interrupted (timeout, crash), can be resumed
+  RESUMING             // Being resumed from interruption
+}
+
+// ============================================
+// BATCH JOB CHECKPOINTS - For resumable processing
+// ============================================
+model BatchJobCheckpoint {
+  id                  String              @id @default(uuid()) @db.Uuid
+  job_id              String              @db.Uuid
+  record_index        Int
+  record_reference    String?
+  record_hash         String?
+
+  status              BatchCheckpointStatus
+  error_message       String?
+  processing_time_ms  Int?
+
+  // Context data
+  record_data         Json?
+
+  job                 BatchJob            @relation(fields: [job_id], references: [id], onDelete: Cascade)
+
+  created_at          DateTime            @default(now())
+
+  @@unique([job_id, record_index])
+  @@index([job_id, status])
+  @@index([record_hash])
+  @@map("batch_job_checkpoints")
+}
+
+enum BatchCheckpointStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+// ============================================
+// BATCH JOB ERRORS - Detailed error logging
+// ============================================
+model BatchJobError {
+  id                  String              @id @default(uuid()) @db.Uuid
+  job_id              String              @db.Uuid
+  record_index        Int?
+  record_reference    String?
+
+  error_type          String
+  error_message       String
+  severity            BatchErrorSeverity
+
+  // Context
+  row_data            Json?
+  correction_suggestion String?
+
+  job                 BatchJob            @relation(fields: [job_id], references: [id], onDelete: Cascade)
+
+  created_at          DateTime            @default(now())
+
+  @@index([job_id])
+  @@index([error_type])
+  @@index([severity])
+  @@map("batch_job_errors")
+}
+
+enum BatchErrorSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+// ============================================
+// BATCH JOB ARTIFACTS - Output files and data
+// ============================================
+model BatchJobArtifact {
+  id                  String              @id @default(uuid()) @db.Uuid
+  job_id              String              @db.Uuid
+
+  type                ArtifactType
+  name                String
+  description         String?
+
+  // File info
+  mime_type           String?
+  file_size           Int?
+  file_url            String?
+  file_hash           String?
+
+  // Data (for small inline data)
+  data                Json?
+
+  // Expiration
+  expires_at          DateTime?
+
+  job                 BatchJob            @relation(fields: [job_id], references: [id], onDelete: Cascade)
+
+  created_at          DateTime            @default(now())
+
+  @@index([job_id])
+  @@index([type])
+  @@index([expires_at])
+  @@map("batch_job_artifacts")
+}
+
+enum ArtifactType {
+  FILE
+  URL
+  DATA
+  REPORT
 }
