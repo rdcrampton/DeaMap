@@ -2,7 +2,7 @@
  * Barra de progreso para exportaciones
  */
 
-import { ExportBatchInfo } from "@/domain/export/ports/IExportRepository";
+import { ExportBatchInfo } from "@/export/domain/ports/IExportRepository";
 
 interface ExportProgressBarProps {
   batch: ExportBatchInfo;
@@ -38,10 +38,7 @@ export default function ExportProgressBar({ batch }: ExportProgressBarProps) {
           <span className="text-red-600 font-medium">✕</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-          <div
-            className="bg-red-500 h-full rounded-full"
-            style={{ width: "100%" }}
-          />
+          <div className="bg-red-500 h-full rounded-full" style={{ width: "100%" }} />
         </div>
       </div>
     );
@@ -56,18 +53,14 @@ export default function ExportProgressBar({ batch }: ExportProgressBarProps) {
           <span className="text-gray-600 font-medium">-</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-          <div
-            className="bg-gray-400 h-full rounded-full"
-            style={{ width: "0%" }}
-          />
+          <div className="bg-gray-400 h-full rounded-full" style={{ width: "0%" }} />
         </div>
       </div>
     );
   }
 
   // En progreso o pendiente
-  const percentage =
-    totalRecords > 0 ? Math.round((successfulRecords / totalRecords) * 100) : 0;
+  const percentage = totalRecords > 0 ? Math.round((successfulRecords / totalRecords) * 100) : 0;
 
   return (
     <div className="w-full">
@@ -80,9 +73,7 @@ export default function ExportProgressBar({ batch }: ExportProgressBarProps) {
       <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-300 ${
-            status === "IN_PROGRESS"
-              ? "bg-blue-500 animate-pulse"
-              : "bg-gray-400"
+            status === "IN_PROGRESS" ? "bg-blue-500 animate-pulse" : "bg-gray-400"
           }`}
           style={{ width: `${percentage}%` }}
         />

@@ -4,15 +4,14 @@
  * POST /api/batch/[jobId]/cancel - Cancel a running job
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@/generated/client';
-import { PrismaBatchJobRepository } from '@/infrastructure/batch';
-import { BatchJobOrchestrator } from '@/application/batch';
-import { CancelBatchJobUseCase } from '@/application/batch/use-cases';
-import { initializeProcessors } from '@/application/batch/processors';
-import { PrismaDataSourceRepository } from '@/infrastructure/import/repositories/PrismaDataSourceRepository';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { PrismaBatchJobRepository } from "@/batch/infrastructure";
+import { BatchJobOrchestrator } from "@/batch/application";
+import { CancelBatchJobUseCase } from "@/batch/application/use-cases";
+import { initializeProcessors } from "@/batch/application/processors";
+import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
 
-const prisma = new PrismaClient();
 const repository = new PrismaBatchJobRepository(prisma);
 const dataSourceRepository = new PrismaDataSourceRepository(prisma);
 
@@ -29,10 +28,7 @@ interface RouteParams {
  * POST /api/batch/[jobId]/cancel
  * Cancel a batch job
  */
-export async function POST(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const body = await request.json().catch(() => ({}));
@@ -42,25 +38,25 @@ export async function POST(
     const result = await useCase.execute({ jobId, reason });
 
     if (!result.success) {
-      const status = result.error?.includes('not found') ? 404 :
-                     result.error?.includes('Cannot cancel') ? 400 : 500;
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status }
-      );
+      const status = result.error?.includes("not found")
+        ? 404
+        : result.error?.includes("Cannot cancel")
+          ? 400
+          : 500;
+      return NextResponse.json({ success: false, error: result.error }, { status });
     }
 
     return NextResponse.json({
       success: true,
       job: result.job?.toJSON(),
-      message: 'Job cancelled successfully',
+      message: "Job cancelled successfully",
     });
   } catch (error) {
-    console.error('Error cancelling batch job:', error);
+    console.error("Error cancelling batch job:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

@@ -14,8 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getQueryStrategy, isValidBoundingBox } from "@/lib/zoom-strategy";
-import { GetAedsWithClustersUseCase } from "@/application/clustering/use-cases/GetAedsWithClustersUseCase";
-import { PostGISClusteringAdapter } from "@/infrastructure/clustering/adapters/PostGISClusteringAdapter";
+import { GetAedsWithClustersUseCase } from "@/clustering/application/use-cases/GetAedsWithClustersUseCase";
+import { PostGISClusteringAdapter } from "@/clustering/infrastructure/adapters/PostGISClusteringAdapter";
 
 /**
  * GET /api/aeds/by-bounds

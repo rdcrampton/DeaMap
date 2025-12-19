@@ -6,10 +6,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { DataSourceAdapterFactory } from "@/infrastructure/import/adapters/DataSourceAdapterFactory";
-import { buildDataSourceConfig } from "@/infrastructure/import/adapters/buildAdapterConfig";
-import type { DataSourceType } from "@/domain/import/ports/IDataSourceAdapter";
-import type { ImportRecord } from "@/domain/import/value-objects/ImportRecord";
+import { DataSourceAdapterFactory } from "@/import/infrastructure/adapters/DataSourceAdapterFactory";
+import { buildDataSourceConfig } from "@/import/infrastructure/adapters/buildAdapterConfig";
+import type { DataSourceType } from "@/import/domain/ports/IDataSourceAdapter";
+import type { ImportRecord } from "@/import/domain/value-objects/ImportRecord";
 
 interface RouteParams {
   params: Promise<{ id: string }>;

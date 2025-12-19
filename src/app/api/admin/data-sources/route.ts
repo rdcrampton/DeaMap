@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       include: {
         _count: {
           select: {
-            import_batches: true,
+            batch_jobs: true,
             managed_aeds: true,
           },
         },
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
       regionCode: ds.region_code,
       config: ds.config,
       stats: {
-        importBatches: ds._count.import_batches,
+        batchJobs: ds._count.batch_jobs,
         managedAeds: ds._count.managed_aeds,
       },
       createdAt: ds.created_at,

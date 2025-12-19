@@ -8,7 +8,7 @@
 import { CheckCircle, AlertTriangle, X, ChevronDown, Search } from "lucide-react";
 import { useState, useMemo, useRef, useEffect } from "react";
 
-import { getAllFields, getFieldByKey } from "@/domain/import/value-objects/FieldDefinition";
+import { getAllFields, getFieldByKey } from "@/import/domain/value-objects/FieldDefinition";
 
 interface MappingRowProps {
   csvColumn: string;

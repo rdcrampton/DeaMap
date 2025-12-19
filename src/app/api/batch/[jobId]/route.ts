@@ -5,15 +5,14 @@
  * DELETE /api/batch/[jobId] - Delete job
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@/generated/client';
-import { PrismaBatchJobRepository } from '@/infrastructure/batch';
-import { BatchJobOrchestrator } from '@/application/batch';
-import { GetBatchJobStatusUseCase } from '@/application/batch/use-cases';
-import { initializeProcessors } from '@/application/batch/processors';
-import { PrismaDataSourceRepository } from '@/infrastructure/import/repositories/PrismaDataSourceRepository';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { PrismaBatchJobRepository } from "@/batch/infrastructure";
+import { BatchJobOrchestrator } from "@/batch/application";
+import { GetBatchJobStatusUseCase } from "@/batch/application/use-cases";
+import { initializeProcessors } from "@/batch/application/processors";
+import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
 
-const prisma = new PrismaClient();
 const repository = new PrismaBatchJobRepository(prisma);
 const dataSourceRepository = new PrismaDataSourceRepository(prisma);
 
@@ -30,14 +29,11 @@ interface RouteParams {
  * GET /api/batch/[jobId]
  * Get the status and progress of a batch job
  */
-export async function GET(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
     const searchParams = request.nextUrl.searchParams;
-    const includeResult = searchParams.get('includeResult') === 'true';
+    const includeResult = searchParams.get("includeResult") === "true";
 
     const useCase = new GetBatchJobStatusUseCase(orchestrator);
     const result = await useCase.execute({
@@ -46,16 +42,10 @@ export async function GET(
     });
 
     if (!result.success) {
-      if (result.error?.includes('not found')) {
-        return NextResponse.json(
-          { success: false, error: result.error },
-          { status: 404 }
-        );
+      if (result.error?.includes("not found")) {
+        return NextResponse.json({ success: false, error: result.error }, { status: 404 });
       }
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -68,11 +58,11 @@ export async function GET(
       isComplete: result.isComplete,
     });
   } catch (error) {
-    console.error('Error getting batch job status:', error);
+    console.error("Error getting batch job status:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
@@ -83,10 +73,7 @@ export async function GET(
  * DELETE /api/batch/[jobId]
  * Delete a batch job (only if terminal)
  */
-export async function DELETE(
-  _request: NextRequest,
-  { params }: RouteParams
-) {
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const { jobId } = await params;
 
@@ -95,7 +82,7 @@ export async function DELETE(
 
     if (!status.isComplete) {
       return NextResponse.json(
-        { success: false, error: 'Can only delete completed jobs' },
+        { success: false, error: "Can only delete completed jobs" },
         { status: 400 }
       );
     }
@@ -104,22 +91,19 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: 'Job deleted successfully',
+      message: "Job deleted successfully",
     });
   } catch (error) {
-    console.error('Error deleting batch job:', error);
+    console.error("Error deleting batch job:", error);
 
-    if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 404 }
-      );
+    if (error instanceof Error && error.message.includes("not found")) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 404 });
     }
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

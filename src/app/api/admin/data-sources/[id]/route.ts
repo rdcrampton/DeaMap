@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const dataSource = await prisma.externalDataSource.findUnique({
       where: { id },
       include: {
-        import_batches: {
+        batch_jobs: {
           orderBy: { created_at: "desc" },
           take: 10,
           select: {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         _count: {
           select: {
             managed_aeds: true,
-            import_batches: true,
+            batch_jobs: true,
           },
         },
       },
@@ -82,9 +82,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       regionCode: dataSource.region_code,
       stats: {
         totalAeds: dataSource._count.managed_aeds,
-        totalBatches: dataSource._count.import_batches,
+        totalBatches: dataSource._count.batch_jobs,
       },
-      recentBatches: dataSource.import_batches.map((batch) => ({
+      recentBatches: dataSource.batch_jobs.map((batch) => ({
         id: batch.id,
         name: batch.name,
         status: batch.status,
@@ -218,8 +218,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Eliminar batches de importación asociados (en cascada)
-    await prisma.importBatch.deleteMany({
+    // Eliminar batch jobs asociados (en cascada por FK)
+    await prisma.batchJob.deleteMany({
       where: { data_source_id: id },
     });
 

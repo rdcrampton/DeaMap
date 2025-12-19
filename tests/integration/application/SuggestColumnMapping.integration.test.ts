@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { SuggestColumnMappingUseCase } from "@/application/import/use-cases/SuggestColumnMappingUseCase";
-import { CsvPreview } from "@/domain/import/value-objects/CsvPreview";
+import { SuggestColumnMappingUseCase } from "@/import/application/use-cases/SuggestColumnMappingUseCase";
+import { CsvPreview } from "@/import/domain/value-objects/CsvPreview";
 
 describe("SuggestColumnMappingUseCase - Integration", () => {
   const useCase = new SuggestColumnMappingUseCase();

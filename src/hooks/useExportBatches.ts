@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-import { ExportBatchInfo } from "@/domain/export/ports/IExportRepository";
+import { ExportBatchInfo } from "@/export/domain/ports/IExportRepository";
 
 interface UseExportBatchesOptions {
   page?: number;

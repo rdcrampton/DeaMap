@@ -7,15 +7,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@/generated/client";
-import { PrismaBatchJobRepository } from "@/infrastructure/batch";
-import { BatchJobOrchestrator } from "@/application/batch";
-import { CreateBatchJobUseCase } from "@/application/batch/use-cases";
-import { initializeProcessors } from "@/application/batch/processors";
-import { PrismaDataSourceRepository } from "@/infrastructure/import/repositories/PrismaDataSourceRepository";
-import { JobType, AedCsvImportConfig } from "@/domain/batch";
+import { prisma } from "@/lib/db";
+import { PrismaBatchJobRepository } from "@/batch/infrastructure";
+import { BatchJobOrchestrator } from "@/batch/application";
+import { CreateBatchJobUseCase } from "@/batch/application/use-cases";
+import { initializeProcessors } from "@/batch/application/processors";
+import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
+import { JobType, AedCsvImportConfig } from "@/batch/domain";
 
-const prisma = new PrismaClient();
 const repository = new PrismaBatchJobRepository(prisma);
 const dataSourceRepository = new PrismaDataSourceRepository(prisma);
 
@@ -37,10 +36,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert mappings to the new format
-    const columnMappings = mappings.map((m: { csvColumn: string; systemFieldKey?: string; systemField?: string }) => ({
-      csvColumn: m.csvColumn,
-      systemField: m.systemFieldKey || m.systemField,
-    }));
+    const columnMappings = mappings.map(
+      (m: { csvColumn: string; systemFieldKey?: string; systemField?: string }) => ({
+        csvColumn: m.csvColumn,
+        systemField: m.systemFieldKey || m.systemField,
+      })
+    );
 
     // Create a dry-run job to validate
     const config: AedCsvImportConfig = {
@@ -58,8 +59,8 @@ export async function POST(request: NextRequest) {
       checkpointFrequency: 100,
       heartbeatIntervalMs: 30000,
       skipOnError: true,
-      dryRun: true,        // DRY RUN - don't create anything
-      validateOnly: true,  // Only validate, no writes
+      dryRun: true, // DRY RUN - don't create anything
+      validateOnly: true, // Only validate, no writes
       notifyOnComplete: false,
       notifyOnError: false,
     };

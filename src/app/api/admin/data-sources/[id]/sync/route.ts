@@ -8,16 +8,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { PrismaBatchJobRepository } from "@/infrastructure/batch";
-import { BatchJobOrchestrator } from "@/application/batch";
-import {
-  CreateBatchJobUseCase,
-  ContinueBatchJobUseCase,
-  GetBatchJobStatusUseCase,
-} from "@/application/batch/use-cases";
-import { initializeProcessors } from "@/application/batch/processors";
-import { PrismaDataSourceRepository } from "@/infrastructure/import/repositories/PrismaDataSourceRepository";
-import { JobType, ExternalSyncConfig, JobStatus } from "@/domain/batch";
+import { PrismaBatchJobRepository } from "@/batch/infrastructure";
+import { BatchJobOrchestrator } from "@/batch/application";
+import { CreateBatchJobUseCase, ContinueBatchJobUseCase } from "@/batch/application/use-cases";
+import { initializeProcessors } from "@/batch/application/processors";
+import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
+import { JobType, ExternalSyncConfig, JobStatus } from "@/batch/domain";
 
 const repository = new PrismaBatchJobRepository(prisma);
 const dataSourceRepository = new PrismaDataSourceRepository(prisma);
@@ -68,10 +64,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const continueResult = await continueUseCase.execute({ jobId: continueJobId });
 
       if (!continueResult.success) {
-        return NextResponse.json(
-          { error: continueResult.error },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: continueResult.error }, { status: 400 });
       }
 
       const job = continueResult.job!;
@@ -110,7 +103,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       types: [JobType.AED_EXTERNAL_SYNC],
     });
 
-    const existingJob = activeJobs.find(j => {
+    const existingJob = activeJobs.find((j) => {
       const config = j.config as ExternalSyncConfig;
       return config.dataSourceId === id;
     });
@@ -121,10 +114,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const continueResult = await continueUseCase.execute({ jobId: existingJob.id });
 
       if (!continueResult.success) {
-        return NextResponse.json(
-          { error: continueResult.error },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: continueResult.error }, { status: 400 });
       }
 
       const job = continueResult.job!;
@@ -192,10 +182,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
     const job = result.job!;
@@ -261,7 +248,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     );
 
     // Filter by data source ID
-    const lastJob = jobs.jobs.find(job => {
+    const lastJob = jobs.jobs.find((job) => {
       const config = job.config as ExternalSyncConfig;
       return config.dataSourceId === id;
     });
@@ -293,7 +280,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         createdAt: lastJob.createdAt,
         completedAt: lastJob.completedAt,
         lastHeartbeat: lastJob.lastHeartbeat,
-        canContinue: [JobStatus.WAITING, JobStatus.PAUSED, JobStatus.INTERRUPTED].includes(lastJob.status),
+        canContinue: (
+          [JobStatus.WAITING, JobStatus.PAUSED, JobStatus.INTERRUPTED] as JobStatus[]
+        ).includes(lastJob.status),
         recentErrors: errors.map((err) => ({
           recordIndex: err.record_index,
           errorType: err.error_type,

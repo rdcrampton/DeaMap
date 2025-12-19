@@ -5,19 +5,15 @@
  * GET /api/batch - List batch jobs
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@/generated/client';
-import { PrismaBatchJobRepository } from '@/infrastructure/batch';
-import { BatchJobOrchestrator } from '@/application/batch';
-import {
-  CreateBatchJobUseCase,
-  ListBatchJobsUseCase,
-} from '@/application/batch/use-cases';
-import { initializeProcessors } from '@/application/batch/processors';
-import { PrismaDataSourceRepository } from '@/infrastructure/import/repositories/PrismaDataSourceRepository';
-import { JobType, isValidJobType, JobStatus, isValidJobStatus } from '@/domain/batch';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { PrismaBatchJobRepository } from "@/batch/infrastructure";
+import { BatchJobOrchestrator } from "@/batch/application";
+import { CreateBatchJobUseCase, ListBatchJobsUseCase } from "@/batch/application/use-cases";
+import { initializeProcessors } from "@/batch/application/processors";
+import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
+import { JobType, isValidJobType, JobStatus, isValidJobStatus } from "@/batch/domain";
 
-const prisma = new PrismaClient();
 const repository = new PrismaBatchJobRepository(prisma);
 const dataSourceRepository = new PrismaDataSourceRepository(prisma);
 
@@ -36,10 +32,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!body.type) {
-      return NextResponse.json(
-        { success: false, error: 'type is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "type is required" }, { status: 400 });
     }
 
     if (!isValidJobType(body.type)) {
@@ -50,24 +43,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (!body.name) {
-      return NextResponse.json(
-        { success: false, error: 'name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "name is required" }, { status: 400 });
     }
 
     if (!body.config) {
-      return NextResponse.json(
-        { success: false, error: 'config is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "config is required" }, { status: 400 });
     }
 
     if (!body.createdBy) {
-      return NextResponse.json(
-        { success: false, error: 'createdBy is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "createdBy is required" }, { status: 400 });
     }
 
     const useCase = new CreateBatchJobUseCase(orchestrator);
@@ -99,24 +83,24 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
     }
 
-    return NextResponse.json({
-      success: true,
-      job: result.job?.toJSON(),
-      started: result.started,
-      chunkResult: result.chunkResult,
-    }, { status: result.started ? 202 : 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        job: result.job?.toJSON(),
+        started: result.started,
+        chunkResult: result.chunkResult,
+      },
+      { status: result.started ? 202 : 201 }
+    );
   } catch (error) {
-    console.error('Error creating batch job:', error);
+    console.error("Error creating batch job:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
@@ -132,25 +116,34 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
 
     // Parse filters
-    const types = searchParams.get('types')?.split(',').filter(isValidJobType) as JobType[] | undefined;
-    const statuses = searchParams.get('statuses')?.split(',').filter(isValidJobStatus) as JobStatus[] | undefined;
-    const createdBy = searchParams.get('createdBy') ?? undefined;
-    const organizationId = searchParams.get('organizationId') ?? undefined;
-    const tags = searchParams.get('tags')?.split(',') ?? undefined;
-    const createdAfter = searchParams.get('createdAfter')
-      ? new Date(searchParams.get('createdAfter')!)
+    const types = searchParams.get("types")?.split(",").filter(isValidJobType) as
+      | JobType[]
+      | undefined;
+    const statuses = searchParams.get("statuses")?.split(",").filter(isValidJobStatus) as
+      | JobStatus[]
+      | undefined;
+    const createdBy = searchParams.get("createdBy") ?? undefined;
+    const organizationId = searchParams.get("organizationId") ?? undefined;
+    const tags = searchParams.get("tags")?.split(",") ?? undefined;
+    const createdAfter = searchParams.get("createdAfter")
+      ? new Date(searchParams.get("createdAfter")!)
       : undefined;
-    const createdBefore = searchParams.get('createdBefore')
-      ? new Date(searchParams.get('createdBefore')!)
+    const createdBefore = searchParams.get("createdBefore")
+      ? new Date(searchParams.get("createdBefore")!)
       : undefined;
 
     // Parse pagination
-    const page = parseInt(searchParams.get('page') ?? '1', 10);
-    const pageSize = parseInt(searchParams.get('pageSize') ?? '20', 10);
+    const page = parseInt(searchParams.get("page") ?? "1", 10);
+    const pageSize = parseInt(searchParams.get("pageSize") ?? "20", 10);
 
     // Parse sorting
-    const sortBy = searchParams.get('sortBy') as 'createdAt' | 'updatedAt' | 'name' | 'status' | undefined;
-    const sortDirection = searchParams.get('sortDirection') as 'asc' | 'desc' | undefined;
+    const sortBy = searchParams.get("sortBy") as
+      | "createdAt"
+      | "updatedAt"
+      | "name"
+      | "status"
+      | undefined;
+    const sortDirection = searchParams.get("sortDirection") as "asc" | "desc" | undefined;
 
     const useCase = new ListBatchJobsUseCase(repository);
     const result = await useCase.execute({
@@ -163,15 +156,12 @@ export async function GET(request: NextRequest) {
       createdBefore,
       page,
       pageSize,
-      sortBy: sortBy ?? 'createdAt',
-      sortDirection: sortDirection ?? 'desc',
+      sortBy: sortBy ?? "createdAt",
+      sortDirection: sortDirection ?? "desc",
     });
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -180,11 +170,11 @@ export async function GET(request: NextRequest) {
       pagination: result.pagination,
     });
   } catch (error) {
-    console.error('Error listing batch jobs:', error);
+    console.error("Error listing batch jobs:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

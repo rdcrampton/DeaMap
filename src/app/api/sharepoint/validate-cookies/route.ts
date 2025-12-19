@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { SharePointImageDownloader } from "@/infrastructure/storage/adapters/SharePointImageDownloader";
+import { SharePointImageDownloader } from "@/storage/infrastructure/adapters/SharePointImageDownloader";
 
 export async function POST(request: NextRequest) {
   try {

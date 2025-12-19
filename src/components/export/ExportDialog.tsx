@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { X, Download, Loader2 } from "lucide-react";
 
-import { ExportFilters } from "@/domain/export/ports/IExportRepository";
+import { ExportFilters } from "@/export/domain/ports/IExportRepository";
 
 interface ExportDialogProps {
   isOpen: boolean;

@@ -4,12 +4,11 @@
  * GET /api/batch/stats - Get batch job statistics
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@/generated/client';
-import { PrismaBatchJobRepository } from '@/infrastructure/batch';
-import { GetJobStatsUseCase } from '@/application/batch/use-cases';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { PrismaBatchJobRepository } from "@/batch/infrastructure";
+import { GetJobStatsUseCase } from "@/batch/application/use-cases";
 
-const prisma = new PrismaClient();
 const repository = new PrismaBatchJobRepository(prisma);
 
 /**
@@ -20,13 +19,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
 
-    const organizationId = searchParams.get('organizationId') ?? undefined;
-    const dateFrom = searchParams.get('dateFrom')
-      ? new Date(searchParams.get('dateFrom')!)
+    const organizationId = searchParams.get("organizationId") ?? undefined;
+    const dateFrom = searchParams.get("dateFrom")
+      ? new Date(searchParams.get("dateFrom")!)
       : undefined;
-    const dateTo = searchParams.get('dateTo')
-      ? new Date(searchParams.get('dateTo')!)
-      : undefined;
+    const dateTo = searchParams.get("dateTo") ? new Date(searchParams.get("dateTo")!) : undefined;
 
     const useCase = new GetJobStatsUseCase(repository);
     const result = await useCase.execute({
@@ -36,10 +33,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -47,11 +41,11 @@ export async function GET(request: NextRequest) {
       stats: result.stats,
     });
   } catch (error) {
-    console.error('Error getting batch job stats:', error);
+    console.error("Error getting batch job stats:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

@@ -6,8 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { ParseCsvPreviewUseCase } from "@/application/import/use-cases/ParseCsvPreviewUseCase";
-import { SuggestColumnMappingUseCase } from "@/application/import/use-cases/SuggestColumnMappingUseCase";
+import { ParseCsvPreviewUseCase } from "@/import/application/use-cases/ParseCsvPreviewUseCase";
+import { SuggestColumnMappingUseCase } from "@/import/application/use-cases/SuggestColumnMappingUseCase";
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { UploadImageUseCase } from "@/application/storage/use-cases/UploadImageUseCase";
-import { S3ImageStorageAdapter } from "@/infrastructure/storage/adapters/S3ImageStorageAdapter";
+import { UploadImageUseCase } from "@/storage/application/use-cases/UploadImageUseCase";
+import { S3ImageStorageAdapter } from "@/storage/infrastructure/adapters/S3ImageStorageAdapter";
 import { requireAuth } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {

@@ -5,15 +5,14 @@
  * GET /api/batch/recover - List resumable jobs
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@/generated/client';
-import { PrismaBatchJobRepository } from '@/infrastructure/batch';
-import { BatchJobOrchestrator } from '@/application/batch';
-import { initializeProcessors } from '@/application/batch/processors';
-import { PrismaDataSourceRepository } from '@/infrastructure/import/repositories/PrismaDataSourceRepository';
-import { JobType, isValidJobType } from '@/domain/batch';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { PrismaBatchJobRepository } from "@/batch/infrastructure";
+import { BatchJobOrchestrator } from "@/batch/application";
+import { initializeProcessors } from "@/batch/application/processors";
+import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
+import { JobType, isValidJobType } from "@/batch/domain";
 
-const prisma = new PrismaClient();
 const repository = new PrismaBatchJobRepository(prisma);
 const dataSourceRepository = new PrismaDataSourceRepository(prisma);
 
@@ -30,8 +29,10 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
 
-    const types = searchParams.get('types')?.split(',').filter(isValidJobType) as JobType[] | undefined;
-    const organizationId = searchParams.get('organizationId') ?? undefined;
+    const types = searchParams.get("types")?.split(",").filter(isValidJobType) as
+      | JobType[]
+      | undefined;
+    const organizationId = searchParams.get("organizationId") ?? undefined;
 
     const jobs = await repository.findResumableJobs({
       types,
@@ -40,15 +41,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      jobs: jobs.map(job => job.toJSON()),
+      jobs: jobs.map((job) => job.toJSON()),
       count: jobs.length,
     });
   } catch (error) {
-    console.error('Error listing resumable jobs:', error);
+    console.error("Error listing resumable jobs:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      recoveredJobs: recoveredJobs.map(job => ({
+      recoveredJobs: recoveredJobs.map((job) => ({
         id: job.id,
         name: job.name,
         type: job.type,
@@ -76,16 +77,17 @@ export async function POST(request: NextRequest) {
         lastCheckpointIndex: job.lastCheckpointIndex,
       })),
       count: recoveredJobs.length,
-      message: recoveredJobs.length > 0
-        ? `Recovered ${recoveredJobs.length} timed-out jobs`
-        : 'No timed-out jobs found',
+      message:
+        recoveredJobs.length > 0
+          ? `Recovered ${recoveredJobs.length} timed-out jobs`
+          : "No timed-out jobs found",
     });
   } catch (error) {
-    console.error('Error recovering timed-out jobs:', error);
+    console.error("Error recovering timed-out jobs:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
