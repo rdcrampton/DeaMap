@@ -25,7 +25,7 @@ import ExportDialog from "@/components/export/ExportDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useImportBatches } from "@/hooks/useImportBatches";
 import { useExportBatches } from "@/hooks/useExportBatches";
-import { ExportFilters } from "@/domain/export/ports/IExportRepository";
+import { ExportFilters } from "@/export/domain/ports/IExportRepository";
 
 export default function ImportPage() {
   const { user, loading: authLoading } = useAuth();

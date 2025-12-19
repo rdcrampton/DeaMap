@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ColumnMapping } from "@/domain/import/value-objects/ColumnMapping";
+import { ColumnMapping } from "@/import/domain/value-objects/ColumnMapping";
 import {
   FieldDefinition,
   REQUIRED_FIELDS,
   OPTIONAL_FIELDS,
-} from "@/domain/import/value-objects/FieldDefinition";
+} from "@/import/domain/value-objects/FieldDefinition";
 
 describe("ColumnMapping", () => {
   describe("Creación manual", () => {

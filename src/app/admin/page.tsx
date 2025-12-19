@@ -39,9 +39,7 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Panel de Administración</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Bienvenido, {user?.name || user?.email}
-          </p>
+          <p className="mt-2 text-sm text-gray-600">Bienvenido, {user?.name || user?.email}</p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -160,6 +158,36 @@ export default function AdminDashboard() {
                 <h2 className="text-lg font-semibold text-gray-900">Importaciones</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   Importar DEAs masivamente desde archivos CSV
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          {/* Fuentes de Datos Externas */}
+          <Link
+            href="/admin/data-sources"
+            className="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition-shadow"
+          >
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-8 w-8 text-cyan-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+                  />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h2 className="text-lg font-semibold text-gray-900">Fuentes Externas</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Sincronizar DEAs desde APIs externas (CKAN, etc.)
                 </p>
               </div>
             </div>

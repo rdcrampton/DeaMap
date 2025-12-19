@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
   // Output configuration for Vercel
   output: "standalone",
 
+  productionBrowserSourceMaps: process.env.VERCEL_ENV === "preview",
+
   // Ensure proper handling of API routes
   async rewrites() {
     return [

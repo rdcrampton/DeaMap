@@ -5,11 +5,8 @@
  */
 
 export async function register() {
-  // Solo ejecutar en el servidor
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { runImportRecovery } = await import("./lib/recovery/runImportRecovery");
-
-    // Ejecutar recuperación de importaciones
-    await runImportRecovery();
-  }
+  // La recuperación de batch jobs ahora se maneja mediante:
+  // - POST /api/batch/recover - Recupera jobs con timeout
+  // - GET /api/batch/recover - Lista jobs resumibles
+  // No es necesario ejecutar recuperación automática al iniciar
 }

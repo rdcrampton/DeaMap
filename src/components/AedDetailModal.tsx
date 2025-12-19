@@ -10,7 +10,7 @@ import {
   Phone,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import type { Aed } from "@/types/aed";
 
@@ -23,11 +23,20 @@ interface AedDetailModalProps {
 export default function AedDetailModal({ aed, isOpen, onClose }: AedDetailModalProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
+  // Reset selectedImageIndex when AED changes to avoid index out of bounds
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [aed?.id]);
+
   if (!isOpen || !aed) return null;
+
+  // Safely calculate the image index within bounds
+  const safeImageIndex =
+    aed.images && aed.images.length > 0 ? Math.min(selectedImageIndex, aed.images.length - 1) : 0;
 
   const displayImage =
     aed.images && aed.images.length > 0
-      ? aed.images[selectedImageIndex].processed_url || aed.images[selectedImageIndex].original_url
+      ? aed.images[safeImageIndex]?.processed_url || aed.images[safeImageIndex]?.original_url
       : null;
 
   return (

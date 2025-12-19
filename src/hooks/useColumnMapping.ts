@@ -3,9 +3,9 @@
  * Permite al usuario mapear columnas CSV a campos del sistema
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from "react";
 
-import { REQUIRED_FIELDS } from '@/domain/import/value-objects/FieldDefinition';
+import { REQUIRED_FIELDS } from "@/import/domain/value-objects/FieldDefinition";
 
 export interface MappingState {
   csvColumn: string;
@@ -35,14 +35,14 @@ export function useColumnMapping(
     csvColumns.forEach((col) => {
       initial[col] = null;
     });
-    
+
     // Aplicar sugerencias iniciales
     initialSuggestions.forEach((suggestion) => {
       if (initial[suggestion.csvColumn] !== undefined) {
         initial[suggestion.csvColumn] = suggestion.systemField;
       }
     });
-    
+
     return initial;
   });
 

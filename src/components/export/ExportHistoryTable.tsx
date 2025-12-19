@@ -6,7 +6,7 @@
 
 import { FileDown, RefreshCw, Download, Calendar, Package } from "lucide-react";
 
-import { ExportBatchInfo } from "@/domain/export/ports/IExportRepository";
+import { ExportBatchInfo } from "@/export/domain/ports/IExportRepository";
 
 import ExportProgressBar from "./ExportProgressBar";
 import ExportStatusBadge from "./ExportStatusBadge";
@@ -57,9 +57,7 @@ export default function ExportHistoryTable({
         <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Package className="w-8 h-8 text-gray-400" />
         </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
-          No hay exportaciones aún
-        </h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No hay exportaciones aún</h3>
         <p className="text-sm text-gray-500 max-w-sm mx-auto">
           Crea tu primera exportación para generar archivos CSV con los datos de los DEAs
         </p>
@@ -91,9 +89,7 @@ export default function ExportHistoryTable({
       {/* Header */}
       <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Historial de Exportaciones
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900">Historial de Exportaciones</h2>
           <p className="text-sm text-gray-500 mt-1">
             {batches.length} exportación{batches.length !== 1 ? "es" : ""}
           </p>
@@ -185,9 +181,7 @@ export default function ExportHistoryTable({
                     )}
                   </div>
                   {batch.fileSize && (
-                    <div className="text-xs text-gray-500">
-                      {formatFileSize(batch.fileSize)}
-                    </div>
+                    <div className="text-xs text-gray-500">{formatFileSize(batch.fileSize)}</div>
                   )}
                 </td>
 

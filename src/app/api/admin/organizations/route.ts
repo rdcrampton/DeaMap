@@ -6,11 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import type {
-  Organization,
-  CreateOrganizationRequest,
-  UpdateOrganizationRequest
-} from "@/types/organization";
+import type { CreateOrganizationRequest } from "@/types/organization";
 
 /**
  * GET /api/admin/organizations
