@@ -26,9 +26,26 @@ interface DataSource {
 }
 
 interface PreviewRecord {
-  sourceId: string;
-  rawData: Record<string, unknown>;
-  mappedData: Record<string, unknown>;
+  externalId: string;
+  rowIndex: number;
+  contentHash: string;
+  fields: {
+    name: string | null;
+    establishmentType: string | null;
+    streetType: string | null;
+    streetName: string | null;
+    streetNumber: string | null;
+    postalCode: string | null;
+    city: string | null;
+    district: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    accessDescription: string | null;
+    accessSchedule: string | null;
+  };
+  hasCoordinates: boolean;
+  hasMinimumFields: boolean;
+  missingFields: string[];
 }
 
 interface SyncResult {
@@ -868,18 +885,48 @@ export default function DataSourceDetailPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Datos Mapeados
                       </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Estado
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {preview.map((record, index) => (
                       <tr key={index}>
                         <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">
-                          {record.sourceId}
+                          {record.externalId}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           <pre className="text-xs bg-gray-50 p-2 rounded overflow-x-auto max-w-xl">
-                            {JSON.stringify(record.mappedData, null, 2)}
+                            {JSON.stringify(record.fields, null, 2)}
                           </pre>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1">
+                              <span
+                                className={`inline-block w-2 h-2 rounded-full ${record.hasCoordinates ? "bg-green-400" : "bg-red-400"}`}
+                              ></span>
+                              <span className="text-xs">
+                                {record.hasCoordinates ? "Con coordenadas" : "Sin coordenadas"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span
+                                className={`inline-block w-2 h-2 rounded-full ${record.hasMinimumFields ? "bg-green-400" : "bg-yellow-400"}`}
+                              ></span>
+                              <span className="text-xs">
+                                {record.hasMinimumFields
+                                  ? "Campos completos"
+                                  : "Campos incompletos"}
+                              </span>
+                            </div>
+                            {record.missingFields.length > 0 && (
+                              <div className="text-xs text-red-600">
+                                Falta: {record.missingFields.join(", ")}
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
