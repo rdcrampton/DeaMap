@@ -548,6 +548,7 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
       }),
       ...(filter.createdBy && { created_by: filter.createdBy }),
       ...(filter.organizationId && { organization_id: filter.organizationId }),
+      ...(filter.dataSourceId && { data_source_id: filter.dataSourceId }),
       ...(filter.tags && { tags: { hasSome: filter.tags } }),
       ...(filter.createdAfter && { created_at: { gte: filter.createdAfter } }),
       ...(filter.createdBefore && { created_at: { lte: filter.createdBefore } }),

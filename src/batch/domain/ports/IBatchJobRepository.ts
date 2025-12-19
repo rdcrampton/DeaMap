@@ -14,6 +14,7 @@ export interface BatchJobFilter {
   createdBy?: string;
   organizationId?: string;
   parentJobId?: string;
+  dataSourceId?: string;
   tags?: string[];
   createdAfter?: Date;
   createdBefore?: Date;
