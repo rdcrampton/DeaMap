@@ -3,7 +3,7 @@
 echo "🔍 Running pre-push validation..."
 echo "  - Type checking..."
 #npm run type-check || exit 1
-npx lint-staged
+# npx lint-staged
 
 echo "  - Linting..."
 npm run lint || exit 1

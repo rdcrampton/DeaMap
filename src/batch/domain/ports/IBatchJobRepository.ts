@@ -14,6 +14,7 @@ export interface BatchJobFilter {
   createdBy?: string;
   organizationId?: string;
   parentJobId?: string;
+  dataSourceId?: string;
   tags?: string[];
   createdAfter?: Date;
   createdBefore?: Date;
@@ -93,6 +94,11 @@ export interface IBatchJobRepository {
    * Find jobs that can be resumed
    */
   findResumableJobs(options?: { types?: JobType[]; organizationId?: string }): Promise<BatchJob[]>;
+
+  /**
+   * Find jobs in WAITING status that need to be continued
+   */
+  findWaitingJobs(limit?: number): Promise<BatchJob[]>;
 
   /**
    * Delete a job and all its checkpoints

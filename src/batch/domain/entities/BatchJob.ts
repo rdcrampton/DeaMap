@@ -34,6 +34,7 @@ export interface BatchJobData {
   createdBy: string;
   organizationId?: string;
   parentJobId?: string; // For sub-jobs
+  dataSourceId?: string; // For external sync jobs
 
   // Timestamps
   createdAt: Date;
@@ -59,6 +60,7 @@ export interface CreateBatchJobParams {
   createdBy: string;
   organizationId?: string;
   parentJobId?: string;
+  dataSourceId?: string;
   metadata?: Record<string, unknown>;
   tags?: string[];
 }
@@ -87,6 +89,7 @@ export class BatchJob {
       createdBy: params.createdBy,
       organizationId: params.organizationId,
       parentJobId: params.parentJobId,
+      dataSourceId: params.dataSourceId,
       createdAt: now,
       updatedAt: now,
       startedAt: null,
@@ -201,6 +204,31 @@ export class BatchJob {
     return Date.now() - this.data.lastHeartbeat.getTime() > timeoutMs;
   }
 
+  /**
+   * Check if job is stuck (no heartbeat for extended period and in active state)
+   */
+  get isStuck(): boolean {
+    if (!this.isRunning) return false;
+    if (!this.data.lastHeartbeat) {
+      // If running but no heartbeat, check if started recently
+      if (this.data.startedAt) {
+        const timeSinceStart = Date.now() - this.data.startedAt.getTime();
+        return timeSinceStart > 180000; // 3 minutes
+      }
+      return true;
+    }
+    const timeoutMs = (this.data.config as BaseJobConfig).heartbeatIntervalMs * 5; // More aggressive
+    return Date.now() - this.data.lastHeartbeat.getTime() > timeoutMs;
+  }
+
+  /**
+   * Get time since last heartbeat in ms
+   */
+  get timeSinceLastHeartbeat(): number | null {
+    if (!this.data.lastHeartbeat) return null;
+    return Date.now() - this.data.lastHeartbeat.getTime();
+  }
+
   get durationMs(): number {
     if (!this.data.startedAt) return 0;
     const endTime = this.data.completedAt || new Date();
@@ -304,6 +332,51 @@ export class BatchJob {
    */
   markInterrupted(): void {
     this.transitionTo(JobStatus.INTERRUPTED);
+  }
+
+  /**
+   * Force reset to INTERRUPTED state (admin/recovery action)
+   * This bypasses normal transition rules for stuck jobs
+   */
+  forceReset(reason: string): void {
+    if (this.isTerminal) {
+      throw new Error("Cannot reset terminal job");
+    }
+
+    // Force the status change without validation
+    this.data.status = JobStatus.INTERRUPTED;
+    this.data.updatedAt = new Date();
+    this.data.metadata = {
+      ...this.data.metadata,
+      forceResetReason: reason,
+      forceResetAt: new Date().toISOString(),
+      previousStatus: this.data.status,
+    };
+
+    // Add tag for tracking
+    this.addTag("force-reset");
+  }
+
+  /**
+   * Recover from stuck state
+   * Attempts to transition stuck job to recoverable state
+   */
+  recoverFromStuck(): void {
+    if (!this.isStuck && !this.isRunning) {
+      throw new Error("Job is not stuck or running");
+    }
+
+    // Mark as interrupted so it can be resumed
+    this.data.status = JobStatus.INTERRUPTED;
+    this.data.updatedAt = new Date();
+    this.data.metadata = {
+      ...this.data.metadata,
+      recoveredFromStuck: true,
+      recoveredAt: new Date().toISOString(),
+      timeSinceLastHeartbeat: this.timeSinceLastHeartbeat,
+    };
+
+    this.addTag("auto-recovered");
   }
 
   /**

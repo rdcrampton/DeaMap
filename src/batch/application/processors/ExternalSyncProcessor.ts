@@ -22,6 +22,7 @@ import { IDataSourceRepository } from "@/import/domain/ports/IDataSourceReposito
 import { ImportRecord } from "@/import/domain/value-objects/ImportRecord";
 import { DataSourceAdapterFactory } from "@/import/infrastructure/adapters/DataSourceAdapterFactory";
 import { PrismaClient } from "@/generated/client/client";
+import { S3DataCacheService } from "@/batch/infrastructure/services/S3DataCacheService";
 
 interface ExternalDataSourceLocalConfig {
   type: string;
@@ -39,14 +40,14 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
 
   private adapter: IDataSourceAdapter | null = null;
   private dataSource: ExternalDataSourceLocalConfig | null = null;
-  private records: ImportRecord[] = [];
-  private recordsIterator: AsyncGenerator<ImportRecord> | null = null;
+  private s3Cache: S3DataCacheService;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly dataSourceRepository: IDataSourceRepository
   ) {
     super();
+    this.s3Cache = new S3DataCacheService();
   }
 
   validateConfig(config: ExternalSyncConfig): ProcessorValidationResult {
@@ -101,8 +102,22 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         dataSource.type as "CKAN_API" | "JSON_FILE" | "REST_API" | "CSV_FILE"
       );
 
-      // Get total record count
-      const totalRecords = await this.adapter.getRecordCount(this.dataSource.config);
+      // Use estimated count instead of actual count to avoid timeout
+      // The count will be updated as we process records
+      let totalRecords = 99999; // High estimate for large datasets
+
+      try {
+        // Try to get actual count with a short timeout
+        const countPromise = this.adapter.getRecordCount(this.dataSource.config);
+        const timeoutPromise = new Promise<number>((_, reject) =>
+          setTimeout(() => reject(new Error("Count timeout")), 5000)
+        );
+
+        totalRecords = await Promise.race([countPromise, timeoutPromise]);
+      } catch (error) {
+        // If count fails or times out, use the estimate
+        console.warn("Could not get exact record count, using estimate:", error);
+      }
 
       return {
         success: true,
@@ -111,6 +126,7 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
           dataSourceType: this.dataSource.type,
           matchingStrategy: this.dataSource.matchingStrategy,
           regionCode: this.dataSource.regionCode,
+          estimatedCount: totalRecords === 99999,
         },
       };
     } catch (error) {
@@ -141,57 +157,78 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
     let currentIndex = startIndex;
 
     try {
-      // Initialize records iterator if not already done
-      if (!this.recordsIterator && this.adapter && this.dataSource) {
-        this.recordsIterator = this.adapter.fetchRecords(this.dataSource.config);
-      }
+      let rawRecords: Record<string, unknown>[];
+      let totalRecords: number;
 
-      if (!this.recordsIterator) {
-        return {
-          processedCount: 0,
-          successCount: 0,
-          failedCount: 0,
-          skippedCount: 0,
-          results: [],
-          hasMore: false,
-          nextIndex: startIndex,
-          shouldContinue: false,
-          error: "Failed to initialize records iterator",
-        };
-      }
+      // CHUNK 1: Initialize and cache data in S3
+      if (startIndex === 0) {
+        console.log(`🚀 [ExternalSync] Initializing first chunk - downloading and caching data`);
 
-      // Skip already processed records
-      if (startIndex > 0 && this.records.length < startIndex) {
-        for (let i = this.records.length; i < startIndex; i++) {
-          const { value, done } = await this.recordsIterator.next();
-          if (done) break;
-          this.records.push(value);
+        if (!this.adapter || !this.dataSource) {
+          throw new Error("Adapter or data source not initialized");
         }
+
+        // Download complete JSON data
+        console.log(`📥 [ExternalSync] Downloading complete dataset...`);
+
+        // Get all records - fetch the complete dataset
+        const recordsArray: Record<string, unknown>[] = [];
+        const recordsGenerator = this.adapter.fetchRecords(this.dataSource.config);
+
+        for await (const record of recordsGenerator) {
+          recordsArray.push(record.toJSON() as Record<string, unknown>);
+
+          if (recordsArray.length % 1000 === 0) {
+            console.log(`📦 [ExternalSync] Downloaded ${recordsArray.length} records...`);
+          }
+        }
+
+        totalRecords = recordsArray.length;
+        console.log(`✅ [ExternalSync] Downloaded ${totalRecords} total records`);
+
+        // Upload to S3
+        await this.s3Cache.uploadJsonData(job.id, recordsArray, {
+          totalRecords,
+          dataSourceId: config.dataSourceId,
+          jsonPath: this.dataSource.config.jsonPath,
+        });
+
+        // Update job with actual total records
+        job.setTotalRecords(totalRecords);
+
+        // Get first chunk
+        rawRecords = recordsArray.slice(0, chunkSize);
+      } else {
+        // CHUNK 2+: Read chunk from S3 cache
+        console.log(`📥 [ExternalSync] Reading chunk from S3 cache (${startIndex}-${startIndex + chunkSize - 1})`);
+
+        rawRecords = await this.s3Cache.getJsonChunk(job.id, startIndex, chunkSize);
+
+        // Get total from cache metadata
+        const cacheMetadata = await this.s3Cache.getCacheMetadata(job.id);
+        totalRecords = cacheMetadata?.totalRecords || job.progress.totalRecords;
       }
 
-      // Process chunk
-      while (processedCount < chunkSize) {
-        // Check timeout
+      console.log(`🔄 [ExternalSync] Processing ${rawRecords.length} records from chunk`);
+
+      // Process records in the chunk
+      for (const rawRecord of rawRecords) {
+        // Check timeout before processing each record
         if (this.isApproachingTimeout(context)) {
+          console.warn(`⏰ [ExternalSync] Approaching timeout, stopping chunk processing`);
           break;
         }
 
-        // Get next record
-        let record: ImportRecord;
-        if (currentIndex < this.records.length) {
-          record = this.records[currentIndex];
-        } else {
-          const { value, done } = await this.recordsIterator.next();
-          if (done) {
-            // No more records
-            break;
-          }
-          record = value;
-          this.records.push(record);
-        }
+        // Convert to ImportRecord
+        const importRecord = ImportRecord.fromApiRecord(
+          rawRecord,
+          this.dataSource?.config.fieldMappings || {},
+          currentIndex,
+          this.detectExternalIdField(rawRecord)
+        );
 
         // Process the record
-        const result = await this.processRecord(record, config, currentIndex);
+        const result = await this.processRecord(importRecord, config, currentIndex);
         results.push(result);
 
         if (result.success) {
@@ -207,29 +244,26 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         processedCount++;
         currentIndex++;
 
-        // Save checkpoint periodically
-        if (processedCount % config.checkpointFrequency === 0) {
+        // Save checkpoint more frequently (every 5 records)
+        if (processedCount % 5 === 0) {
           if (onCheckpoint) {
-            const recordHash = this.generateRecordHash(record);
+            const recordHash = this.generateImportRecordHash(importRecord);
             await onCheckpoint(currentIndex - 1, recordHash);
           }
         }
 
         // Send heartbeat
-        if (onHeartbeat && processedCount % 10 === 0) {
+        if (onHeartbeat && processedCount % 5 === 0) {
           await onHeartbeat();
         }
       }
 
-      // Check if there are more records
-      const { done } = await this.recordsIterator.next();
-      const hasMore = !done;
+      // Determine if there are more records
+      const hasMore = currentIndex < totalRecords;
 
-      // If we peeked ahead, we need to store that record
-      if (!done) {
-        // We consumed one record to check, need to handle this
-        // For simplicity, we mark as having more
-      }
+      console.log(
+        `✅ [ExternalSync] Chunk complete: ${processedCount} processed, hasMore: ${hasMore}, next: ${currentIndex}`
+      );
 
       // Final checkpoint
       if (onCheckpoint && processedCount > 0) {
@@ -247,6 +281,7 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         shouldContinue: failedCount < processedCount * 0.5, // Stop if >50% failing
       };
     } catch (error) {
+      console.error(`❌ [ExternalSync] Error processing chunk:`, error);
       return {
         processedCount,
         successCount,
@@ -409,7 +444,10 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
     });
   }
 
-  private generateRecordHash(record: ImportRecord): string {
+  /**
+   * Generate hash from ImportRecord for checkpoint
+   */
+  private generateImportRecordHash(record: ImportRecord): string {
     const data = JSON.stringify({
       name: record.name,
       lat: record.latitude,
@@ -426,7 +464,38 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
     return hash.toString(16);
   }
 
+  /**
+   * Detect the external ID field from a raw record
+   */
+  private detectExternalIdField(record: Record<string, unknown>): string {
+    const keys = Object.keys(record);
+
+    // Common ID field names
+    const idCandidates = [
+      "id",
+      "codigo_dea",
+      "id_dea",
+      "external_id",
+      "dea_id",
+      "_id",
+      "identificador",
+    ];
+
+    for (const candidate of idCandidates) {
+      if (keys.includes(candidate)) {
+        return candidate;
+      }
+    }
+
+    // Fallback to first key or 'id'
+    return keys[0] || "id";
+  }
+
   async finalize(job: BatchJob): Promise<JobResult> {
+    // Clean up S3 cache
+    console.log(`🧹 [ExternalSync] Cleaning up S3 cache for job ${job.id}`);
+    await this.s3Cache.deleteCache(job.id);
+
     // Update data source last sync time
     const config = job.config as ExternalSyncConfig;
 
@@ -442,11 +511,14 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
       .complete();
   }
 
-  async cleanup(_job: BatchJob): Promise<void> {
+  async cleanup(job: BatchJob): Promise<void> {
+    // Clean up S3 cache on error/cancellation
+    console.log(`🧹 [ExternalSync] Cleanup - removing S3 cache for job ${job.id}`);
+    await this.s3Cache.deleteCache(job.id);
+
+    // Clear adapter and data source
     this.adapter = null;
     this.dataSource = null;
-    this.records = [];
-    this.recordsIterator = null;
   }
 
   async preview(

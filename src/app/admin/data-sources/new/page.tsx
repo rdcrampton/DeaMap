@@ -32,6 +32,7 @@ const DEFAULT_CKAN_FIELD_MAPPING: FieldMapping = {
 // Formato: campo_fuente → campo_sistema
 const MADRID_JSON_FIELD_MAPPING: FieldMapping = {
   codigo_dea: "externalId",
+  nombre_establecimiento: "name", // Nombre del establecimiento (si existe en datos)
   direccion_via_codigo: "streetType",
   direccion_via_nombre: "streetName",
   direccion_portal_numero: "streetNumber",
@@ -81,6 +82,7 @@ export default function NewDataSourcePage() {
     jsonPath: "data",
     // Común
     syncFrequency: "MANUAL",
+    defaultPublicationMode: "LOCATION_ONLY",
     isActive: true,
     sourceOrigin: "EXTERNAL_API",
     regionCode: "MAD",
@@ -144,6 +146,7 @@ export default function NewDataSourcePage() {
           type: form.type,
           description: form.description || null,
           syncFrequency: form.syncFrequency,
+          defaultPublicationMode: form.defaultPublicationMode,
           isActive: form.isActive,
           sourceOrigin: form.sourceOrigin,
           regionCode: form.regionCode,
@@ -341,6 +344,30 @@ export default function NewDataSourcePage() {
                   <option value="WEEKLY">Semanal</option>
                   <option value="MONTHLY">Mensual</option>
                 </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="defaultPublicationMode"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Modo de Publicación por Defecto
+                </label>
+                <select
+                  id="defaultPublicationMode"
+                  value={form.defaultPublicationMode}
+                  onChange={(e) => setForm({ ...form, defaultPublicationMode: e.target.value })}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="NONE">Ninguno - No publicar</option>
+                  <option value="LOCATION_ONLY">Solo ubicación</option>
+                  <option value="BASIC_INFO">Info básica (ubicación + horario + tipo)</option>
+                  <option value="FULL">Información completa</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Nivel de información que se publicará automáticamente al importar desde esta
+                  fuente
+                </p>
               </div>
 
               <div className="flex items-center">

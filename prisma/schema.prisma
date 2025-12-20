@@ -235,6 +235,9 @@ model ExternalDataSource {
   // Behavior
   auto_deactivate_missing   Boolean             @default(false)
   auto_update_fields        String[]            @default([])
+  
+  // Publication settings
+  default_publication_mode  PublicationMode     @default(LOCATION_ONLY)
 
   // Scope
   source_origin             SourceOrigin
