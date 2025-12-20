@@ -206,26 +206,11 @@ function generateEmail(establishmentName: string, domain?: string): string {
   return `${sanitized}@${pickRandom(domains)}`;
 }
 
-// Create districts in the database
-async function createDistricts() {
-  console.log("📍 Creating districts...");
-
-  for (const district of madridData.districts) {
-    await prisma.district.upsert({
-      where: { district_code: district.code },
-      update: {},
-      create: {
-        district_code: district.code,
-        text_code: district.textCode,
-        name: district.name,
-        normalized_name: district.normalizedName,
-        shape_length: faker.number.float({ min: 10000, max: 50000 }),
-        shape_area: faker.number.float({ min: 1000000, max: 10000000 }),
-      },
-    });
-  }
-
-  console.log(`✅ Created ${madridData.districts.length} districts`);
+// Districts are reference data only (not persisted to DB)
+// The schema uses denormalized district fields for multi-city support
+async function loadDistrictsReference() {
+  console.log("📍 Loading districts reference data...");
+  console.log(`✅ Loaded ${madridData.districts.length} districts from JSON (reference only)`);
 }
 
 // Create organizations
@@ -523,8 +508,8 @@ async function main() {
   console.log(`   - Districts: ${madridData.districts.length}`);
   console.log(`   - Batch size: ${CONFIG.batchSize}\n`);
 
-  // Create base data
-  await createDistricts();
+  // Load reference data and create base data
+  await loadDistrictsReference();
   await createOrganizations();
   await createTestUsers();
 
@@ -552,7 +537,7 @@ async function main() {
 
   console.log(`\n✅ Dummy data seed completed!`);
   console.log(`\n📊 Summary:`);
-  console.log(`   - Districts: ${madridData.districts.length}`);
+  console.log(`   - Districts (reference): ${madridData.districts.length}`);
   console.log(`   - Organizations: ${madridData.organizations.length}`);
   console.log(`   - Test users: 20`);
   console.log(`   - DEAs: ${CONFIG.totalAeds}`);
