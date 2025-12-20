@@ -133,14 +133,14 @@ export class BatchJobOrchestrator {
 
     await this.repository.update(job);
 
-    // Process first chunk
-    const chunkResult = await this.processChunk(job, processor, 0);
+    // Process first chunks (multi-chunk)
+    const chunkResult = await this.processChunks(job, processor, 0);
 
     return { job, chunkResult };
   }
 
   /**
-   * Continue a job (subsequent chunks)
+   * Continue a job (subsequent chunks) - Multi-chunk processing
    */
   async continue(jobId: string): Promise<ContinueJobResult> {
     const job = await this.getJobOrThrow(jobId);
@@ -163,7 +163,7 @@ export class BatchJobOrchestrator {
     await this.repository.update(job);
 
     const startIndex = job.getResumeIndex();
-    const chunkResult = await this.processChunk(job, processor, startIndex);
+    const chunkResult = await this.processChunks(job, processor, startIndex);
 
     return { job, chunkResult };
   }
@@ -264,15 +264,120 @@ export class BatchJobOrchestrator {
   }
 
   /**
-   * Process a single chunk of records
+   * Process multiple chunks of records until timeout or completion
    */
-  private async processChunk(
+  private async processChunks(
     job: BatchJob,
     processor: IBatchJobProcessor,
     startIndex: number
   ): Promise<ChunkExecutionResult> {
-    const config = job.config as BaseJobConfig;
     const timeoutAt = new Date(Date.now() + this.defaultTimeoutMs);
+    const safetyBuffer = 10000; // 10 seconds safety buffer
+    const effectiveTimeout = new Date(timeoutAt.getTime() - safetyBuffer);
+
+    let currentIndex = startIndex;
+    let totalProcessed = 0;
+    let totalSuccess = 0;
+    let totalFailed = 0;
+    let hasMore = true;
+    let shouldContinue = true;
+    let chunkCount = 0;
+
+    console.log(
+      `🔄 [Orchestrator] Starting multi-chunk processing from index ${startIndex} (timeout: ${this.defaultTimeoutMs}ms)`
+    );
+
+    // Process multiple chunks until timeout or completion
+    while (hasMore && shouldContinue && Date.now() < effectiveTimeout.getTime()) {
+      chunkCount++;
+      const chunkStartTime = Date.now();
+
+      console.log(
+        `📦 [Orchestrator] Processing chunk #${chunkCount} at index ${currentIndex} (${Math.round((effectiveTimeout.getTime() - Date.now()) / 1000)}s remaining)`
+      );
+
+      const chunkResult = await this.processSingleChunk(
+        job,
+        processor,
+        currentIndex,
+        effectiveTimeout
+      );
+
+      // Accumulate results
+      totalProcessed += chunkResult.processedCount;
+      totalSuccess += chunkResult.successCount;
+      totalFailed += chunkResult.failedCount;
+      hasMore = chunkResult.hasMore;
+      shouldContinue = chunkResult.shouldContinue;
+      currentIndex = chunkResult.nextIndex;
+
+      const chunkDuration = Date.now() - chunkStartTime;
+      console.log(
+        `✅ [Orchestrator] Chunk #${chunkCount} complete: ${chunkResult.processedCount} records in ${chunkDuration}ms (hasMore: ${hasMore}, shouldContinue: ${shouldContinue})`
+      );
+
+      // Stop if chunk failed or processor says stop
+      if (!shouldContinue) {
+        console.warn(`⚠️ [Orchestrator] Stopping: processor requested stop`);
+        break;
+      }
+
+      // Stop if no more records
+      if (!hasMore) {
+        console.log(`🎉 [Orchestrator] All records processed!`);
+        break;
+      }
+
+      // Check if we have enough time for another chunk
+      const timeRemaining = effectiveTimeout.getTime() - Date.now();
+      const estimatedChunkTime = chunkDuration * 1.2; // Add 20% buffer
+      if (timeRemaining < estimatedChunkTime) {
+        console.log(
+          `⏰ [Orchestrator] Stopping after ${chunkCount} chunks: insufficient time remaining (${Math.round(timeRemaining / 1000)}s < ${Math.round(estimatedChunkTime / 1000)}s estimated)`
+        );
+        break;
+      }
+    }
+
+    console.log(
+      `🏁 [Orchestrator] Multi-chunk session complete: ${chunkCount} chunks, ${totalProcessed} records, ${totalSuccess} successful`
+    );
+
+    // Return consolidated result
+    return {
+      success: totalFailed < totalProcessed * 0.5, // Success if < 50% failed
+      jobId: job.id,
+      status: job.status,
+      progress: {
+        totalRecords: job.progress.totalRecords,
+        processedRecords: job.progress.processedRecords,
+        successfulRecords: job.progress.successfulRecords,
+        failedRecords: job.progress.failedRecords,
+        percentage: job.progress.percentage,
+        hasMore,
+      },
+      shouldContinue: hasMore && shouldContinue,
+    };
+  }
+
+  /**
+   * Process a single chunk of records
+   */
+  private async processSingleChunk(
+    job: BatchJob,
+    processor: IBatchJobProcessor,
+    startIndex: number,
+    timeoutAt: Date
+  ): Promise<{
+    processedCount: number;
+    successCount: number;
+    failedCount: number;
+    skippedCount: number;
+    hasMore: boolean;
+    shouldContinue: boolean;
+    nextIndex: number;
+  }> {
+    const config = job.config as BaseJobConfig;
 
     const context: ProcessorContext = {
       job,
@@ -354,18 +459,13 @@ export class BatchJobOrchestrator {
       await this.repository.update(job);
 
       return {
-        success: true,
-        jobId: job.id,
-        status: job.status,
-        progress: {
-          totalRecords: job.progress.totalRecords,
-          processedRecords: job.progress.processedRecords,
-          successfulRecords: job.progress.successfulRecords,
-          failedRecords: job.progress.failedRecords,
-          percentage: job.progress.percentage,
-          hasMore: chunkResult.hasMore,
-        },
-        shouldContinue: chunkResult.hasMore && chunkResult.shouldContinue,
+        processedCount: chunkResult.processedCount,
+        successCount: chunkResult.successCount,
+        failedCount: chunkResult.failedCount,
+        skippedCount: chunkResult.skippedCount,
+        hasMore: chunkResult.hasMore,
+        shouldContinue: chunkResult.shouldContinue,
+        nextIndex: chunkResult.nextIndex,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -375,7 +475,15 @@ export class BatchJobOrchestrator {
       await this.repository.update(job);
       await processor.cleanup(job);
 
-      return this.createFailedResult(job, errorMessage);
+      return {
+        processedCount: 0,
+        successCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        hasMore: false,
+        shouldContinue: false,
+        nextIndex: startIndex,
+      };
     }
   }
 

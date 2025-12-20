@@ -183,6 +183,21 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
     return jobs.map((j) => this.mapToDomain(j));
   }
 
+  async findWaitingJobs(limit: number = 10): Promise<BatchJob[]> {
+    const jobs = await this.prisma.batchJob.findMany({
+      where: {
+        status: "WAITING" as BatchJobStatus,
+      },
+      orderBy: [
+        { last_heartbeat: "asc" }, // Prioritize jobs that haven't been touched recently
+        { created_at: "asc" }, // Then by creation time
+      ],
+      take: limit,
+    });
+
+    return jobs.map((j) => this.mapToDomain(j));
+  }
+
   async delete(id: string): Promise<void> {
     await this.prisma.batchJob.delete({
       where: { id },

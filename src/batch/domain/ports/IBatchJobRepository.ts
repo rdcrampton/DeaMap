@@ -96,6 +96,11 @@ export interface IBatchJobRepository {
   findResumableJobs(options?: { types?: JobType[]; organizationId?: string }): Promise<BatchJob[]>;
 
   /**
+   * Find jobs in WAITING status that need to be continued
+   */
+  findWaitingJobs(limit?: number): Promise<BatchJob[]>;
+
+  /**
    * Delete a job and all its checkpoints
    */
   delete(id: string): Promise<void>;
