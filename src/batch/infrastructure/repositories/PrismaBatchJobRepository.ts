@@ -51,6 +51,7 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
         created_by: data.createdBy,
         organization_id: data.organizationId,
         parent_job_id: data.parentJobId,
+        data_source_id: data.dataSourceId,
         metadata: data.metadata as object,
         tags: data.tags,
       },
@@ -177,6 +178,21 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
         ...(options?.types && { type: { in: options.types as BatchJobType[] } }),
         ...(options?.organizationId && { organization_id: options.organizationId }),
       },
+    });
+
+    return jobs.map((j) => this.mapToDomain(j));
+  }
+
+  async findWaitingJobs(limit: number = 10): Promise<BatchJob[]> {
+    const jobs = await this.prisma.batchJob.findMany({
+      where: {
+        status: "WAITING" as BatchJobStatus,
+      },
+      orderBy: [
+        { last_heartbeat: "asc" }, // Prioritize jobs that haven't been touched recently
+        { created_at: "asc" }, // Then by creation time
+      ],
+      take: limit,
     });
 
     return jobs.map((j) => this.mapToDomain(j));
@@ -506,6 +522,7 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
       createdBy: prismaJob.created_by,
       organizationId: prismaJob.organization_id ?? undefined,
       parentJobId: prismaJob.parent_job_id ?? undefined,
+      dataSourceId: prismaJob.data_source_id ?? undefined,
       createdAt: prismaJob.created_at,
       updatedAt: prismaJob.updated_at,
       startedAt: prismaJob.started_at,
@@ -548,6 +565,7 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
       }),
       ...(filter.createdBy && { created_by: filter.createdBy }),
       ...(filter.organizationId && { organization_id: filter.organizationId }),
+      ...(filter.dataSourceId && { data_source_id: filter.dataSourceId }),
       ...(filter.tags && { tags: { hasSome: filter.tags } }),
       ...(filter.createdAfter && { created_at: { gte: filter.createdAfter } }),
       ...(filter.createdBefore && { created_at: { lte: filter.createdBefore } }),

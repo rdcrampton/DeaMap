@@ -202,6 +202,7 @@ export const VALID_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
     JobStatus.RESUMING,
     JobStatus.CANCELLED,
     JobStatus.INTERRUPTED,
+    JobStatus.FAILED,
   ],
   [JobStatus.COMPLETED]: [],
   [JobStatus.COMPLETED_WITH_WARNINGS]: [],

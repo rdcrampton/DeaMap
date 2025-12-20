@@ -54,10 +54,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Fuente de datos no encontrada" }, { status: 404 });
     }
 
-    // Extraer apiEndpoint y resourceId desde config para mostrar en el frontend
+    // Extraer campos según el tipo de fuente de datos
     const config = dataSource.config as Record<string, unknown> | null;
+
+    // Campos específicos de CKAN_API
     const apiEndpoint = config?.apiEndpoint as string | null;
     const resourceId = config?.resourceId as string | null;
+
+    // Campos específicos de JSON_FILE
+    const fileUrl = config?.fileUrl as string | null;
+    const jsonPath = config?.jsonPath as string | null;
+
+    // Campos específicos de CSV_FILE
+    const filePath = config?.filePath as string | null;
+
+    // Campos comunes
     const fieldMapping = config?.fieldMapping as Record<string, string> | null;
 
     // Formatear respuesta
@@ -67,13 +78,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       description: dataSource.description,
       type: dataSource.type,
       config: dataSource.config,
-      apiEndpoint, // Extraído del config para facilitar acceso
-      resourceId, // Extraído del config para facilitar acceso
-      fieldMapping, // Extraído del config para facilitar acceso
+      // Campos específicos extraídos según tipo
+      apiEndpoint, // CKAN_API
+      resourceId, // CKAN_API
+      fileUrl, // JSON_FILE
+      jsonPath, // JSON_FILE
+      filePath, // CSV_FILE
+      fieldMapping, // Común a todos
       isActive: dataSource.is_active,
       matchingStrategy: dataSource.matching_strategy,
       matchingThreshold: dataSource.matching_threshold,
       syncFrequency: dataSource.sync_frequency,
+      defaultPublicationMode: dataSource.default_publication_mode,
       lastSyncAt: dataSource.last_sync_at,
       nextScheduledSyncAt: dataSource.next_scheduled_sync_at,
       autoDeactivateMissing: dataSource.auto_deactivate_missing,
@@ -153,6 +169,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (body.matchingThreshold !== undefined)
       updateData.matching_threshold = body.matchingThreshold;
     if (body.syncFrequency !== undefined) updateData.sync_frequency = body.syncFrequency;
+    if (body.defaultPublicationMode !== undefined)
+      updateData.default_publication_mode = body.defaultPublicationMode;
     if (body.autoDeactivateMissing !== undefined)
       updateData.auto_deactivate_missing = body.autoDeactivateMissing;
     if (body.autoUpdateFields !== undefined) updateData.auto_update_fields = body.autoUpdateFields;

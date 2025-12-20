@@ -40,16 +40,18 @@ const gitBranch = getCurrentBranch();
 // Define branches that should run migrations
 const MIGRATION_BRANCHES = ["main", "refactor", "claude/simple-dea-form"];
 
-// Also allow claude/ branches to run migrations for development previews
+// Also allow claude/ and copilot/ branches to run migrations for development previews
 const isClaudeBranch = gitBranch.startsWith("claude/");
+const isCopilotBranch = gitBranch.startsWith("copilot/");
 
-// Check if current branch matches any migration branch or is a claude branch
+// Check if current branch matches any migration branch or is a claude/copilot branch
 const shouldRunMigrations =
   isVercel &&
   (MIGRATION_BRANCHES.some(
     (branch) => gitBranch === branch || gitBranch.includes(branch)
   ) ||
-    isClaudeBranch);
+    isClaudeBranch ||
+    isCopilotBranch);
 
 async function main() {
   console.log("🔍 Migration Check:");

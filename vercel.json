@@ -2,6 +2,12 @@
   "framework": "nextjs",
   "buildCommand": "node scripts/migrate.js && next build",
   "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/process-waiting-jobs",
+      "schedule": "* * * * *"
+    }
+  ],
   "functions": {
     "src/app/api/**/*.ts": {
       "maxDuration": 30
@@ -23,6 +29,9 @@
     },
     "src/app/api/batch/[jobId]/retry/route.ts": {
       "maxDuration": 100
+    },
+    "src/app/api/cron/process-waiting-jobs/route.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
