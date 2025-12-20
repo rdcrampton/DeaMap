@@ -6,20 +6,24 @@
 
 El script `scripts/migrate.js` ahora soporta la creación automática de bases de datos separadas para cada rama de desarrollo, con 500 DEAs dummy realistas. Solo se crea la BD en el primer deploy de cada rama.
 
-## Variables de Entorno Nuevas
+## Variables de Entorno
+
+Solo necesitas añadir **UNA** variable de entorno nueva:
 
 ```env
-# Credenciales de admin para crear bases de datos
-POSTGRES_ADMIN_URL=postgresql://postgres:password@host:5432/postgres
+# Ya tienes esto configurado:
+DATABASE_URL=postgresql://app:secret@host:5432/samur_dea
 
-# Componentes para construir URLs dinámicas
-POSTGRES_HOST=your-host.com
-POSTGRES_PORT=5432
-POSTGRES_DB_USER=app_user
-POSTGRES_DB_PASSWORD=app_password
+# Solo añade esto (credenciales de superusuario postgres):
+POSTGRES_ADMIN_URL=postgresql://postgres:admin_password@host:5432/postgres
+```
 
-# Nombre de la base de datos de producción (referencia)
-PRODUCTION_DATABASE_NAME=samur_dea
+El sistema extrae automáticamente las credenciales (host, port, user, password) de tu `DATABASE_URL` existente y construye las URLs para las bases de datos de rama.
+
+**Opcional:**
+```env
+# Si quieres usar un nombre base diferente al de DATABASE_URL:
+PRODUCTION_DATABASE_NAME=mi_otro_nombre
 ```
 
 ## Arquitectura Propuesta
@@ -336,11 +340,11 @@ npm install @faker-js/faker pg --save-dev
 ### Configurar Variables de Entorno en Vercel
 
 ```env
-POSTGRES_ADMIN_URL=postgresql://postgres:password@host:5432/postgres
-POSTGRES_HOST=your-host.com
-POSTGRES_PORT=5432
-POSTGRES_DB_USER=app_user
-POSTGRES_DB_PASSWORD=app_password
+# Ya debes tener esto:
+DATABASE_URL=postgresql://app:secret@host:5432/samur_dea
+
+# Solo añade esto:
+POSTGRES_ADMIN_URL=postgresql://postgres:admin_password@host:5432/postgres
 ```
 
 ### Scripts Disponibles

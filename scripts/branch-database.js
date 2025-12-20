@@ -7,26 +7,64 @@
  * This allows isolated development environments with dummy data.
  *
  * Required environment variables:
- * - POSTGRES_ADMIN_URL: Admin connection to create databases
- * - POSTGRES_HOST: Database host
- * - POSTGRES_PORT: Database port (default: 5432)
- * - POSTGRES_DB_USER: Application database user
- * - POSTGRES_DB_PASSWORD: Application database password
- * - PRODUCTION_DATABASE_NAME: Base name for databases (default: samur_dea)
+ * - DATABASE_URL: Production database URL (parsed for credentials)
+ * - POSTGRES_ADMIN_URL: Admin connection to create databases (e.g., postgres user)
+ *
+ * Optional:
+ * - PRODUCTION_DATABASE_NAME: Override base name for databases (default: extracted from DATABASE_URL)
+ *
+ * How it works:
+ * 1. Parses DATABASE_URL to extract: host, port, user, password, database name
+ * 2. Uses POSTGRES_ADMIN_URL to create new databases
+ * 3. Builds new DATABASE_URL for branch using same credentials but different DB name
+ *
+ * Example:
+ * - DATABASE_URL: postgresql://app:secret@host:5432/samur_dea
+ * - Branch: claude/feature-xyz
+ * - New DB: samur_dea_claude_feature_xyz
+ * - New URL: postgresql://app:secret@host:5432/samur_dea_claude_feature_xyz
  */
 
 const { Client } = require("pg");
+
+/**
+ * Parses a PostgreSQL connection URL
+ * Returns: { host, port, user, password, database }
+ */
+function parseDatabaseUrl(url) {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: parsed.port || "5432",
+      user: parsed.username,
+      password: decodeURIComponent(parsed.password),
+      database: parsed.pathname.slice(1), // Remove leading /
+    };
+  } catch {
+    console.error("Failed to parse DATABASE_URL");
+    return null;
+  }
+}
+
+// Parse DATABASE_URL for configuration
+const dbConfig = parseDatabaseUrl(process.env.DATABASE_URL);
 
 // Configuration
 const CONFIG = {
   // Branches that should use the main production database
   productionBranches: ["main", "master"],
 
-  // Prefix for branch databases
-  dbPrefix: process.env.PRODUCTION_DATABASE_NAME || "samur_dea",
+  // Prefix for branch databases (from DATABASE_URL or override)
+  dbPrefix: process.env.PRODUCTION_DATABASE_NAME || dbConfig?.database || "samur_dea",
 
   // Max database name length in PostgreSQL
   maxDbNameLength: 63,
+
+  // Parsed credentials from DATABASE_URL
+  credentials: dbConfig,
 };
 
 /**
@@ -65,13 +103,12 @@ function getDatabaseName(branch) {
 
 /**
  * Checks if branch database feature is enabled
+ * Requires: DATABASE_URL (for credentials) and POSTGRES_ADMIN_URL (to create DBs)
  */
 function isFeatureEnabled() {
   return !!(
     process.env.POSTGRES_ADMIN_URL &&
-    process.env.POSTGRES_HOST &&
-    process.env.POSTGRES_DB_USER &&
-    process.env.POSTGRES_DB_PASSWORD
+    CONFIG.credentials
   );
 }
 
@@ -126,12 +163,14 @@ async function createDatabase(adminClient, dbName) {
 
 /**
  * Builds the DATABASE_URL for the application
+ * Uses credentials parsed from the original DATABASE_URL
  */
 function buildDatabaseUrl(dbName) {
-  const host = process.env.POSTGRES_HOST;
-  const port = process.env.POSTGRES_PORT || "5432";
-  const user = process.env.POSTGRES_DB_USER;
-  const password = process.env.POSTGRES_DB_PASSWORD;
+  if (!CONFIG.credentials) {
+    throw new Error("Cannot build database URL: DATABASE_URL not configured");
+  }
+
+  const { host, port, user, password } = CONFIG.credentials;
 
   // URL encode the password in case it has special characters
   const encodedPassword = encodeURIComponent(password);
@@ -298,10 +337,22 @@ if (require.main === module) {
   async function main() {
     switch (command) {
       case "check":
-        console.log("Feature enabled:", isFeatureEnabled());
-        console.log("Current branch:", getCurrentBranch());
-        console.log("Database name:", getDatabaseName(getCurrentBranch()));
-        console.log("Should create:", shouldCreateBranchDatabase());
+        console.log("🔍 Branch Database Configuration\n");
+        console.log("Feature enabled:", isFeatureEnabled() ? "✅" : "❌");
+        console.log("Current branch:", getCurrentBranch() || "(not set)");
+        console.log("Target database:", getDatabaseName(getCurrentBranch()));
+        console.log("Should create:", shouldCreateBranchDatabase() ? "✅" : "❌");
+        console.log("\n📦 Credentials (from DATABASE_URL):");
+        if (CONFIG.credentials) {
+          console.log("  Host:", CONFIG.credentials.host);
+          console.log("  Port:", CONFIG.credentials.port);
+          console.log("  User:", CONFIG.credentials.user);
+          console.log("  Password:", CONFIG.credentials.password ? "****" : "(not set)");
+          console.log("  Database:", CONFIG.credentials.database);
+        } else {
+          console.log("  ❌ DATABASE_URL not configured or invalid");
+        }
+        console.log("\n🔑 Admin URL:", process.env.POSTGRES_ADMIN_URL ? "✅ configured" : "❌ not set");
         break;
 
       case "create":
@@ -335,12 +386,18 @@ Usage:
   node branch-database.js drop <name> - Drop a branch database
 
 Environment variables required:
-  POSTGRES_ADMIN_URL      - Admin connection string
-  POSTGRES_HOST           - Database host
-  POSTGRES_PORT           - Database port (default: 5432)
-  POSTGRES_DB_USER        - Application user
-  POSTGRES_DB_PASSWORD    - Application password
-  PRODUCTION_DATABASE_NAME - Base database name (default: samur_dea)
+  DATABASE_URL            - Production database URL (credentials are extracted from here)
+  POSTGRES_ADMIN_URL      - Admin connection string (e.g., postgres superuser)
+
+Optional:
+  PRODUCTION_DATABASE_NAME - Override base database name (default: from DATABASE_URL)
+
+Example:
+  DATABASE_URL=postgresql://app:secret@host:5432/samur_dea
+  POSTGRES_ADMIN_URL=postgresql://postgres:admin@host:5432/postgres
+
+  Branch: claude/feature-xyz
+  Creates: samur_dea_claude_feature_xyz
 `);
     }
   }
