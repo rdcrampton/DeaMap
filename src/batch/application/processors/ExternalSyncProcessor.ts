@@ -255,20 +255,10 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         }
       }
 
-      // Check if there are more records (peek ahead)
-      let hasMore = false;
-      try {
-        const { done } = await Promise.race([
-          this.recordsIterator.next(),
-          new Promise<{ done: boolean }>((_, reject) =>
-            setTimeout(() => reject(new Error("Peek timeout")), 1000)
-          ),
-        ]);
-        hasMore = !done;
-      } catch {
-        // If peek times out or fails, assume there might be more
-        hasMore = processedCount === chunkSize;
-      }
+      // Determine if there are more records based on chunk completion
+      // If we processed exactly chunkSize records, there are likely more
+      // If we processed less, the iterator reached the end (done = true)
+      const hasMore = processedCount === chunkSize;
 
       // Final checkpoint
       if (onCheckpoint && processedCount > 0) {
