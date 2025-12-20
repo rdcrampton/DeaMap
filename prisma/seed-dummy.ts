@@ -213,6 +213,30 @@ async function loadDistrictsReference() {
   console.log(`✅ Loaded ${madridData.districts.length} districts from JSON (reference only)`);
 }
 
+// Map JSON organization types to Prisma enum values
+function mapOrganizationType(jsonType: string): "CIVIL_PROTECTION" | "CERTIFIED_COMPANY" | "VOLUNTEER_GROUP" | "MUNICIPALITY" | "HEALTH_SERVICE" | "OWNER" {
+  const typeMap: Record<string, "CIVIL_PROTECTION" | "CERTIFIED_COMPANY" | "VOLUNTEER_GROUP" | "MUNICIPALITY" | "HEALTH_SERVICE" | "OWNER"> = {
+    "emergency": "CIVIL_PROTECTION",
+    "government": "MUNICIPALITY",
+    "commercial": "CERTIFIED_COMPANY",
+    "health": "HEALTH_SERVICE",
+    "hospital": "HEALTH_SERVICE",
+    "transport": "MUNICIPALITY", // Transport falls under municipality
+    "enterprise": "CERTIFIED_COMPANY", // Enterprise is a certified company
+  };
+  return typeMap[jsonType.toLowerCase()] || "CERTIFIED_COMPANY";
+}
+
+// Generate unique organization code
+function generateOrgCode(name: string): string {
+  return name
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]/g, "_")
+    .substring(0, 50);
+}
+
 // Create organizations
 async function createOrganizations() {
   console.log("🏢 Creating organizations...");
@@ -220,22 +244,18 @@ async function createOrganizations() {
   const orgIds: string[] = [];
 
   for (const org of madridData.organizations) {
+    const orgCode = generateOrgCode(org.name);
     const created = await prisma.organization.upsert({
-      where: { name: org.name },
+      where: { code: orgCode },
       update: {},
       create: {
+        code: orgCode,
         name: org.name,
         description: `Organización ${org.type} - ${org.name}`,
-        type: org.type.toUpperCase() as
-          | "EMERGENCY"
-          | "GOVERNMENT"
-          | "COMMERCIAL"
-          | "HEALTH"
-          | "TRANSPORT"
-          | "ENTERPRISE",
+        type: mapOrganizationType(org.type),
         is_active: true,
-        contact_email: generateEmail(org.name),
-        contact_phone: faker.phone.number({ style: "national" }),
+        email: generateEmail(org.name),
+        phone: faker.phone.number({ style: "national" }),
       },
     });
     orgIds.push(created.id);
@@ -249,7 +269,7 @@ async function createOrganizations() {
 async function createTestUsers() {
   console.log("👤 Creating test users...");
 
-  const roles = ["ADMIN", "VALIDATOR", "VIEWER", "EDITOR"];
+  const roles = ["ADMIN", "MODERATOR", "USER"];
   const userCount = 20;
 
   for (let i = 0; i < userCount; i++) {
@@ -262,8 +282,9 @@ async function createTestUsers() {
       update: {},
       create: {
         email: `test.user${i + 1}@deamap.test`,
+        password_hash: "$2a$10$dummyhashfortesting", // Dummy bcrypt hash for testing
         name: `${firstName} ${lastName}`,
-        role: role as "ADMIN" | "VALIDATOR" | "VIEWER" | "EDITOR",
+        role: role as "ADMIN" | "MODERATOR" | "USER",
         is_active: true,
       },
     });
