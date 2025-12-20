@@ -269,6 +269,20 @@ async function createOrganizations() {
 async function createTestUsers() {
   console.log("👤 Creating test users...");
 
+  // Create specific admin user for testing
+  await prisma.user.upsert({
+    where: { email: "admin@deamap.es" },
+    update: {},
+    create: {
+      email: "admin@deamap.es",
+      password_hash: "$2a$10$N9qo8uLOickgx2ZMRZoMye/tPEv6tMUjQvY3v.8K.rDv6Vx7wq7Dm", // bcrypt hash for "123456"
+      name: "Admin DEA Map",
+      role: "ADMIN",
+      is_active: true,
+      is_verified: true,
+    },
+  });
+
   const roles = ["ADMIN", "MODERATOR", "USER"];
   const userCount = 20;
 
@@ -290,7 +304,7 @@ async function createTestUsers() {
     });
   }
 
-  console.log(`✅ Created ${userCount} test users`);
+  console.log(`✅ Created ${userCount + 1} test users (including admin@deamap.es)`);
 }
 
 // Generate a single AED with all related data
