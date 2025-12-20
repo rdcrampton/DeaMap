@@ -186,6 +186,17 @@ async function createDatabase(adminUrl, dbName) {
       // Make app user owner of public schema so it can create tables
       await newDbClient.query(`ALTER SCHEMA public OWNER TO "${safeUser}"`);
       console.log(`   ✅ Permissions granted to user: ${appUser}`);
+
+    //   ENABLE EXTENSIONS
+    //   POSTGIS
+      await newDbClient.query(`CREATE EXTENSION IF NOT EXISTS postgis`);
+      console.log(`   ✅ PostGIS extension enabled`);
+    //   UUID-OSSP
+        await newDbClient.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+        console.log(`   ✅ uuid-ossp extension enabled`);
+    //     postgres search
+        await newDbClient.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+        console.log(`   ✅ pg_trgm extension enabled`);
     } finally {
       await newDbClient.end();
     }
