@@ -7,35 +7,43 @@
  * Usage: npx tsx prisma/seed-dummy.ts
  */
 
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, AedStatus, SourceOrigin, PublicationMode } from "@/generated/client/client";
 import { faker } from "@faker-js/faker/locale/es";
 import madridData from "./data/madrid-districts.json";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL environment variable is not set");
+}
+
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
 
 // Configuration
 const CONFIG = {
   totalAeds: 500,
   batchSize: 50, // Insert in batches for performance
   statusDistribution: {
-    PUBLISHED: 0.60,
+    PUBLISHED: 0.6,
     DRAFT: 0.15,
-    PENDING_REVIEW: 0.10,
-    INACTIVE: 0.10,
+    PENDING_REVIEW: 0.1,
+    INACTIVE: 0.1,
     REJECTED: 0.05,
   },
   sourceOriginDistribution: {
-    WEB_FORM: 0.30,
-    ADMIN_FORM: 0.20,
+    WEB_FORM: 0.3,
+    ADMIN_FORM: 0.2,
     EXCEL_IMPORT: 0.15,
     LEGACY_MIGRATION: 0.15,
-    EXTERNAL_API: 0.10,
-    CITIZEN_REPORT: 0.10,
+    EXTERNAL_API: 0.1,
+    CITIZEN_REPORT: 0.1,
   },
   publicationModeDistribution: {
-    LOCATION_ONLY: 0.40,
+    LOCATION_ONLY: 0.4,
     BASIC_INFO: 0.35,
-    FULL: 0.20,
+    FULL: 0.2,
     NONE: 0.05,
   },
 };
@@ -93,7 +101,7 @@ function pickScheduleTemplate() {
 }
 
 // Generate random coordinates within district bounds
-function generateCoordinates(district: typeof madridData.districts[0]) {
+function generateCoordinates(district: (typeof madridData.districts)[0]) {
   const lat = faker.number.float({
     min: district.bounds.minLat,
     max: district.bounds.maxLat,
@@ -110,17 +118,54 @@ function generateCoordinates(district: typeof madridData.districts[0]) {
 // Generate realistic street name
 function generateStreetName(): string {
   const streetNames = [
-    "Gran Vía", "Alcalá", "Serrano", "Velázquez", "Goya", "Princesa",
-    "Bravo Murillo", "López de Hoyos", "Arturo Soria", "Francisco Silvela",
-    "Doctor Esquerdo", "Conde de Casal", "Atocha", "Embajadores", "Toledo",
-    "Mayor", "Arenal", "Preciados", "Carmen", "Montera", "Fuencarral",
-    "Hortaleza", "San Bernardo", "Alberto Aguilera", "Cea Bermúdez",
-    "José Abascal", "María de Molina", "Príncipe de Vergara", "Castellana",
-    "Paseo del Prado", "Paseo de Recoletos", "Paseo de la Habana",
-    "General Perón", "Orense", "Raimundo Fernández Villaverde",
-    "Santa Engracia", "Ríos Rosas", "Alonso Cano", "Ponzano",
-    "García de Paredes", "Luchana", "Eloy Gonzalo", "Trafalgar",
-    "Sagasta", "Génova", "Almagro", "Zurbano", "Bárbara de Braganza",
+    "Gran Vía",
+    "Alcalá",
+    "Serrano",
+    "Velázquez",
+    "Goya",
+    "Princesa",
+    "Bravo Murillo",
+    "López de Hoyos",
+    "Arturo Soria",
+    "Francisco Silvela",
+    "Doctor Esquerdo",
+    "Conde de Casal",
+    "Atocha",
+    "Embajadores",
+    "Toledo",
+    "Mayor",
+    "Arenal",
+    "Preciados",
+    "Carmen",
+    "Montera",
+    "Fuencarral",
+    "Hortaleza",
+    "San Bernardo",
+    "Alberto Aguilera",
+    "Cea Bermúdez",
+    "José Abascal",
+    "María de Molina",
+    "Príncipe de Vergara",
+    "Castellana",
+    "Paseo del Prado",
+    "Paseo de Recoletos",
+    "Paseo de la Habana",
+    "General Perón",
+    "Orense",
+    "Raimundo Fernández Villaverde",
+    "Santa Engracia",
+    "Ríos Rosas",
+    "Alonso Cano",
+    "Ponzano",
+    "García de Paredes",
+    "Luchana",
+    "Eloy Gonzalo",
+    "Trafalgar",
+    "Sagasta",
+    "Génova",
+    "Almagro",
+    "Zurbano",
+    "Bárbara de Braganza",
   ];
   return faker.helpers.arrayElement(streetNames);
 }
@@ -131,8 +176,12 @@ function generateResponsibleName(establishmentType: string): string {
     "Centro educativo": ["Director/a", "Coordinador/a de Seguridad", "Jefe/a de Estudios"],
     "Centro deportivo": ["Director/a Deportivo", "Coordinador/a", "Gerente"],
     "Centro comercial": ["Director/a de Seguridad", "Jefe/a de Mantenimiento", "Gerente"],
-    "Centro de salud": ["Director/a Médico", "Coordinador/a de Enfermería", "Responsable de Seguridad"],
-    "Empresa": ["Director/a de RRHH", "Responsable de Prevención", "Facility Manager"],
+    "Centro de salud": [
+      "Director/a Médico",
+      "Coordinador/a de Enfermería",
+      "Responsable de Seguridad",
+    ],
+    Empresa: ["Director/a de RRHH", "Responsable de Prevención", "Facility Manager"],
     default: ["Responsable", "Coordinador/a", "Encargado/a"],
   };
 
@@ -150,13 +199,9 @@ function generateEmail(establishmentName: string, domain?: string): string {
     .replace(/\.+/g, ".")
     .substring(0, 20);
 
-  const domains = domain ? [domain] : [
-    "madrid.es",
-    "comunidad.madrid",
-    "gmail.com",
-    "hotmail.com",
-    "outlook.es",
-  ];
+  const domains = domain
+    ? [domain]
+    : ["madrid.es", "comunidad.madrid", "gmail.com", "hotmail.com", "outlook.es"];
 
   return `${sanitized}@${pickRandom(domains)}`;
 }
@@ -196,7 +241,13 @@ async function createOrganizations() {
       create: {
         name: org.name,
         description: `Organización ${org.type} - ${org.name}`,
-        type: org.type.toUpperCase() as "EMERGENCY" | "GOVERNMENT" | "COMMERCIAL" | "HEALTH" | "TRANSPORT" | "ENTERPRISE",
+        type: org.type.toUpperCase() as
+          | "EMERGENCY"
+          | "GOVERNMENT"
+          | "COMMERCIAL"
+          | "HEALTH"
+          | "TRANSPORT"
+          | "ENTERPRISE",
         is_active: true,
         contact_email: generateEmail(org.name),
         contact_phone: faker.phone.number({ style: "national" }),
@@ -260,7 +311,9 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
       street_type: pickRandom(madridData.streetTypes),
       street_name: generateStreetName(),
       street_number: String(faker.number.int({ min: 1, max: 200 })),
-      additional_info: faker.helpers.maybe(() => `Planta ${faker.number.int({ min: 0, max: 5 })}`, { probability: 0.3 }),
+      additional_info: faker.helpers.maybe(() => `Planta ${faker.number.int({ min: 0, max: 5 })}`, {
+        probability: 0.3,
+      }),
       postal_code: pickRandom(district.postalCodes),
       latitude: coords.lat,
       longitude: coords.lng,
@@ -270,15 +323,16 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
       district_code: district.textCode,
       district_name: district.name,
       access_instructions: faker.helpers.maybe(
-        () => faker.helpers.arrayElement([
-          "Entrada principal, junto a recepción",
-          "En el vestíbulo, al lado del ascensor",
-          "Planta baja, zona de seguridad",
-          "Acceso por puerta lateral",
-          "Junto al punto de información",
-          "En la zona de emergencias",
-          "Visible desde la entrada principal",
-        ]),
+        () =>
+          faker.helpers.arrayElement([
+            "Entrada principal, junto a recepción",
+            "En el vestíbulo, al lado del ascensor",
+            "Planta baja, zona de seguridad",
+            "Acceso por puerta lateral",
+            "Junto al punto de información",
+            "En la zona de emergencias",
+            "Visible desde la entrada principal",
+          ]),
         { probability: 0.7 }
       ),
     },
@@ -313,12 +367,13 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
       closed_on_holidays: scheduleTemplate.closedHolidays || false,
       closed_in_august: scheduleTemplate.closedAugust || false,
       observations: faker.helpers.maybe(
-        () => faker.helpers.arrayElement([
-          "Acceso restringido fuera de horario",
-          "Solicitar acceso en recepción",
-          "Vigilancia las 24 horas",
-          "Personal de seguridad presente",
-        ]),
+        () =>
+          faker.helpers.arrayElement([
+            "Acceso restringido fuera de horario",
+            "Solicitar acceso en recepción",
+            "Vigilancia las 24 horas",
+            "Personal de seguridad presente",
+          ]),
         { probability: 0.4 }
       ),
     },
@@ -326,9 +381,10 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
 
   // Create AED
   const publishedAt = status === "PUBLISHED" ? faker.date.past({ years: 2 }) : null;
-  const lastVerifiedAt = status === "PUBLISHED"
-    ? faker.helpers.maybe(() => faker.date.recent({ days: 180 }), { probability: 0.6 })
-    : null;
+  const lastVerifiedAt =
+    status === "PUBLISHED"
+      ? faker.helpers.maybe(() => faker.date.recent({ days: 180 }), { probability: 0.6 })
+      : null;
 
   const aed = await prisma.aed.create({
     data: {
@@ -348,30 +404,30 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
         ? pickRandom(["field_visit", "phone_call", "email", "photo_verification"])
         : null,
       is_publicly_accessible: faker.datatype.boolean({ probability: 0.85 }),
-      installation_date: faker.helpers.maybe(
-        () => faker.date.past({ years: 5 }),
-        { probability: 0.5 }
-      ),
-      requires_attention: status === "PENDING_REVIEW" || faker.datatype.boolean({ probability: 0.1 }),
-      attention_reason: status === "PENDING_REVIEW"
-        ? pickRandom(["Verificación pendiente", "Datos incompletos", "Requiere visita"])
-        : null,
-      rejection_reason: status === "REJECTED"
-        ? pickRandom(["Ubicación incorrecta", "DEA no encontrado", "Duplicado", "Datos falsos"])
-        : null,
+      installation_date: faker.helpers.maybe(() => faker.date.past({ years: 5 }), {
+        probability: 0.5,
+      }),
+      requires_attention:
+        status === "PENDING_REVIEW" || faker.datatype.boolean({ probability: 0.1 }),
+      attention_reason:
+        status === "PENDING_REVIEW"
+          ? pickRandom(["Verificación pendiente", "Datos incompletos", "Requiere visita"])
+          : null,
+      rejection_reason:
+        status === "REJECTED"
+          ? pickRandom(["Ubicación incorrecta", "DEA no encontrado", "Duplicado", "Datos falsos"])
+          : null,
       location_id: location.id,
       responsible_id: responsible.id,
       schedule_id: schedule.id,
-      internal_notes: faker.helpers.maybe(
-        () => faker.lorem.sentence(),
-        { probability: 0.2 }
-      ),
+      internal_notes: faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.2 }),
       public_notes: faker.helpers.maybe(
-        () => faker.helpers.arrayElement([
-          "DEA de acceso público durante horario de apertura",
-          "Solicitar acceso al personal de seguridad",
-          "Disponible las 24 horas",
-        ]),
+        () =>
+          faker.helpers.arrayElement([
+            "DEA de acceso público durante horario de apertura",
+            "Solicitar acceso al personal de seguridad",
+            "Disponible las 24 horas",
+          ]),
         { probability: 0.3 }
       ),
     },
@@ -400,7 +456,10 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
 
     if (status === "REJECTED") {
       statusHistory.push({ status: "PENDING_REVIEW", date: reviewDate });
-      statusHistory.push({ status: "REJECTED", date: faker.date.between({ from: reviewDate, to: new Date() }) });
+      statusHistory.push({
+        status: "REJECTED",
+        date: faker.date.between({ from: reviewDate, to: new Date() }),
+      });
     } else if (status === "PENDING_REVIEW") {
       statusHistory.push({ status: "PENDING_REVIEW", date: reviewDate });
     } else if (status === "PUBLISHED" || status === "INACTIVE") {
@@ -438,10 +497,18 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
 
 function getStatusChangeReason(from: AedStatus | null, to: AedStatus): string {
   const reasons: Record<string, string[]> = {
-    "DRAFT_PENDING_REVIEW": ["Enviado para revisión", "Datos completados", "Solicitud de publicación"],
-    "PENDING_REVIEW_PUBLISHED": ["Verificación completada", "Datos validados", "Aprobado por administrador"],
-    "PENDING_REVIEW_REJECTED": ["Datos incorrectos", "No se pudo verificar", "Ubicación no válida"],
-    "PUBLISHED_INACTIVE": ["DEA retirado", "Mantenimiento", "Cierre temporal", "Cambio de ubicación"],
+    DRAFT_PENDING_REVIEW: [
+      "Enviado para revisión",
+      "Datos completados",
+      "Solicitud de publicación",
+    ],
+    PENDING_REVIEW_PUBLISHED: [
+      "Verificación completada",
+      "Datos validados",
+      "Aprobado por administrador",
+    ],
+    PENDING_REVIEW_REJECTED: ["Datos incorrectos", "No se pudo verificar", "Ubicación no válida"],
+    PUBLISHED_INACTIVE: ["DEA retirado", "Mantenimiento", "Cierre temporal", "Cambio de ubicación"],
     default: ["Actualización de estado"],
   };
 
