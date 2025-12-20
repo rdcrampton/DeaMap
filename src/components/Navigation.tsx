@@ -10,7 +10,6 @@ import {
   User,
   PlusCircle,
   ClipboardCheck,
-  Upload,
   Settings,
 } from "lucide-react";
 import Image from "next/image";
@@ -45,7 +44,6 @@ export default function Navigation() {
 
   const authNavLinks = [
     { href: "/verify", label: "Verificar", icon: ClipboardCheck },
-    { href: "/import", label: "Importar", icon: Upload },
   ];
 
   const adminNavLinks = [
