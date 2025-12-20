@@ -39,8 +39,8 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
 
   private adapter: IDataSourceAdapter | null = null;
   private dataSource: ExternalDataSourceLocalConfig | null = null;
-  private records: ImportRecord[] = [];
   private recordsIterator: AsyncGenerator<ImportRecord> | null = null;
+  private recordsSkipped: number = 0;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -101,8 +101,22 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         dataSource.type as "CKAN_API" | "JSON_FILE" | "REST_API" | "CSV_FILE"
       );
 
-      // Get total record count
-      const totalRecords = await this.adapter.getRecordCount(this.dataSource.config);
+      // Use estimated count instead of actual count to avoid timeout
+      // The count will be updated as we process records
+      let totalRecords = 99999; // High estimate for large datasets
+
+      try {
+        // Try to get actual count with a short timeout
+        const countPromise = this.adapter.getRecordCount(this.dataSource.config);
+        const timeoutPromise = new Promise<number>((_, reject) =>
+          setTimeout(() => reject(new Error("Count timeout")), 5000)
+        );
+
+        totalRecords = await Promise.race([countPromise, timeoutPromise]);
+      } catch (error) {
+        // If count fails or times out, use the estimate
+        console.warn("Could not get exact record count, using estimate:", error);
+      }
 
       return {
         success: true,
@@ -111,6 +125,7 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
           dataSourceType: this.dataSource.type,
           matchingStrategy: this.dataSource.matchingStrategy,
           regionCode: this.dataSource.regionCode,
+          estimatedCount: totalRecords === 99999,
         },
       };
     } catch (error) {
@@ -144,6 +159,7 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
       // Initialize records iterator if not already done
       if (!this.recordsIterator && this.adapter && this.dataSource) {
         this.recordsIterator = this.adapter.fetchRecords(this.dataSource.config);
+        this.recordsSkipped = 0;
       }
 
       if (!this.recordsIterator) {
@@ -160,34 +176,52 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         };
       }
 
-      // Skip already processed records
-      if (startIndex > 0 && this.records.length < startIndex) {
-        for (let i = this.records.length; i < startIndex; i++) {
-          const { value, done } = await this.recordsIterator.next();
-          if (done) break;
-          this.records.push(value);
+      // Skip already processed records (without storing them in memory)
+      while (this.recordsSkipped < startIndex) {
+        // Check timeout during skip phase
+        if (this.isApproachingTimeout(context)) {
+          return {
+            processedCount: 0,
+            successCount: 0,
+            failedCount: 0,
+            skippedCount: 0,
+            results: [],
+            hasMore: true,
+            nextIndex: startIndex,
+            shouldContinue: true,
+            error: "Timeout while skipping to start index",
+          };
         }
+
+        const { done } = await this.recordsIterator.next();
+        if (done) {
+          // Reached end before getting to startIndex
+          return {
+            processedCount: 0,
+            successCount: 0,
+            failedCount: 0,
+            skippedCount: 0,
+            results: [],
+            hasMore: false,
+            nextIndex: startIndex,
+            shouldContinue: false,
+          };
+        }
+        this.recordsSkipped++;
       }
 
       // Process chunk
       while (processedCount < chunkSize) {
-        // Check timeout
+        // Check timeout before processing each record
         if (this.isApproachingTimeout(context)) {
           break;
         }
 
-        // Get next record
-        let record: ImportRecord;
-        if (currentIndex < this.records.length) {
-          record = this.records[currentIndex];
-        } else {
-          const { value, done } = await this.recordsIterator.next();
-          if (done) {
-            // No more records
-            break;
-          }
-          record = value;
-          this.records.push(record);
+        // Get next record from iterator
+        const { value: record, done } = await this.recordsIterator.next();
+        if (done) {
+          // No more records
+          break;
         }
 
         // Process the record
@@ -207,8 +241,8 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         processedCount++;
         currentIndex++;
 
-        // Save checkpoint periodically
-        if (processedCount % config.checkpointFrequency === 0) {
+        // Save checkpoint more frequently (every 5 records instead of 10)
+        if (processedCount % 5 === 0) {
           if (onCheckpoint) {
             const recordHash = this.generateRecordHash(record);
             await onCheckpoint(currentIndex - 1, recordHash);
@@ -216,19 +250,24 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         }
 
         // Send heartbeat
-        if (onHeartbeat && processedCount % 10 === 0) {
+        if (onHeartbeat && processedCount % 5 === 0) {
           await onHeartbeat();
         }
       }
 
-      // Check if there are more records
-      const { done } = await this.recordsIterator.next();
-      const hasMore = !done;
-
-      // If we peeked ahead, we need to store that record
-      if (!done) {
-        // We consumed one record to check, need to handle this
-        // For simplicity, we mark as having more
+      // Check if there are more records (peek ahead)
+      let hasMore = false;
+      try {
+        const { done } = await Promise.race([
+          this.recordsIterator.next(),
+          new Promise<{ done: boolean }>((_, reject) =>
+            setTimeout(() => reject(new Error("Peek timeout")), 1000)
+          ),
+        ]);
+        hasMore = !done;
+      } catch {
+        // If peek times out or fails, assume there might be more
+        hasMore = processedCount === chunkSize;
       }
 
       // Final checkpoint
@@ -445,8 +484,8 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
   async cleanup(_job: BatchJob): Promise<void> {
     this.adapter = null;
     this.dataSource = null;
-    this.records = [];
     this.recordsIterator = null;
+    this.recordsSkipped = 0;
   }
 
   async preview(

@@ -1,5 +1,5 @@
 /**
- * Admin API para ejecutar sincronización de una fuente de datos
+ * Admin API para ejecutar sincronizaciรณn de una fuente de datos
  * Solo accesible para usuarios con rol ADMIN
  *
  * Uses the new BatchJob system for external sync
@@ -29,7 +29,7 @@ interface RouteParams {
 
 /**
  * POST /api/admin/data-sources/[id]/sync
- * Ejecuta la sincronización de una fuente de datos
+ * Ejecuta la sincronizaciรณn de una fuente de datos
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const user = await requireAdmin(request);
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
 
-    // Verificar que la fuente existe y está activa
+    // Verificar que la fuente existe y estรก activa
     const dataSource = await prisma.externalDataSource.findUnique({
       where: { id },
     });
@@ -51,12 +51,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     if (!dataSource.is_active) {
-      return NextResponse.json({ error: "La fuente de datos no está activa" }, { status: 400 });
+      return NextResponse.json({ error: "La fuente de datos no estรก activa" }, { status: 400 });
     }
 
     // Check if we should continue an existing job
     const continueJobId = body.continueJobId as string | undefined;
-    const batchSize = body.batchSize ? parseInt(body.batchSize) : 100;
+    const batchSize = body.batchSize ? parseInt(body.batchSize) : 30; // Reduced from 100 to 30 to avoid timeouts
 
     // If continuing a job, use the continue flow
     if (continueJobId) {
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         },
         message: progress.hasMore
           ? `Procesando: ${progress.processedRecords}/${progress.totalRecords} registros (${progress.percentage}%)`
-          : `Sincronización completada: ${progress.successfulRecords} exitosos`,
+          : `Sincronizaciรณn completada: ${progress.successfulRecords} exitosos`,
       });
     }
 
@@ -155,9 +155,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       chunkSize: batchSize,
       maxRetries: 3,
       retryDelayMs: 1000,
-      timeoutMs: 90000,
-      checkpointFrequency: 10,
-      heartbeatIntervalMs: 30000,
+      timeoutMs: 85000, // 85 seconds to leave margin for Vercel's 100s limit
+      checkpointFrequency: 5, // Save checkpoint every 5 records
+      heartbeatIntervalMs: 15000, // More frequent heartbeats
       skipOnError: true,
       dryRun: body.dryRun === true,
       validateOnly: false,
@@ -166,20 +166,83 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     };
 
     const createUseCase = new CreateBatchJobUseCase(orchestrator);
-    const result = await createUseCase.execute({
-      type: JobType.AED_EXTERNAL_SYNC,
-      name: `Sync: ${dataSource.name}`,
-      description: `Sincronización automática desde ${dataSource.type}`,
-      config,
-      createdBy: user.userId,
-      startImmediately: true,
-      metadata: {
-        dataSourceName: dataSource.name,
-        dataSourceType: dataSource.type,
-        regionCode: dataSource.region_code,
-      },
-      tags: ["sync", dataSource.region_code, dataSource.type.toLowerCase()],
-    });
+
+    // Wrap execution with timeout handling
+    const executionTimeout = 85000; // 85 seconds
+    let result: Awaited<ReturnType<typeof createUseCase.execute>>;
+
+    try {
+      const executionPromise = createUseCase.execute({
+        type: JobType.AED_EXTERNAL_SYNC,
+        name: `Sync: ${dataSource.name}`,
+        description: `Sincronización automática desde ${dataSource.type}`,
+        config,
+        createdBy: user.userId,
+        startImmediately: true,
+        metadata: {
+          dataSourceName: dataSource.name,
+          dataSourceType: dataSource.type,
+          regionCode: dataSource.region_code,
+        },
+        tags: ["sync", dataSource.region_code, dataSource.type.toLowerCase()],
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("EXECUTION_TIMEOUT")), executionTimeout)
+      );
+
+      result = (await Promise.race([executionPromise, timeoutPromise])) as Awaited<
+        ReturnType<typeof createUseCase.execute>
+      >;
+    } catch (timeoutError) {
+      // If timeout occurs, try to find and mark the job as interrupted
+      console.error("Sync execution timeout:", timeoutError);
+
+      // Try to find any recently created job for this data source
+      const recentJobs = await repository.findActiveJobs({
+        types: [JobType.AED_EXTERNAL_SYNC],
+      });
+
+      const recentJob = recentJobs.find((j) => {
+        const jobConfig = j.config as ExternalSyncConfig;
+        return jobConfig.dataSourceId === id;
+      });
+
+      if (recentJob) {
+        // Return the job info so client can continue it
+        return NextResponse.json({
+          success: true,
+          data: {
+            jobId: recentJob.id,
+            dataSourceId: id,
+            interrupted: true,
+            stats: {
+              total: recentJob.progress.totalRecords,
+              processed: recentJob.progress.processedRecords,
+              created: recentJob.progress.successfulRecords,
+              skipped: recentJob.progress.skippedRecords,
+              failed: recentJob.progress.failedRecords,
+            },
+            progress: {
+              total: recentJob.progress.totalRecords,
+              processed: recentJob.progress.processedRecords,
+              percentage: recentJob.progress.percentage,
+              hasMore: true,
+              status: recentJob.status,
+            },
+          },
+          message: `Sincronización en progreso: ${recentJob.progress.processedRecords}/${recentJob.progress.totalRecords}. Continúa automáticamente.`,
+        });
+      }
+
+      return NextResponse.json(
+        {
+          error: "La sincronización está tomando más tiempo del esperado",
+          details: "El proceso continúa en segundo plano. Recarga la página para ver el progreso.",
+        },
+        { status: 202 } // Accepted
+      );
+    }
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
@@ -215,6 +278,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error("Error during sync:", error);
+
+    // Check if it's a timeout error
+    if (error instanceof Error && error.message.includes("timeout")) {
+      return NextResponse.json(
+        {
+          error: "Timeout durante la sincronización",
+          details:
+            "El proceso puede continuar en segundo plano. Recarga la página para ver el estado.",
+        },
+        { status: 504 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: "Error durante la sincronización",
@@ -227,7 +303,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 /**
  * GET /api/admin/data-sources/[id]/sync
- * Obtiene el estado de la última sincronización
+ * Obtiene el estado de la รบltima sincronizaciรณn
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const user = await requireAdmin(request);
@@ -294,7 +370,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   } catch (error) {
     console.error("Error fetching sync status:", error);
     return NextResponse.json(
-      { error: "Error al obtener el estado de sincronización" },
+      { error: "Error al obtener el estado de sincronizaciรณn" },
       { status: 500 }
     );
   }
