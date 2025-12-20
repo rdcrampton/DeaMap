@@ -153,12 +153,43 @@ async function databaseExists(adminClient, dbName) {
 }
 
 /**
- * Creates a new database
+ * Creates a new database and grants permissions to the app user
  */
-async function createDatabase(adminClient, dbName) {
-  // Database names with special chars need quoting
-  const safeName = dbName.replace(/"/g, '""');
-  await adminClient.query(`CREATE DATABASE "${safeName}"`);
+async function createDatabase(adminUrl, dbName) {
+  // First, create the database
+  const adminClient = new Client({ connectionString: adminUrl });
+  await adminClient.connect();
+
+  try {
+    const safeName = dbName.replace(/"/g, '""');
+    await adminClient.query(`CREATE DATABASE "${safeName}"`);
+  } finally {
+    await adminClient.end();
+  }
+
+  // Now connect to the new database and grant permissions
+  const appUser = CONFIG.credentials?.user;
+  if (appUser) {
+    // Parse admin URL and replace database name
+    const parsedAdminUrl = new URL(adminUrl);
+    parsedAdminUrl.pathname = `/${dbName}`;
+
+    const newDbClient = new Client({ connectionString: parsedAdminUrl.toString() });
+    await newDbClient.connect();
+
+    try {
+      const safeUser = appUser.replace(/"/g, '""');
+      // Grant all privileges on the new database
+      await newDbClient.query(`GRANT ALL PRIVILEGES ON DATABASE "${dbName.replace(/"/g, '""')}" TO "${safeUser}"`);
+      // Grant usage and create on public schema
+      await newDbClient.query(`GRANT ALL ON SCHEMA public TO "${safeUser}"`);
+      // Make app user owner of public schema so it can create tables
+      await newDbClient.query(`ALTER SCHEMA public OWNER TO "${safeUser}"`);
+      console.log(`   ✅ Permissions granted to user: ${appUser}`);
+    } finally {
+      await newDbClient.end();
+    }
+  }
 }
 
 /**
@@ -232,7 +263,7 @@ async function createBranchDatabaseIfNeeded() {
 
     // Create new database
     console.log(`   📦 Creating new database...`);
-    await createDatabase(adminClient, dbName);
+    await createDatabase(process.env.POSTGRES_ADMIN_URL, dbName);
     console.log(`   ✅ Database created: ${dbName}`);
 
     return {
