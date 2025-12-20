@@ -247,36 +247,28 @@ export default function DataSourceDetailPage() {
     }
   };
 
-  const recoverJobs = async () => {
+  const continueCurrentJob = async () => {
+    if (!currentJob) return;
+
     try {
       setRecovering(true);
 
-      const response = await fetch(`/api/admin/jobs/recover`, {
+      const response = await fetch(`/api/batch/${currentJob.id}/continue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          maxJobsToRecover: 10,
-          dryRun: false,
-        }),
       });
 
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || "Error al recuperar jobs");
+        throw new Error(data.error || "Error al continuar job");
       }
 
-      // Refresh job status
+      // Refresh job status immediately
       await fetchCurrentJob();
       await fetchDataSource();
-
-      if (data.data.recoveredJobs.length > 0) {
-        alert(`✅ ${data.data.recoveredJobs.length} job(s) recuperado(s) exitosamente`);
-      } else {
-        alert("ℹ️ No se encontraron jobs atascados para recuperar");
-      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al recuperar jobs");
+      setError(err instanceof Error ? err.message : "Error al continuar job");
     } finally {
       setRecovering(false);
     }
@@ -301,6 +293,7 @@ export default function DataSourceDetailPage() {
 
       setSyncResult(data.data);
       await fetchDataSource(); // Refrescar datos
+      await fetchCurrentJob(); // Actualizar estado del job automáticamente
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al sincronizar");
     } finally {
@@ -1058,49 +1051,57 @@ export default function DataSourceDetailPage() {
                     )}
                   </button>
                 )}
-                <button
-                  onClick={recoverJobs}
-                  disabled={recovering}
-                  className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-orange-300 rounded-md shadow-sm text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  {recovering ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
+                {["WAITING", "PAUSED", "INTERRUPTED"].includes(currentJob.status) && (
+                  <button
+                    onClick={continueCurrentJob}
+                    disabled={recovering}
+                    className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {recovering ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Continuando...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="h-4 w-4 mr-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
                           stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Recuperando...
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="h-4 w-4 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                        />
-                      </svg>
-                      Recuperar Automáticamente
-                    </>
-                  )}
-                </button>
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        Continuar Sincronización
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Job Details */}
