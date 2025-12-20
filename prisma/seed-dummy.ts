@@ -275,7 +275,7 @@ async function createTestUsers() {
     update: {},
     create: {
       email: "admin@deamap.es",
-      password_hash: "$2a$10$N9qo8uLOickgx2ZMRZoMye/tPEv6tMUjQvY3v.8K.rDv6Vx7wq7Dm", // bcrypt hash for "123456"
+      password_hash: "$2a$12$4K2OfmPm3siMhBLTfKrQved1KQ2kVutUh4dFwQuU1NXyWHP1eb/2C", // bcrypt hash for "123456"
       name: "Admin DEA Map",
       role: "ADMIN",
       is_active: true,

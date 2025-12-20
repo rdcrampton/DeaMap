@@ -6,7 +6,7 @@ echo "  - Type checking..."
 # npx lint-staged
 
 echo "  - Linting..."
-npm run lint || exit 1
+npm run lint:fix || exit 1
 
 echo "  - Building..."
 npm run build || exit 1
