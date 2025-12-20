@@ -22,6 +22,8 @@
  */
 
 const { execSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 
 // Import branch database utilities
 const {
@@ -30,6 +32,9 @@ const {
   getCurrentBranch,
   isFeatureEnabled,
 } = require("./branch-database");
+
+// Marker file to indicate branch DB was successfully created
+const BRANCH_DB_MARKER = path.join(__dirname, "..", ".branch-db-created");
 
 // Check if we're running in Vercel
 const isVercel = process.env.VERCEL === "1";
@@ -75,6 +80,10 @@ async function main() {
         // Update DATABASE_URL for Prisma
         process.env.DATABASE_URL = result.databaseUrl;
         console.log(`   ✅ Using database: ${result.databaseName}`);
+
+        // Write marker file so runtime knows to use branch DB
+        fs.writeFileSync(BRANCH_DB_MARKER, result.databaseName);
+        console.log(`   ✅ Branch DB marker created`);
       }
 
       isNewDatabase = result.isNewDatabase;
@@ -85,6 +94,10 @@ async function main() {
     } catch (error) {
       console.error("   ❌ Branch database setup failed:", error.message);
       console.log("   ⚠️  Falling back to DATABASE_URL");
+      // Remove marker file if it exists (ensure runtime uses default DB)
+      if (fs.existsSync(BRANCH_DB_MARKER)) {
+        fs.unlinkSync(BRANCH_DB_MARKER);
+      }
       // Continue with default DATABASE_URL
     }
   }
