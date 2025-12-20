@@ -1,8 +1,10 @@
-# Plan: Base de Datos por Rama con Datos Dummy
+# Base de Datos por Rama con Datos Dummy
+
+> **Estado: IMPLEMENTADO** ✅
 
 ## Resumen
 
-Modificar `scripts/migrate.js` para que cada rama de desarrollo tenga su propia base de datos con datos dummy realistas, creándola solo en el primer deploy de cada rama.
+El script `scripts/migrate.js` ahora soporta la creación automática de bases de datos separadas para cada rama de desarrollo, con 500 DEAs dummy realistas. Solo se crea la BD en el primer deploy de cada rama.
 
 ## Variables de Entorno Nuevas
 
@@ -319,6 +321,45 @@ npm install @faker-js/faker pg --save-dev
 - `@faker-js/faker`: Generación de datos falsos realistas (nombres, emails, teléfonos)
 - `pg`: Cliente PostgreSQL nativo para operaciones de admin (CREATE DATABASE)
 
-## Siguiente Paso
+## Archivos Implementados
 
-¿Apruebas este plan? Si es así, procedo a implementarlo.
+| Archivo | Descripción |
+|---------|-------------|
+| `scripts/branch-database.js` | Módulo de gestión de BD por rama |
+| `prisma/seed-dummy.ts` | Seeder con 500 DEAs realistas |
+| `prisma/data/madrid-districts.json` | Datos de los 21 distritos de Madrid |
+| `scripts/migrate.js` | Modificado para integrar la creación de BD |
+| `package.json` | Nuevos scripts: `db:seed:dummy`, `db:branch:check`, `db:branch:list` |
+
+## Uso
+
+### Configurar Variables de Entorno en Vercel
+
+```env
+POSTGRES_ADMIN_URL=postgresql://postgres:password@host:5432/postgres
+POSTGRES_HOST=your-host.com
+POSTGRES_PORT=5432
+POSTGRES_DB_USER=app_user
+POSTGRES_DB_PASSWORD=app_password
+```
+
+### Scripts Disponibles
+
+```bash
+# Ejecutar seed dummy localmente
+npm run db:seed:dummy
+
+# Verificar configuración de branch databases
+npm run db:branch:check
+
+# Listar todas las bases de datos de rama
+npm run db:branch:list
+```
+
+### Flujo Automático
+
+1. Push a rama `claude/*` o `feature/*`
+2. Vercel detecta el build
+3. `migrate.js` verifica si la BD de la rama existe
+4. Si no existe → la crea y ejecuta el seed con 500 DEAs
+5. Si existe → la reutiliza sin recrear datos

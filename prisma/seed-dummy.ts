@@ -1,0 +1,515 @@
+/**
+ * Dummy Data Seeder for Branch Databases
+ *
+ * Generates 500 realistic DEAs with varied statuses, locations,
+ * schedules, and responsible parties across all Madrid districts.
+ *
+ * Usage: npx tsx prisma/seed-dummy.ts
+ */
+
+import { PrismaClient, AedStatus, SourceOrigin, PublicationMode } from "@/generated/client/client";
+import { faker } from "@faker-js/faker/locale/es";
+import madridData from "./data/madrid-districts.json";
+
+const prisma = new PrismaClient();
+
+// Configuration
+const CONFIG = {
+  totalAeds: 500,
+  batchSize: 50, // Insert in batches for performance
+  statusDistribution: {
+    PUBLISHED: 0.60,
+    DRAFT: 0.15,
+    PENDING_REVIEW: 0.10,
+    INACTIVE: 0.10,
+    REJECTED: 0.05,
+  },
+  sourceOriginDistribution: {
+    WEB_FORM: 0.30,
+    ADMIN_FORM: 0.20,
+    EXCEL_IMPORT: 0.15,
+    LEGACY_MIGRATION: 0.15,
+    EXTERNAL_API: 0.10,
+    CITIZEN_REPORT: 0.10,
+  },
+  publicationModeDistribution: {
+    LOCATION_ONLY: 0.40,
+    BASIC_INFO: 0.35,
+    FULL: 0.20,
+    NONE: 0.05,
+  },
+};
+
+// Helper to pick based on weighted distribution
+function pickWeighted<T extends string>(distribution: Record<T, number>): T {
+  const rand = Math.random();
+  let cumulative = 0;
+  for (const [key, weight] of Object.entries(distribution)) {
+    cumulative += weight as number;
+    if (rand <= cumulative) {
+      return key as T;
+    }
+  }
+  return Object.keys(distribution)[0] as T;
+}
+
+// Helper to pick random item from array
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Helper to pick establishment type based on weight
+function pickEstablishmentType(): { type: string; subtype: string } {
+  const totalWeight = madridData.establishmentTypes.reduce((sum, e) => sum + e.weight, 0);
+  let rand = Math.random() * totalWeight;
+
+  for (const est of madridData.establishmentTypes) {
+    rand -= est.weight;
+    if (rand <= 0) {
+      return {
+        type: est.type,
+        subtype: pickRandom(est.subtypes),
+      };
+    }
+  }
+
+  const fallback = madridData.establishmentTypes[0];
+  return { type: fallback.type, subtype: fallback.subtypes[0] };
+}
+
+// Helper to pick schedule template based on weight
+function pickScheduleTemplate() {
+  const totalWeight = madridData.scheduleTemplates.reduce((sum, s) => sum + s.weight, 0);
+  let rand = Math.random() * totalWeight;
+
+  for (const sched of madridData.scheduleTemplates) {
+    rand -= sched.weight;
+    if (rand <= 0) {
+      return sched;
+    }
+  }
+
+  return madridData.scheduleTemplates[0];
+}
+
+// Generate random coordinates within district bounds
+function generateCoordinates(district: typeof madridData.districts[0]) {
+  const lat = faker.number.float({
+    min: district.bounds.minLat,
+    max: district.bounds.maxLat,
+    fractionDigits: 6,
+  });
+  const lng = faker.number.float({
+    min: district.bounds.minLng,
+    max: district.bounds.maxLng,
+    fractionDigits: 6,
+  });
+  return { lat, lng };
+}
+
+// Generate realistic street name
+function generateStreetName(): string {
+  const streetNames = [
+    "Gran Vía", "Alcalá", "Serrano", "Velázquez", "Goya", "Princesa",
+    "Bravo Murillo", "López de Hoyos", "Arturo Soria", "Francisco Silvela",
+    "Doctor Esquerdo", "Conde de Casal", "Atocha", "Embajadores", "Toledo",
+    "Mayor", "Arenal", "Preciados", "Carmen", "Montera", "Fuencarral",
+    "Hortaleza", "San Bernardo", "Alberto Aguilera", "Cea Bermúdez",
+    "José Abascal", "María de Molina", "Príncipe de Vergara", "Castellana",
+    "Paseo del Prado", "Paseo de Recoletos", "Paseo de la Habana",
+    "General Perón", "Orense", "Raimundo Fernández Villaverde",
+    "Santa Engracia", "Ríos Rosas", "Alonso Cano", "Ponzano",
+    "García de Paredes", "Luchana", "Eloy Gonzalo", "Trafalgar",
+    "Sagasta", "Génova", "Almagro", "Zurbano", "Bárbara de Braganza",
+  ];
+  return faker.helpers.arrayElement(streetNames);
+}
+
+// Generate responsible name based on establishment type
+function generateResponsibleName(establishmentType: string): string {
+  const prefixes: Record<string, string[]> = {
+    "Centro educativo": ["Director/a", "Coordinador/a de Seguridad", "Jefe/a de Estudios"],
+    "Centro deportivo": ["Director/a Deportivo", "Coordinador/a", "Gerente"],
+    "Centro comercial": ["Director/a de Seguridad", "Jefe/a de Mantenimiento", "Gerente"],
+    "Centro de salud": ["Director/a Médico", "Coordinador/a de Enfermería", "Responsable de Seguridad"],
+    "Empresa": ["Director/a de RRHH", "Responsable de Prevención", "Facility Manager"],
+    default: ["Responsable", "Coordinador/a", "Encargado/a"],
+  };
+
+  const prefix = pickRandom(prefixes[establishmentType] || prefixes.default);
+  return `${prefix} - ${faker.person.fullName()}`;
+}
+
+// Generate email based on establishment
+function generateEmail(establishmentName: string, domain?: string): string {
+  const sanitized = establishmentName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, ".")
+    .replace(/\.+/g, ".")
+    .substring(0, 20);
+
+  const domains = domain ? [domain] : [
+    "madrid.es",
+    "comunidad.madrid",
+    "gmail.com",
+    "hotmail.com",
+    "outlook.es",
+  ];
+
+  return `${sanitized}@${pickRandom(domains)}`;
+}
+
+// Create districts in the database
+async function createDistricts() {
+  console.log("📍 Creating districts...");
+
+  for (const district of madridData.districts) {
+    await prisma.district.upsert({
+      where: { district_code: district.code },
+      update: {},
+      create: {
+        district_code: district.code,
+        text_code: district.textCode,
+        name: district.name,
+        normalized_name: district.normalizedName,
+        shape_length: faker.number.float({ min: 10000, max: 50000 }),
+        shape_area: faker.number.float({ min: 1000000, max: 10000000 }),
+      },
+    });
+  }
+
+  console.log(`✅ Created ${madridData.districts.length} districts`);
+}
+
+// Create organizations
+async function createOrganizations() {
+  console.log("🏢 Creating organizations...");
+
+  const orgIds: string[] = [];
+
+  for (const org of madridData.organizations) {
+    const created = await prisma.organization.upsert({
+      where: { name: org.name },
+      update: {},
+      create: {
+        name: org.name,
+        description: `Organización ${org.type} - ${org.name}`,
+        type: org.type.toUpperCase() as "EMERGENCY" | "GOVERNMENT" | "COMMERCIAL" | "HEALTH" | "TRANSPORT" | "ENTERPRISE",
+        is_active: true,
+        contact_email: generateEmail(org.name),
+        contact_phone: faker.phone.number({ style: "national" }),
+      },
+    });
+    orgIds.push(created.id);
+  }
+
+  console.log(`✅ Created ${madridData.organizations.length} organizations`);
+  return orgIds;
+}
+
+// Create test users
+async function createTestUsers() {
+  console.log("👤 Creating test users...");
+
+  const roles = ["ADMIN", "VALIDATOR", "VIEWER", "EDITOR"];
+  const userCount = 20;
+
+  for (let i = 0; i < userCount; i++) {
+    const role = roles[i % roles.length];
+    const firstName = faker.person.firstName();
+    const lastName = faker.person.lastName();
+
+    await prisma.user.upsert({
+      where: { email: `test.user${i + 1}@deamap.test` },
+      update: {},
+      create: {
+        email: `test.user${i + 1}@deamap.test`,
+        name: `${firstName} ${lastName}`,
+        role: role as "ADMIN" | "VALIDATOR" | "VIEWER" | "EDITOR",
+        is_active: true,
+      },
+    });
+  }
+
+  console.log(`✅ Created ${userCount} test users`);
+}
+
+// Generate a single AED with all related data
+async function createAed(index: number, districtSequences: Map<number, number>) {
+  const district = pickRandom(madridData.districts);
+  const establishment = pickEstablishmentType();
+  const scheduleTemplate = pickScheduleTemplate();
+  const coords = generateCoordinates(district);
+  const status = pickWeighted(CONFIG.statusDistribution) as AedStatus;
+  const sourceOrigin = pickWeighted(CONFIG.sourceOriginDistribution) as SourceOrigin;
+  const publicationMode = pickWeighted(CONFIG.publicationModeDistribution) as PublicationMode;
+
+  // Get next sequence for this district
+  const currentSeq = districtSequences.get(district.code) || 0;
+  const newSeq = currentSeq + 1;
+  districtSequences.set(district.code, newSeq);
+
+  const code = `${district.textCode}-${String(newSeq).padStart(3, "0")}`;
+  const establishmentName = `${establishment.subtype} ${faker.company.name().split(" ")[0]}`;
+
+  // Create location
+  const location = await prisma.aedLocation.create({
+    data: {
+      street_type: pickRandom(madridData.streetTypes),
+      street_name: generateStreetName(),
+      street_number: String(faker.number.int({ min: 1, max: 200 })),
+      additional_info: faker.helpers.maybe(() => `Planta ${faker.number.int({ min: 0, max: 5 })}`, { probability: 0.3 }),
+      postal_code: pickRandom(district.postalCodes),
+      latitude: coords.lat,
+      longitude: coords.lng,
+      coordinates_precision: pickRandom(["high", "medium", "low"]),
+      city_name: "Madrid",
+      city_code: "079",
+      district_code: district.textCode,
+      district_name: district.name,
+      access_instructions: faker.helpers.maybe(
+        () => faker.helpers.arrayElement([
+          "Entrada principal, junto a recepción",
+          "En el vestíbulo, al lado del ascensor",
+          "Planta baja, zona de seguridad",
+          "Acceso por puerta lateral",
+          "Junto al punto de información",
+          "En la zona de emergencias",
+          "Visible desde la entrada principal",
+        ]),
+        { probability: 0.7 }
+      ),
+    },
+  });
+
+  // Create responsible
+  const responsible = await prisma.aedResponsible.create({
+    data: {
+      name: generateResponsibleName(establishment.type),
+      email: generateEmail(establishmentName),
+      phone: faker.phone.number({ style: "national" }),
+      ownership: pickRandom(["Público", "Privado"]),
+      local_ownership: pickRandom(["Pública", "Privada"]),
+      local_use: pickRandom(["Público", "Privado", "Mixto"]),
+      organization: establishmentName,
+      position: faker.person.jobTitle(),
+    },
+  });
+
+  // Create schedule
+  const schedule = await prisma.aedSchedule.create({
+    data: {
+      description: scheduleTemplate.name,
+      has_24h_surveillance: scheduleTemplate.has24h || false,
+      has_restricted_access: faker.datatype.boolean({ probability: 0.3 }),
+      weekday_opening: scheduleTemplate.weekdayOpen || null,
+      weekday_closing: scheduleTemplate.weekdayClose || null,
+      saturday_opening: scheduleTemplate.saturdayOpen || null,
+      saturday_closing: scheduleTemplate.saturdayClose || null,
+      sunday_opening: scheduleTemplate.sundayOpen || null,
+      sunday_closing: scheduleTemplate.sundayClose || null,
+      closed_on_holidays: scheduleTemplate.closedHolidays || false,
+      closed_in_august: scheduleTemplate.closedAugust || false,
+      observations: faker.helpers.maybe(
+        () => faker.helpers.arrayElement([
+          "Acceso restringido fuera de horario",
+          "Solicitar acceso en recepción",
+          "Vigilancia las 24 horas",
+          "Personal de seguridad presente",
+        ]),
+        { probability: 0.4 }
+      ),
+    },
+  });
+
+  // Create AED
+  const publishedAt = status === "PUBLISHED" ? faker.date.past({ years: 2 }) : null;
+  const lastVerifiedAt = status === "PUBLISHED"
+    ? faker.helpers.maybe(() => faker.date.recent({ days: 180 }), { probability: 0.6 })
+    : null;
+
+  const aed = await prisma.aed.create({
+    data: {
+      code,
+      provisional_number: faker.number.int({ min: 1000, max: 9999 }),
+      name: establishmentName,
+      establishment_type: establishment.type,
+      latitude: coords.lat,
+      longitude: coords.lng,
+      coordinates_precision: pickRandom(["high", "medium", "low"]),
+      source_origin: sourceOrigin,
+      status,
+      publication_mode: publicationMode,
+      published_at: publishedAt,
+      last_verified_at: lastVerifiedAt,
+      verification_method: lastVerifiedAt
+        ? pickRandom(["field_visit", "phone_call", "email", "photo_verification"])
+        : null,
+      is_publicly_accessible: faker.datatype.boolean({ probability: 0.85 }),
+      installation_date: faker.helpers.maybe(
+        () => faker.date.past({ years: 5 }),
+        { probability: 0.5 }
+      ),
+      requires_attention: status === "PENDING_REVIEW" || faker.datatype.boolean({ probability: 0.1 }),
+      attention_reason: status === "PENDING_REVIEW"
+        ? pickRandom(["Verificación pendiente", "Datos incompletos", "Requiere visita"])
+        : null,
+      rejection_reason: status === "REJECTED"
+        ? pickRandom(["Ubicación incorrecta", "DEA no encontrado", "Duplicado", "Datos falsos"])
+        : null,
+      location_id: location.id,
+      responsible_id: responsible.id,
+      schedule_id: schedule.id,
+      internal_notes: faker.helpers.maybe(
+        () => faker.lorem.sentence(),
+        { probability: 0.2 }
+      ),
+      public_notes: faker.helpers.maybe(
+        () => faker.helpers.arrayElement([
+          "DEA de acceso público durante horario de apertura",
+          "Solicitar acceso al personal de seguridad",
+          "Disponible las 24 horas",
+        ]),
+        { probability: 0.3 }
+      ),
+    },
+  });
+
+  // Create code history
+  await prisma.aedCodeHistory.create({
+    data: {
+      aed_id: aed.id,
+      code,
+      district: district.code,
+      sequential: newSeq,
+      is_active: true,
+      change_reason: "Código inicial asignado",
+    },
+  });
+
+  // Create status changes (realistic history)
+  const statusHistory: { status: AedStatus; date: Date }[] = [];
+  const createdDate = faker.date.past({ years: 2 });
+
+  statusHistory.push({ status: "DRAFT", date: createdDate });
+
+  if (status !== "DRAFT") {
+    const reviewDate = faker.date.between({ from: createdDate, to: new Date() });
+
+    if (status === "REJECTED") {
+      statusHistory.push({ status: "PENDING_REVIEW", date: reviewDate });
+      statusHistory.push({ status: "REJECTED", date: faker.date.between({ from: reviewDate, to: new Date() }) });
+    } else if (status === "PENDING_REVIEW") {
+      statusHistory.push({ status: "PENDING_REVIEW", date: reviewDate });
+    } else if (status === "PUBLISHED" || status === "INACTIVE") {
+      statusHistory.push({ status: "PENDING_REVIEW", date: reviewDate });
+      const publishDate = faker.date.between({ from: reviewDate, to: new Date() });
+      statusHistory.push({ status: "PUBLISHED", date: publishDate });
+
+      if (status === "INACTIVE") {
+        statusHistory.push({
+          status: "INACTIVE",
+          date: faker.date.between({ from: publishDate, to: new Date() }),
+        });
+      }
+    }
+  }
+
+  for (let i = 0; i < statusHistory.length; i++) {
+    const change = statusHistory[i];
+    const prevStatus = i > 0 ? statusHistory[i - 1].status : null;
+
+    await prisma.aedStatusChange.create({
+      data: {
+        aed_id: aed.id,
+        previous_status: prevStatus,
+        new_status: change.status,
+        reason: i === 0 ? "Creación inicial" : getStatusChangeReason(prevStatus, change.status),
+        notes: faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.3 }),
+        created_at: change.date,
+      },
+    });
+  }
+
+  return aed;
+}
+
+function getStatusChangeReason(from: AedStatus | null, to: AedStatus): string {
+  const reasons: Record<string, string[]> = {
+    "DRAFT_PENDING_REVIEW": ["Enviado para revisión", "Datos completados", "Solicitud de publicación"],
+    "PENDING_REVIEW_PUBLISHED": ["Verificación completada", "Datos validados", "Aprobado por administrador"],
+    "PENDING_REVIEW_REJECTED": ["Datos incorrectos", "No se pudo verificar", "Ubicación no válida"],
+    "PUBLISHED_INACTIVE": ["DEA retirado", "Mantenimiento", "Cierre temporal", "Cambio de ubicación"],
+    default: ["Actualización de estado"],
+  };
+
+  const key = `${from}_${to}`;
+  return pickRandom(reasons[key] || reasons.default);
+}
+
+async function main() {
+  console.log("🌱 Starting dummy data seed...\n");
+  console.log(`📊 Configuration:`);
+  console.log(`   - Total DEAs: ${CONFIG.totalAeds}`);
+  console.log(`   - Districts: ${madridData.districts.length}`);
+  console.log(`   - Batch size: ${CONFIG.batchSize}\n`);
+
+  // Create base data
+  await createDistricts();
+  await createOrganizations();
+  await createTestUsers();
+
+  // Track sequences per district for code generation
+  const districtSequences = new Map<number, number>();
+
+  // Create DEAs
+  console.log(`\n🏥 Creating ${CONFIG.totalAeds} DEAs...`);
+
+  let created = 0;
+  const startTime = Date.now();
+
+  for (let i = 0; i < CONFIG.totalAeds; i++) {
+    await createAed(i, districtSequences);
+    created++;
+
+    if (created % CONFIG.batchSize === 0) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const rate = (created / parseFloat(elapsed)).toFixed(1);
+      console.log(`   ✓ ${created}/${CONFIG.totalAeds} DEAs created (${rate}/s)`);
+    }
+  }
+
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  console.log(`\n✅ Dummy data seed completed!`);
+  console.log(`\n📊 Summary:`);
+  console.log(`   - Districts: ${madridData.districts.length}`);
+  console.log(`   - Organizations: ${madridData.organizations.length}`);
+  console.log(`   - Test users: 20`);
+  console.log(`   - DEAs: ${CONFIG.totalAeds}`);
+  console.log(`   - Time: ${totalTime}s`);
+
+  // Show status distribution
+  const statusCounts = await prisma.aed.groupBy({
+    by: ["status"],
+    _count: true,
+  });
+
+  console.log(`\n📈 Status distribution:`);
+  for (const { status, _count } of statusCounts) {
+    const pct = ((_count / CONFIG.totalAeds) * 100).toFixed(1);
+    console.log(`   - ${status}: ${_count} (${pct}%)`);
+  }
+}
+
+main()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error("❌ Error during seeding:", e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
