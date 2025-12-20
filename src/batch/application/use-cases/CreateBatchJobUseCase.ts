@@ -41,6 +41,7 @@ export class CreateBatchJobUseCase {
         config: input.config,
         createdBy: input.createdBy,
         organizationId: input.organizationId,
+        dataSourceId: input.dataSourceId,
         metadata: input.metadata,
         tags: input.tags,
       });

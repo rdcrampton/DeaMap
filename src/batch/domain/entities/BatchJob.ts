@@ -34,6 +34,7 @@ export interface BatchJobData {
   createdBy: string;
   organizationId?: string;
   parentJobId?: string; // For sub-jobs
+  dataSourceId?: string; // For external sync jobs
 
   // Timestamps
   createdAt: Date;
@@ -59,6 +60,7 @@ export interface CreateBatchJobParams {
   createdBy: string;
   organizationId?: string;
   parentJobId?: string;
+  dataSourceId?: string;
   metadata?: Record<string, unknown>;
   tags?: string[];
 }
@@ -87,6 +89,7 @@ export class BatchJob {
       createdBy: params.createdBy,
       organizationId: params.organizationId,
       parentJobId: params.parentJobId,
+      dataSourceId: params.dataSourceId,
       createdAt: now,
       updatedAt: now,
       startedAt: null,

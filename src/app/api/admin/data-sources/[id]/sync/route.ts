@@ -178,6 +178,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         description: `Sincronización automática desde ${dataSource.type}`,
         config,
         createdBy: user.userId,
+        dataSourceId: id,
         startImmediately: true,
         metadata: {
           dataSourceName: dataSource.name,

@@ -31,6 +31,7 @@ export interface CreateJobParams {
   config: JobConfig;
   createdBy: string;
   organizationId?: string;
+  dataSourceId?: string;
   metadata?: Record<string, unknown>;
   tags?: string[];
 }
@@ -87,6 +88,7 @@ export class BatchJobOrchestrator {
       config: params.config,
       createdBy: params.createdBy,
       organizationId: params.organizationId,
+      dataSourceId: params.dataSourceId,
       metadata: params.metadata,
       tags: params.tags,
     });
