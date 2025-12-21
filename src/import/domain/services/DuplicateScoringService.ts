@@ -21,10 +21,9 @@ export interface ScoringWeights {
   postalCodeMatch: number; // +5 puntos (igual)
 
   // Pesos para campos que restan puntos (diferencias)
-  accessDescriptionDiff: number; // -15 puntos (diferente)
-  specificLocationDiff: number; // -20 puntos (diferente)
+  accessInstructionsDiff: number; // -15 puntos (diferente)
+  locationDetailsDiff: number; // -20 puntos (diferente)
   floorDiff: number; // -20 puntos (diferente) - AUMENTADO de -15 para edge cases
-  visibleReferencesDiff: number; // -10 puntos (diferente)
 }
 
 export interface AedComparisonData {
@@ -37,10 +36,9 @@ export interface AedComparisonData {
   establishmentType?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  accessDescription?: string | null;
-  specificLocation?: string | null;
+  accessInstructions?: string | null;
+  locationDetails?: string | null;
   floor?: string | null;
-  visibleReferences?: string | null;
 }
 
 export class DuplicateScoringService {
@@ -51,10 +49,9 @@ export class DuplicateScoringService {
     provisionalNumberMatch: 15,
     establishmentTypeMatch: 10,
     postalCodeMatch: 5,
-    accessDescriptionDiff: -15,
-    specificLocationDiff: -20,
+    accessInstructionsDiff: -15,
+    locationDetailsDiff: -20,
     floorDiff: -20,
-    visibleReferencesDiff: -10,
   };
 
   private static readonly COORDINATE_THRESHOLD_METERS = 5;
@@ -142,24 +139,19 @@ export class DuplicateScoringService {
     // ========== CAMPOS QUE RESTAN PUNTOS (-) ==========
     // Indican que son DEAs diferentes (ej: diferentes plantas, ubicaciones específicas)
 
-    // 6. Descripción de acceso diferente → -15 puntos
-    if (this.areDifferent(aed1.accessDescription, aed2.accessDescription)) {
-      score += weights.accessDescriptionDiff; // Nota: weight es negativo
+    // 6. Instrucciones de acceso diferentes → -15 puntos
+    if (this.areDifferent(aed1.accessInstructions, aed2.accessInstructions)) {
+      score += weights.accessInstructionsDiff; // Nota: weight es negativo
     }
 
-    // 7. Ubicación específica diferente → -20 puntos
-    if (this.areDifferent(aed1.specificLocation, aed2.specificLocation)) {
-      score += weights.specificLocationDiff; // Nota: weight es negativo
+    // 7. Detalles de ubicación diferentes → -20 puntos
+    if (this.areDifferent(aed1.locationDetails, aed2.locationDetails)) {
+      score += weights.locationDetailsDiff; // Nota: weight es negativo
     }
 
-    // 8. Piso/planta diferente → -15 puntos
+    // 8. Piso/planta diferente → -20 puntos
     if (this.areDifferent(aed1.floor, aed2.floor)) {
       score += weights.floorDiff; // Nota: weight es negativo
-    }
-
-    // 9. Referencias visibles diferentes → -10 puntos
-    if (this.areDifferent(aed1.visibleReferences, aed2.visibleReferences)) {
-      score += weights.visibleReferencesDiff; // Nota: weight es negativo
     }
 
     // Asegurar que el score esté entre 0 y 100
@@ -274,20 +266,16 @@ export class DuplicateScoringService {
       }
     }
 
-    if (this.areDifferent(aed1.accessDescription, aed2.accessDescription)) {
-      details.push(`❌ Descripción acceso diferente: -15`);
+    if (this.areDifferent(aed1.accessInstructions, aed2.accessInstructions)) {
+      details.push(`❌ Instrucciones acceso diferentes: -15`);
     }
 
-    if (this.areDifferent(aed1.specificLocation, aed2.specificLocation)) {
-      details.push(`❌ Ubicación específica diferente: -20`);
+    if (this.areDifferent(aed1.locationDetails, aed2.locationDetails)) {
+      details.push(`❌ Detalles ubicación diferentes: -20`);
     }
 
     if (this.areDifferent(aed1.floor, aed2.floor)) {
       details.push(`❌ Piso diferente: -20`);
-    }
-
-    if (this.areDifferent(aed1.visibleReferences, aed2.visibleReferences)) {
-      details.push(`❌ Referencias visibles diferentes: -10`);
     }
 
     return `Score: ${score}/100\n${details.join("\n")}`;

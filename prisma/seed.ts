@@ -103,7 +103,7 @@ async function main() {
       sunday_closing: null,
       closed_on_holidays: true,
       closed_in_august: true,
-      observations: "Disponible durante horario escolar",
+      notes: "Disponible durante horario escolar",
     },
   });
 
@@ -120,7 +120,7 @@ async function main() {
       sunday_closing: null,
       closed_on_holidays: true,
       closed_in_august: true,
-      observations: "Horario ampliado de lunes a viernes",
+      notes: "Horario ampliado de lunes a viernes",
     },
   });
 
@@ -133,16 +133,11 @@ async function main() {
       street_type: "Calle",
       street_name: "Manuel Muñoz",
       street_number: "30",
-      additional_info: "Acceso por C/Hijas de Jesús",
       postal_code: "28026",
-      latitude: 40.334922,
-      longitude: -3.701048,
-      coordinates_precision: "high",
       district_id: distrito12.id,
-      access_description:
-        "Entrando al patio por la calle Hijas de Jesús, a la izquierda en el departamento de Tecnología",
-      visible_references: "Edificio educativo con acceso desde patio principal",
-      location_observations: "Las coordenadas son del acceso por la calle Manuel Muñoz número 30",
+      location_details: "Acceso por C/Hijas de Jesús",
+      access_instructions:
+        "Entrando al patio por la calle Hijas de Jesús, a la izquierda en el departamento de Tecnología. Edificio educativo con acceso desde patio principal. Las coordenadas son del acceso por la calle Manuel Muñoz número 30",
     },
   });
 
@@ -151,15 +146,10 @@ async function main() {
       street_type: "Calle",
       street_name: "Madre Cándida María de Jesús",
       street_number: "4",
-      additional_info: null,
       postal_code: "28026",
-      latitude: 40.38463,
-      longitude: -3.701529,
-      coordinates_precision: "high",
       district_id: distrito12.id,
-      access_description:
-        "Pasando hall de entrada, a la derecha y luego a la izquierda, en una sala de profesores",
-      visible_references: "Colegio con entrada principal visible desde la calle",
+      access_instructions:
+        "Pasando hall de entrada, a la derecha y luego a la izquierda, en una sala de profesores. Colegio con entrada principal visible desde la calle",
     },
   });
 
@@ -173,8 +163,8 @@ async function main() {
       provisional_number: 4588,
       name: "Colegio Nuestra Señora de Fátima",
       establishment_type: "Centro educativo",
-      latitude: location1.latitude,
-      longitude: location1.longitude,
+      latitude: 40.334922,
+      longitude: -3.701048,
       coordinates_precision: "high",
       source_origin: "WEB_FORM",
       status: "PUBLISHED",
@@ -182,7 +172,13 @@ async function main() {
       location_id: location1.id,
       responsible_id: responsible1.id,
       schedule_id: schedule1.id,
-      origin_observations: "DEA instalado en centro educativo privado con uso público",
+      internal_notes: [
+        {
+          text: "DEA instalado en centro educativo privado con uso público",
+          type: "origin",
+          date: new Date().toISOString(),
+        },
+      ],
     },
   });
 
@@ -192,8 +188,8 @@ async function main() {
       provisional_number: 3291,
       name: "Colegio Mater Purissima",
       establishment_type: "Centro educativo",
-      latitude: location2.latitude,
-      longitude: location2.longitude,
+      latitude: 40.38463,
+      longitude: -3.701529,
       coordinates_precision: "high",
       source_origin: "WEB_FORM",
       status: "PUBLISHED",
@@ -201,7 +197,13 @@ async function main() {
       location_id: location2.id,
       responsible_id: responsible2.id,
       schedule_id: schedule2.id,
-      origin_observations: "DEA ubicado en sala de profesores",
+      internal_notes: [
+        {
+          text: "DEA ubicado en sala de profesores",
+          type: "origin",
+          date: new Date().toISOString(),
+        },
+      ],
     },
   });
 

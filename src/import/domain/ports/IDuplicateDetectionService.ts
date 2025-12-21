@@ -20,10 +20,9 @@ export interface DuplicateDetectionCriteria {
   longitude?: number | null;
 
   // Campos diferenciadores (ubicación específica dentro del mismo edificio/dirección)
-  accessDescription?: string | null;
-  specificLocation?: string | null;
+  accessInstructions?: string | null;
+  locationDetails?: string | null;
   floor?: string | null;
-  visibleReferences?: string | null;
 
   // Opciones de búsqueda
   exactMatch?: boolean; // true = coincidencia exacta, false = fuzzy matching

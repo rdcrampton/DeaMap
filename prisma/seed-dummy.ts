@@ -325,23 +325,20 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
   const code = `${district.textCode}-${String(newSeq).padStart(3, "0")}`;
   const establishmentName = `${establishment.subtype} ${faker.company.name().split(" ")[0]}`;
 
-  // Create location
+  // Create location (coordinates are now only in Aed table)
   const location = await prisma.aedLocation.create({
     data: {
       street_type: pickRandom(madridData.streetTypes),
       street_name: generateStreetName(),
       street_number: String(faker.number.int({ min: 1, max: 200 })),
-      additional_info: faker.helpers.maybe(() => `Planta ${faker.number.int({ min: 0, max: 5 })}`, {
-        probability: 0.3,
-      }),
       postal_code: pickRandom(district.postalCodes),
-      latitude: coords.lat,
-      longitude: coords.lng,
-      coordinates_precision: pickRandom(["high", "medium", "low"]),
       city_name: "Madrid",
       city_code: "079",
       district_code: district.textCode,
       district_name: district.name,
+      location_details: faker.helpers.maybe(() => `Planta ${faker.number.int({ min: 0, max: 5 })}`, {
+        probability: 0.3,
+      }),
       access_instructions: faker.helpers.maybe(
         () =>
           faker.helpers.arrayElement([
@@ -386,7 +383,7 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
       sunday_closing: scheduleTemplate.sundayClose || null,
       closed_on_holidays: scheduleTemplate.closedHolidays || false,
       closed_in_august: scheduleTemplate.closedAugust || false,
-      observations: faker.helpers.maybe(
+      notes: faker.helpers.maybe(
         () =>
           faker.helpers.arrayElement([
             "Acceso restringido fuera de horario",
@@ -405,6 +402,18 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
     status === "PUBLISHED"
       ? faker.helpers.maybe(() => faker.date.recent({ days: 180 }), { probability: 0.6 })
       : null;
+
+  // Generate internal notes as JSON array
+  const internalNotesArray = faker.helpers.maybe(
+    () => [
+      {
+        text: faker.lorem.sentence(),
+        type: "observation",
+        date: faker.date.recent({ days: 90 }).toISOString(),
+      },
+    ],
+    { probability: 0.2 }
+  );
 
   const aed = await prisma.aed.create({
     data: {
@@ -429,10 +438,6 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
       }),
       requires_attention:
         status === "PENDING_REVIEW" || faker.datatype.boolean({ probability: 0.1 }),
-      attention_reason:
-        status === "PENDING_REVIEW"
-          ? pickRandom(["Verificación pendiente", "Datos incompletos", "Requiere visita"])
-          : null,
       rejection_reason:
         status === "REJECTED"
           ? pickRandom(["Ubicación incorrecta", "DEA no encontrado", "Duplicado", "Datos falsos"])
@@ -440,16 +445,7 @@ async function createAed(index: number, districtSequences: Map<number, number>) 
       location_id: location.id,
       responsible_id: responsible.id,
       schedule_id: schedule.id,
-      internal_notes: faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.2 }),
-      public_notes: faker.helpers.maybe(
-        () =>
-          faker.helpers.arrayElement([
-            "DEA de acceso público durante horario de apertura",
-            "Solicitar acceso al personal de seguridad",
-            "Disponible las 24 horas",
-          ]),
-        { probability: 0.3 }
-      ),
+      internal_notes: internalNotesArray,
     },
   });
 
