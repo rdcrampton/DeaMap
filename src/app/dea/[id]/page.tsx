@@ -226,7 +226,7 @@ export default function DeaDetailPage() {
             <div className="flex-1">
               <p className="text-white font-medium">Acceso Público</p>
               <p className="text-gray-400 text-sm">
-                {aed.location.access_description || "No requiere solicitar al personal"}
+                {aed.location.access_instructions || "No requiere solicitar al personal"}
               </p>
             </div>
           </div>

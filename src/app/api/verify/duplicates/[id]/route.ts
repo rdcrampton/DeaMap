@@ -39,21 +39,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "DEA no encontrado" }, { status: 404 });
     }
 
-    if (!aed.requires_attention || !aed.attention_reason?.includes("duplicado")) {
+    // Check if marked as requires_attention (duplicate detection info is now in internal_notes)
+    if (!aed.requires_attention) {
       return NextResponse.json(
         { error: "Este DEA no está marcado como posible duplicado" },
         { status: 400 }
       );
     }
 
-    // Extraer información del candidato similar del attention_reason
-    const candidateNameMatch = aed.attention_reason.match(/Similar a "([^"]+)"/);
-    const candidateAddressMatch = aed.attention_reason.match(/en "([^"]+)"/);
-    const scoreMatch = aed.attention_reason.match(/score:\s*(\d+)/);
+    // Try to extract duplicate information from internal_notes (JSON array)
+    let candidateName: string | null = null;
+    let candidateAddress: string | null = null;
+    let similarityScore: number | null = null;
 
-    const candidateName = candidateNameMatch?.[1];
-    const candidateAddress = candidateAddressMatch?.[1];
-    const similarityScore = scoreMatch ? parseInt(scoreMatch[1]) : null;
+    if (aed.internal_notes && Array.isArray(aed.internal_notes)) {
+      // Look for a duplicate-type note
+      const duplicateNote = (aed.internal_notes as Array<{ text?: string; type?: string }>).find(
+        (note) => note.type === "duplicate" || note.text?.includes("duplicado")
+      );
+      if (duplicateNote?.text) {
+        const nameMatch = duplicateNote.text.match(/Similar a "([^"]+)"/);
+        const addressMatch = duplicateNote.text.match(/en "([^"]+)"/);
+        const scoreMatch = duplicateNote.text.match(/score:\s*(\d+)/);
+
+        candidateName = nameMatch?.[1] || null;
+        candidateAddress = addressMatch?.[1] || null;
+        similarityScore = scoreMatch ? parseInt(scoreMatch[1]) : null;
+      }
+    }
 
     // Buscar el candidato similar en la base de datos
     let candidateAed = null;
@@ -144,14 +157,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     if (action === "not_duplicate") {
       // Quitar la marca de posible duplicado
+      // Append a new note to internal_notes JSON array
+      const currentNotes = Array.isArray(aed.internal_notes) ? aed.internal_notes : [];
+      const newNote = {
+        text: `Revisión de duplicado por ${user.email}: No es duplicado. ${notes || ""}`.trim(),
+        date: new Date().toISOString(),
+        type: "duplicate_review",
+        author: user.email,
+      };
+
       const updatedAed = await prisma.aed.update({
         where: { id },
         data: {
           requires_attention: false,
-          attention_reason: null,
-          internal_notes: notes
-            ? `${aed.internal_notes || ""}\n\n[${new Date().toISOString()}] Revisión de duplicado por ${user.email}: No es duplicado. ${notes}`.trim()
-            : aed.internal_notes,
+          internal_notes: [...currentNotes, newNote],
           updated_by: user.userId,
         },
       });
@@ -165,16 +184,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       // Marcar como rechazado (duplicado confirmado)
       const rejectionReason = `Duplicado confirmado durante revisión manual. ${notes || ""}`.trim();
 
+      // Append a new note to internal_notes JSON array
+      const currentNotes = Array.isArray(aed.internal_notes) ? aed.internal_notes : [];
+      const newNote = {
+        text: `Revisión de duplicado por ${user.email}: Duplicado confirmado. ${notes || ""}`.trim(),
+        date: new Date().toISOString(),
+        type: "duplicate_review",
+        author: user.email,
+      };
+
       const updatedAed = await prisma.aed.update({
         where: { id },
         data: {
           status: "REJECTED",
           rejection_reason: rejectionReason,
           requires_attention: false,
-          attention_reason: null,
-          internal_notes: notes
-            ? `${aed.internal_notes || ""}\n\n[${new Date().toISOString()}] Revisión de duplicado por ${user.email}: Duplicado confirmado. ${notes}`.trim()
-            : aed.internal_notes,
+          internal_notes: [...currentNotes, newNote],
           updated_by: user.userId,
         },
       });

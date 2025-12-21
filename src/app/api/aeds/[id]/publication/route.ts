@@ -101,7 +101,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           publication_mode: body.publication_mode,
           publication_approved_at: new Date(),
           publication_approved_by: user.userId,
-          publication_notes: body.notes || null,
           updated_at: new Date(),
           updated_by: user.userId,
         },
@@ -180,7 +179,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         publication_mode: true,
         publication_approved_at: true,
         publication_approved_by: true,
-        publication_notes: true,
       },
     });
 

@@ -24,23 +24,19 @@ interface CreateAedRequest {
   // Optional AED data
   provisional_number?: number;
   source_details?: string;
-  origin_observations?: string;
+  internal_notes?: string;
 
   // Location data (optional)
   location?: {
     street_type?: string;
     street_name?: string;
     street_number?: string;
-    additional_info?: string;
     postal_code?: string;
     district_id?: number;
     neighborhood_id?: number;
-    access_description?: string;
-    visible_references?: string;
     floor?: string;
-    specific_location?: string;
-    location_observations?: string;
-    access_warnings?: string;
+    location_details?: string;
+    access_instructions?: string;
   };
 
   // Responsible data (optional)
@@ -55,7 +51,7 @@ interface CreateAedRequest {
     organization?: string;
     position?: string;
     department?: string;
-    observations?: string;
+    notes?: string;
   };
 
   // Schedule data (optional)
@@ -72,9 +68,7 @@ interface CreateAedRequest {
     holidays_as_weekday?: boolean;
     closed_on_holidays?: boolean;
     closed_in_august?: boolean;
-    observations?: string;
-    schedule_exceptions?: string;
-    access_instructions?: string;
+    notes?: string;
   };
 }
 
@@ -133,7 +127,7 @@ export async function GET(request: NextRequest) {
               street_name: true,
               street_number: true,
               postal_code: true,
-              access_description: true,
+              access_instructions: true,
               district_name: true,
               neighborhood_name: true,
               city_name: true,
@@ -260,7 +254,9 @@ export async function POST(request: NextRequest) {
           organization: body.responsible.organization,
           position: body.responsible.position,
           department: body.responsible.department,
-          observations: body.responsible.observations,
+          notes: body.responsible.notes
+            ? [{ text: body.responsible.notes, date: new Date().toISOString(), type: "creation" }]
+            : undefined,
         },
       });
       responsibleId = newResponsible.id;
@@ -272,17 +268,10 @@ export async function POST(request: NextRequest) {
         street_type: body.location?.street_type,
         street_name: body.location?.street_name,
         street_number: body.location?.street_number,
-        additional_info: body.location?.additional_info,
         postal_code: body.location?.postal_code,
-        latitude: body.latitude,
-        longitude: body.longitude,
-        coordinates_precision: body.latitude && body.longitude ? "medium" : undefined,
-        access_description: body.location?.access_description,
-        visible_references: body.location?.visible_references,
         floor: body.location?.floor,
-        specific_location: body.location?.specific_location,
-        location_observations: body.location?.location_observations,
-        access_warnings: body.location?.access_warnings,
+        location_details: body.location?.location_details,
+        access_instructions: body.location?.access_instructions,
       },
     });
 
@@ -303,9 +292,7 @@ export async function POST(request: NextRequest) {
           holidays_as_weekday: body.schedule.holidays_as_weekday ?? false,
           closed_on_holidays: body.schedule.closed_on_holidays ?? false,
           closed_in_august: body.schedule.closed_in_august ?? false,
-          observations: body.schedule.observations,
-          schedule_exceptions: body.schedule.schedule_exceptions,
-          access_instructions: body.schedule.access_instructions,
+          notes: body.schedule.notes,
         },
       });
       scheduleId = schedule.id;
@@ -322,7 +309,9 @@ export async function POST(request: NextRequest) {
         provisional_number: body.provisional_number,
         source_origin: "WEB_FORM",
         source_details: body.source_details,
-        origin_observations: body.origin_observations,
+        internal_notes: body.internal_notes
+          ? [{ text: body.internal_notes, date: new Date().toISOString(), type: "creation" }]
+          : undefined,
         status: "PENDING_REVIEW",
         publication_mode: "LOCATION_ONLY",
         location_id: location.id,

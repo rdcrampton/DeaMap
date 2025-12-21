@@ -139,7 +139,6 @@ export async function POST(request: NextRequest) {
           publication_mode: body.publication_mode,
           publication_approved_at: now,
           publication_approved_by: user.userId,
-          publication_notes: body.notes || null,
           updated_at: now,
           updated_by: user.userId,
         },

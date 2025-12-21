@@ -1,11 +1,11 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/client"
+  provider        = "prisma-client"
+  output          = "../src/generated/client"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
   extensions = [postgis]
 }
 
@@ -13,91 +13,84 @@ datasource db {
 // CORE - AED (Automated External Defibrillator) Information
 // ============================================
 model Aed {
-  id                        String                   @id @default(uuid()) @db.Uuid
-  code                      String?                  @unique
-  provisional_number        Int?
-  name                      String
-  establishment_type        String?
+  id                 String  @id @default(uuid()) @db.Uuid
+  code               String? @unique
+  provisional_number Int?
+  name               String
+  establishment_type String?
 
   // ⭐ GEOSPATIAL - Denormalized for fast proximity searches
-  latitude                  Float?
-  longitude                 Float?
-  coordinates_precision     String?
-  geom                      Unsupported("geometry(Point, 4326)")?  // PostGIS point
+  latitude              Float?
+  longitude             Float?
+  coordinates_precision String?
+  geom                  Unsupported("geometry(Point, 4326)")? // PostGIS point
 
   // Origin and traceability
-  source_origin             SourceOrigin             @default(WEB_FORM)
-  source_details            String?
-  batch_job_id              String?                  @db.Uuid
-  external_reference        String?
+  source_origin      SourceOrigin @default(WEB_FORM)
+  source_details     String?
+  batch_job_id       String?      @db.Uuid
+  external_reference String?
 
-  // Observations and notes (SIMPLIFIED)
-  public_notes              String?  // NEW: Public information visible to all users
-  internal_notes            String?  // Consolidated: includes origin_observations
-  validation_notes          String?  // NEW: Renamed from validation_observations
-  requires_attention        Boolean                  @default(false)
-  attention_reason          String?
-  rejection_reason          String?
-
-  // DEPRECATED - Will be removed in future version (kept for migration)
-  origin_observations       String?  /// @deprecated Merged into internal_notes
-  validation_observations   String?  /// @deprecated Use validation_notes instead
+  // Notes (SIMPLIFIED - v2)
+  public_notes       String? // Public information visible to all users
+  internal_notes     Json? // Array of notes with metadata: [{text, author?, date?, type?}]
+  rejection_reason   String? // Specific rejection reason for workflow
+  requires_attention Boolean @default(false)
 
   // Verification and accessibility (ADDED)
-  last_verified_at          DateTime?  // Last physical verification date
-  verification_method       String?    // "field_visit", "phone_call", "email", "photo_verification"
-  is_publicly_accessible    Boolean    @default(true)  // If accessible to general public
-  installation_date         DateTime?  // Physical installation date
+  last_verified_at       DateTime? // Last physical verification date
+  verification_method    String? // "field_visit", "phone_call", "email", "photo_verification"
+  is_publicly_accessible Boolean   @default(true) // If accessible to general public
+  installation_date      DateTime? // Physical installation date
 
   // General status
-  status                    AedStatus                @default(DRAFT)
-  status_metadata           Json?
-  published_at              DateTime?
+  status          AedStatus @default(DRAFT)
+  status_metadata Json?
+  published_at    DateTime?
 
   // ⭐ PUBLICATION SYSTEM - Controls what data is publicly visible
-  publication_mode          PublicationMode          @default(LOCATION_ONLY)
-  publication_requested_at  DateTime?
-  publication_approved_at   DateTime?
-  publication_approved_by   String?                  @db.Uuid
-  publication_notes         String?
+  publication_mode         PublicationMode @default(LOCATION_ONLY)
+  publication_requested_at DateTime?
+  publication_approved_at  DateTime?
+  publication_approved_by  String?         @db.Uuid
 
   // ⭐ OWNERSHIP - Owner of the DEA (establishment owner)
-  owner_user_id             String?                  @db.Uuid
+  owner_user_id String? @db.Uuid
 
   // Creation sequence
-  sequence                  Int                      @default(autoincrement())
+  sequence Int @default(autoincrement())
 
   // Relationships
-  location_id               String                   @unique @db.Uuid
-  responsible_id            String?                  @db.Uuid
-  schedule_id               String?                  @unique @db.Uuid
+  location_id    String  @unique @db.Uuid
+  responsible_id String? @db.Uuid
+  schedule_id    String? @unique @db.Uuid
 
-  location                  AedLocation              @relation(fields: [location_id], references: [id])
-  responsible               AedResponsible?          @relation(fields: [responsible_id], references: [id])
-  schedule                  AedSchedule?             @relation(fields: [schedule_id], references: [id])
-  batch_job                 BatchJob?                @relation("AedBatchJob", fields: [batch_job_id], references: [id])
+  location    AedLocation     @relation(fields: [location_id], references: [id])
+  responsible AedResponsible? @relation(fields: [responsible_id], references: [id])
+  schedule    AedSchedule?    @relation(fields: [schedule_id], references: [id])
+  batch_job   BatchJob?       @relation("AedBatchJob", fields: [batch_job_id], references: [id])
 
   // External data source tracking (for syncs)
-  data_source_id            String?                  @db.Uuid
-  data_source               ExternalDataSource?      @relation("AedDataSource", fields: [data_source_id], references: [id])
-  last_synced_at            DateTime?                // Last sync with external source
-  sync_content_hash         String?                  // Hash to detect changes
+  data_source_id    String?             @db.Uuid
+  data_source       ExternalDataSource? @relation("AedDataSource", fields: [data_source_id], references: [id])
+  last_synced_at    DateTime? // Last sync with external source
+  sync_content_hash String? // Hash to detect changes
 
-  images                    AedImage[]
-  validations               AedValidation[]
-  code_history              AedCodeHistory[]
-  status_changes            AedStatusChange[]
-  publication_history       AedPublicationHistory[]
-  assignments               AedOrganizationAssignment[]
-  org_verifications         AedOrganizationVerification[]
-  change_proposals          AedChangeProposal[]
-  ownership_claims          AedOwnershipClaim[]
-  field_changes             AedFieldChange[]
+  images              AedImage[]
+  validations         AedValidation[]
+  code_history        AedCodeHistory[]
+  status_changes      AedStatusChange[]
+  publication_history AedPublicationHistory[]
+  assignments         AedOrganizationAssignment[]
+  org_verifications   AedOrganizationVerification[]
+  change_proposals    AedChangeProposal[]
+  ownership_claims    AedOwnershipClaim[]
+  field_changes       AedFieldChange[]
 
-  created_at                DateTime                 @default(now())
-  updated_at                DateTime                 @updatedAt
-  created_by                String?
-  updated_by                String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?
+  updated_by String?
 
   @@index([status])
   @@index([code])
@@ -111,8 +104,8 @@ model Aed {
   @@index([owner_user_id])
   @@index([data_source_id])
   @@index([external_reference])
-  @@index([last_verified_at])  // NEW: For maintenance queries
-  @@index([is_publicly_accessible, status])  // NEW: For public map filtering
+  @@index([last_verified_at]) // NEW: For maintenance queries
+  @@index([is_publicly_accessible, status]) // NEW: For public map filtering
   // ⭐ CRITICAL: Spatial index for proximity searches
   @@index([latitude, longitude], map: "idx_aeds_coordinates")
   @@index([status, latitude, longitude], map: "idx_aeds_published_coordinates")
@@ -130,10 +123,10 @@ enum AedStatus {
 }
 
 enum PublicationMode {
-  NONE          // Not visible publicly
+  NONE // Not visible publicly
   LOCATION_ONLY // Only location data (city, postal code, district, street, number, floor)
-  BASIC_INFO    // Location + schedule + establishment type
-  FULL          // Full information: photos, responsible, contact, descriptions, etc.
+  BASIC_INFO // Location + schedule + establishment type
+  FULL // Full information: photos, responsible, contact, descriptions, etc.
 }
 
 enum SourceOrigin {
@@ -156,17 +149,17 @@ enum SourceOrigin {
 // STATUS CHANGE HISTORY
 // ============================================
 model AedStatusChange {
-  id                String      @id @default(uuid()) @db.Uuid
-  aed_id            String      @db.Uuid
-  previous_status   AedStatus?
-  new_status        AedStatus
-  reason            String?
-  modified_by       String?
-  notes             String?
+  id              String     @id @default(uuid()) @db.Uuid
+  aed_id          String     @db.Uuid
+  previous_status AedStatus?
+  new_status      AedStatus
+  reason          String?
+  modified_by     String?
+  notes           String?
 
-  aed               Aed         @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  aed Aed @relation(fields: [aed_id], references: [id], onDelete: Cascade)
 
-  created_at        DateTime    @default(now())
+  created_at DateTime @default(now())
 
   @@index([aed_id, created_at])
   @@index([new_status])
@@ -177,25 +170,25 @@ model AedStatusChange {
 // PUBLICATION HISTORY - Track publication mode changes
 // ============================================
 model AedPublicationHistory {
-  id                  String            @id @default(uuid()) @db.Uuid
-  aed_id              String            @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  aed_id String @db.Uuid
 
-  previous_mode       PublicationMode?
-  new_mode            PublicationMode
+  previous_mode PublicationMode?
+  new_mode      PublicationMode
 
-  changed_by          String?           @db.Uuid
-  changed_by_role     String?
-  change_reason       String?
+  changed_by      String? @db.Uuid
+  changed_by_role String?
+  change_reason   String?
 
   // Approval workflow (optional)
-  requires_approval   Boolean           @default(false)
-  approved_by         String?           @db.Uuid
-  approved_at         DateTime?
-  approval_notes      String?
+  requires_approval Boolean   @default(false)
+  approved_by       String?   @db.Uuid
+  approved_at       DateTime?
+  approval_notes    String?
 
-  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  aed Aed @relation(fields: [aed_id], references: [id], onDelete: Cascade)
 
-  created_at          DateTime          @default(now())
+  created_at DateTime @default(now())
 
   @@index([aed_id, created_at])
   @@index([new_mode])
@@ -214,43 +207,43 @@ model AedPublicationHistory {
 // EXTERNAL DATA SOURCES - For API/JSON imports
 // ============================================
 model ExternalDataSource {
-  id                        String              @id @default(uuid()) @db.Uuid
-  name                      String              @unique
-  description               String?
-  type                      DataSourceType
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String         @unique
+  description String?
+  type        DataSourceType
 
   // Configuration (JSON with type-specific settings)
-  config                    Json
+  config Json
 
   // Matching configuration
-  matching_strategy         MatchingStrategy    @default(HYBRID)
-  matching_threshold        Int                 @default(75)
+  matching_strategy  MatchingStrategy @default(HYBRID)
+  matching_threshold Int              @default(75)
 
   // Scheduling
-  is_active                 Boolean             @default(true)
-  sync_frequency            SyncFrequency       @default(MANUAL)
-  last_sync_at              DateTime?
-  next_scheduled_sync_at    DateTime?
+  is_active              Boolean       @default(true)
+  sync_frequency         SyncFrequency @default(MANUAL)
+  last_sync_at           DateTime?
+  next_scheduled_sync_at DateTime?
 
   // Behavior
-  auto_deactivate_missing   Boolean             @default(false)
-  auto_update_fields        String[]            @default([])
-  
+  auto_deactivate_missing Boolean  @default(false)
+  auto_update_fields      String[] @default([])
+
   // Publication settings
-  default_publication_mode  PublicationMode     @default(LOCATION_ONLY)
+  default_publication_mode PublicationMode @default(LOCATION_ONLY)
 
   // Scope
-  source_origin             SourceOrigin
-  region_code               String              // "MAD", "CAT", "AND", etc.
+  source_origin SourceOrigin
+  region_code   String // "MAD", "CAT", "AND", etc.
 
   // Relations
-  managed_aeds              Aed[]               @relation("AedDataSource")
-  batch_jobs                BatchJob[]          @relation("BatchJobDataSource")
+  managed_aeds Aed[]      @relation("AedDataSource")
+  batch_jobs   BatchJob[] @relation("BatchJobDataSource")
 
   // Audit
-  created_at                DateTime            @default(now())
-  updated_at                DateTime            @updatedAt
-  created_by                String?             @db.Uuid
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
 
   @@index([is_active])
   @@index([sync_frequency])
@@ -284,50 +277,36 @@ enum SyncFrequency {
 // LOCATION - Geographic information
 // ============================================
 model AedLocation {
-  id                      String                      @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  // Original address from form
-  street_type             String?
-  street_name             String?
-  street_number           String?
-  additional_info         String?
-  postal_code             String?
-
-  // Original coordinates
-  latitude                Float?
-  longitude               Float?
-  coordinates_precision   String?
+  // Address fields
+  street_type   String?
+  street_name   String?
+  street_number String?
+  postal_code   String?
 
   // Geographic information by city (no FK - multi-city support)
-  city_name               String?
-  city_code               String?
-  district_code           String?
-  district_name           String?
-  neighborhood_code       String?
-  neighborhood_name       String?
+  city_name         String?
+  city_code         String?
+  district_code     String?
+  district_name     String?
+  neighborhood_code String?
+  neighborhood_name String?
 
-  // Access information (SIMPLIFIED)
-  floor                   String?
-  specific_location       String?
-  access_instructions     String?  // NEW: Combines access_description + visible_references + access_warnings
-  public_notes            String?  // NEW: Combines location_observations + general public info
+  // Access information (SIMPLIFIED - v2)
+  floor               String? // Floor/level for filtering
+  location_details    String? // Specific location details (combines additional_info + specific_location)
+  access_instructions String? // How to access the AED
 
-  // DEPRECATED - Will be removed in future version (kept for migration)
-  access_description      String?  /// @deprecated Use access_instructions instead
-  visible_references      String?  /// @deprecated Use access_instructions instead
-  access_warnings         String?  /// @deprecated Use access_instructions instead
-  location_observations   String?  /// @deprecated Use public_notes instead
+  aed                Aed?
+  address_validation AedAddressValidation?
 
-  aed                     Aed?
-  address_validation      AedAddressValidation?
-
-  created_at              DateTime                    @default(now())
-  updated_at              DateTime                    @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([postal_code])
-  @@index([latitude, longitude], map: "idx_location_spatial")
   @@index([city_code, district_code])
-  @@index([city_code, postal_code])  // NEW: For city-specific searches
+  @@index([city_code, postal_code])
   @@map("aed_locations")
 }
 
@@ -335,33 +314,31 @@ model AedLocation {
 // SCHEDULE - Availability information
 // ============================================
 model AedSchedule {
-  id                      String    @id @default(uuid()) @db.Uuid
-  description             String?
-  has_24h_surveillance    Boolean   @default(false)
-  has_restricted_access   Boolean   @default(false)
+  id                    String  @id @default(uuid()) @db.Uuid
+  description           String?
+  has_24h_surveillance  Boolean @default(false)
+  has_restricted_access Boolean @default(false)
 
   // Structured schedules (HH:MM format)
-  weekday_opening         String?
-  weekday_closing         String?
-  saturday_opening        String?
-  saturday_closing        String?
-  sunday_opening          String?
-  sunday_closing          String?
+  weekday_opening  String?
+  weekday_closing  String?
+  saturday_opening String?
+  saturday_closing String?
+  sunday_opening   String?
+  sunday_closing   String?
 
   // Special days
-  holidays_as_weekday     Boolean   @default(false)
-  closed_on_holidays      Boolean   @default(false)
-  closed_in_august        Boolean   @default(false)
+  holidays_as_weekday Boolean @default(false)
+  closed_on_holidays  Boolean @default(false)
+  closed_in_august    Boolean @default(false)
 
-  // Observations
-  observations            String?
-  schedule_exceptions     String?
-  access_instructions     String?
+  // Notes (SIMPLIFIED - v2)
+  notes String? // General notes including exceptions
 
-  aed                     Aed?
+  aed Aed?
 
-  created_at              DateTime  @default(now())
-  updated_at              DateTime  @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([has_24h_surveillance])
   @@map("aed_schedules")
@@ -371,7 +348,7 @@ model AedSchedule {
 // RESPONSIBLE - Contact information
 // ============================================
 model AedResponsible {
-  id                String    @id @default(uuid()) @db.Uuid
+  id                String  @id @default(uuid()) @db.Uuid
   name              String
   email             String?
   phone             String?
@@ -381,18 +358,17 @@ model AedResponsible {
   local_use         String?
 
   // Additional info
-  organization      String?
-  position          String?
-  department        String?
+  organization String?
+  position     String?
+  department   String?
 
-  // Observations
-  observations      String?
-  contact_notes     String?
+  // Notes (SIMPLIFIED - v2)
+  notes Json? // Array of notes with metadata: [{text, author?, date?}]
 
-  aeds              Aed[]
+  aeds Aed[]
 
-  created_at        DateTime  @default(now())
-  updated_at        DateTime  @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([organization])
   @@map("aed_responsibles")
@@ -402,33 +378,33 @@ model AedResponsible {
 // IMAGES - Image management
 // ============================================
 model AedImage {
-  id                  String            @id @default(uuid()) @db.Uuid
-  aed_id              String            @db.Uuid
-  type                AedImageType
-  order               Int               @default(1)
+  id     String       @id @default(uuid()) @db.Uuid
+  aed_id String       @db.Uuid
+  type   AedImageType
+  order  Int          @default(1)
 
   // URLs
-  original_url        String
-  processed_url       String?
-  thumbnail_url       String?
+  original_url  String
+  processed_url String?
+  thumbnail_url String?
 
   // Metadata
-  width               Int?
-  height              Int?
-  size_bytes          Int?
-  format              String?
-  file_hash           String?
+  width      Int?
+  height     Int?
+  size_bytes Int?
+  format     String?
+  file_hash  String?
 
   // Verification status
-  is_verified         Boolean           @default(false)
-  verified_at         DateTime?
-  verified_by         String?
-  rejection_reason    String?
+  is_verified      Boolean   @default(false)
+  verified_at      DateTime?
+  verified_by      String?
+  rejection_reason String?
 
-  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-  markers             ImageMarker[]
+  aed     Aed           @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  markers ImageMarker[]
 
-  created_at          DateTime          @default(now())
+  created_at DateTime @default(now())
 
   @@index([aed_id, type, order])
   @@index([is_verified])
@@ -446,23 +422,23 @@ enum AedImageType {
 }
 
 model ImageMarker {
-  id          String      @id @default(uuid()) @db.Uuid
-  image_id    String      @db.Uuid
-  type        String
+  id       String @id @default(uuid()) @db.Uuid
+  image_id String @db.Uuid
+  type     String
 
   // Normalized coordinates (0-1)
-  start_x     Float
-  start_y     Float
-  end_x       Float?
-  end_y       Float?
+  start_x Float
+  start_y Float
+  end_x   Float?
+  end_y   Float?
 
   // Style
-  color       String      @default("#dc2626")
-  thickness   Int         @default(40)
-  text        String?
+  color     String  @default("#dc2626")
+  thickness Int     @default(40)
+  text      String?
 
-  image       AedImage    @relation(fields: [image_id], references: [id], onDelete: Cascade)
-  created_at  DateTime    @default(now())
+  image      AedImage @relation(fields: [image_id], references: [id], onDelete: Cascade)
+  created_at DateTime @default(now())
 
   @@index([image_id])
   @@map("image_markers")
@@ -472,30 +448,30 @@ model ImageMarker {
 // VALIDATIONS - Verification system
 // ============================================
 model AedValidation {
-  id                  String              @id @default(uuid()) @db.Uuid
-  aed_id              String              @db.Uuid
-  type                ValidationType
-  status              ValidationStatus    @default(PENDING)
+  id     String           @id @default(uuid()) @db.Uuid
+  aed_id String           @db.Uuid
+  type   ValidationType
+  status ValidationStatus @default(PENDING)
 
   // Process
-  started_at          DateTime            @default(now())
-  completed_at        DateTime?
-  verified_by         String?
+  started_at   DateTime  @default(now())
+  completed_at DateTime?
+  verified_by  String?
 
   // Validation specific data
-  data                Json?
-  result              Json?
-  errors              Json?
+  data   Json?
+  result Json?
+  errors Json?
 
   // Metrics
-  duration_ms         Int?
-  attempts            Int                 @default(1)
+  duration_ms Int?
+  attempts    Int  @default(1)
 
-  aed                 Aed                 @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-  sessions            ValidationSession[]
+  aed      Aed                 @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  sessions ValidationSession[]
 
-  created_at          DateTime            @default(now())
-  updated_at          DateTime            @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([aed_id, type])
   @@index([status, started_at])
@@ -523,16 +499,16 @@ enum ValidationStatus {
 }
 
 model ValidationSession {
-  id                String            @id @default(uuid()) @db.Uuid
-  validation_id     String            @db.Uuid
-  step              String
-  step_data         Json?
-  is_completed      Boolean           @default(false)
+  id            String  @id @default(uuid()) @db.Uuid
+  validation_id String  @db.Uuid
+  step          String
+  step_data     Json?
+  is_completed  Boolean @default(false)
 
-  validation        AedValidation     @relation(fields: [validation_id], references: [id], onDelete: Cascade)
+  validation AedValidation @relation(fields: [validation_id], references: [id], onDelete: Cascade)
 
-  created_at        DateTime          @default(now())
-  updated_at        DateTime          @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([validation_id, step])
   @@map("validation_sessions")
@@ -542,46 +518,46 @@ model ValidationSession {
 // ADDRESS VALIDATION - Specific information
 // ============================================
 model AedAddressValidation {
-  id                        String          @id @default(uuid()) @db.Uuid
-  location_id               String          @unique @db.Uuid
+  id          String @id @default(uuid()) @db.Uuid
+  location_id String @unique @db.Uuid
 
   // Search results
-  address_found             Boolean         @default(false)
-  match_level               Float?
-  distance_meters           Float?
-  match_type                String?
+  address_found   Boolean @default(false)
+  match_level     Float?
+  distance_meters Float?
+  match_type      String?
 
   // Corrected coordinates (if applicable)
-  suggested_latitude        Float?
-  suggested_longitude       Float?
+  suggested_latitude  Float?
+  suggested_longitude Float?
 
   // Official address found (no FK - multi-city support)
-  official_street_name      String?
-  official_number           String?
-  official_postal_code      String?
-  official_city_name        String?
-  official_city_code        String?
-  official_district_code    String?
-  official_district_name    String?
+  official_street_name       String?
+  official_number            String?
+  official_postal_code       String?
+  official_city_name         String?
+  official_city_code         String?
+  official_district_code     String?
+  official_district_name     String?
   official_neighborhood_code String?
   official_neighborhood_name String?
 
   // Suggested addresses
-  suggestions               Json            @default("[]")
+  suggestions Json @default("[]")
 
   // Diagnosis
-  detected_problems         Json            @default("[]")
-  recommended_actions       Json            @default("[]")
-  result_confidence         Float?
+  detected_problems   Json   @default("[]")
+  recommended_actions Json   @default("[]")
+  result_confidence   Float?
 
   // Process metadata
-  strategies_used           Json            @default("[]")
-  duration_ms               Int?
-  api_calls_made            Int             @default(0)
+  strategies_used Json @default("[]")
+  duration_ms     Int?
+  api_calls_made  Int  @default(0)
 
-  location                  AedLocation     @relation(fields: [location_id], references: [id], onDelete: Cascade)
+  location AedLocation @relation(fields: [location_id], references: [id], onDelete: Cascade)
 
-  processed_at              DateTime        @default(now())
+  processed_at DateTime @default(now())
 
   @@index([address_found])
   @@index([match_level])
@@ -593,21 +569,21 @@ model AedAddressValidation {
 // AED CODES - Management and history
 // ============================================
 model AedCodeHistory {
-  id                String    @id @default(uuid()) @db.Uuid
-  aed_id            String    @db.Uuid
-  code              String    @unique
-  district          Int
-  sequential        Int
+  id         String @id @default(uuid()) @db.Uuid
+  aed_id     String @db.Uuid
+  code       String @unique
+  district   Int
+  sequential Int
 
   // Status
-  is_active         Boolean   @default(true)
-  change_reason     String?
-  changed_by        String?
+  is_active     Boolean @default(true)
+  change_reason String?
+  changed_by    String?
 
-  assigned_at       DateTime  @default(now())
-  deactivated_at    DateTime?
+  assigned_at    DateTime  @default(now())
+  deactivated_at DateTime?
 
-  aed               Aed       @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  aed Aed @relation(fields: [aed_id], references: [id], onDelete: Cascade)
 
   @@unique([district, sequential, is_active])
   @@index([aed_id, is_active])
@@ -621,20 +597,20 @@ model AedCodeHistory {
 // ============================================
 
 model AuditLog {
-  id              String    @id @default(uuid()) @db.Uuid
-  table_name      String
-  record_id       String
-  action          String
-  user_id         String?
-  ip_address      String?
-  user_agent      String?
+  id         String  @id @default(uuid()) @db.Uuid
+  table_name String
+  record_id  String
+  action     String
+  user_id    String?
+  ip_address String?
+  user_agent String?
 
   // Change data
-  data_before     Json?
-  data_after      Json?
-  changed_fields  String[]
+  data_before    Json?
+  data_after     Json?
+  changed_fields String[]
 
-  created_at      DateTime  @default(now())
+  created_at DateTime @default(now())
 
   @@index([table_name, record_id])
   @@index([user_id])
@@ -648,13 +624,13 @@ model AuditLog {
 // ============================================
 
 model SystemMetric {
-  id              String    @id @default(uuid()) @db.Uuid
-  metric_name     String
-  metric_value    Float
-  metric_context  Json?
-  tags            String[]  @default([])
+  id             String   @id @default(uuid()) @db.Uuid
+  metric_name    String
+  metric_value   Float
+  metric_context Json?
+  tags           String[] @default([])
 
-  recorded_at     DateTime  @default(now())
+  recorded_at DateTime @default(now())
 
   @@index([metric_name, recorded_at])
   @@index([recorded_at])
@@ -666,27 +642,27 @@ model SystemMetric {
 // ============================================
 
 model User {
-  id                String    @id @default(uuid()) @db.Uuid
-  email             String    @unique
-  password_hash     String
-  name              String
+  id            String @id @default(uuid()) @db.Uuid
+  email         String @unique
+  password_hash String
+  name          String
 
   // Profile
-  role              UserRole  @default(USER)
-  is_active         Boolean   @default(true)
-  is_verified       Boolean   @default(false)
+  role        UserRole @default(USER)
+  is_active   Boolean  @default(true)
+  is_verified Boolean  @default(false)
 
   // Metadata
-  last_login_at     DateTime?
-  verification_token String?
-  reset_token       String?
+  last_login_at       DateTime?
+  verification_token  String?
+  reset_token         String?
   reset_token_expires DateTime?
 
   // Relations
   organization_members OrganizationMember[]
 
-  created_at        DateTime  @default(now())
-  updated_at        DateTime  @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([email])
   @@index([role])
@@ -709,48 +685,48 @@ enum UserRole {
 // ORGANIZATIONS - Groups that manage AEDs
 // ============================================
 model Organization {
-  id                  String                          @id @default(uuid()) @db.Uuid
-  type                OrganizationType
-  name                String
-  code                String?                         @unique // e.g. "PROTE_MADRID"
+  id   String           @id @default(uuid()) @db.Uuid
+  type OrganizationType
+  name String
+  code String?          @unique // e.g. "PROTE_MADRID"
 
   // Contact & Location
-  email               String?
-  phone               String?
-  website             String?
-  description         String?
+  email       String?
+  phone       String?
+  website     String?
+  description String?
 
   // ⭐ Geographic scope
-  scope_type          OrgScopeType                    @default(CITY)
-  city_code           String?                         // Municipality code
-  city_name           String?
-  district_codes      String[]                        // Array of district codes
+  scope_type               OrgScopeType @default(CITY)
+  city_code                String? // Municipality code
+  city_name                String?
+  district_codes           String[] // Array of district codes
   custom_scope_description String?
 
   // Settings
-  require_approval    Boolean                         @default(true) // Requires external approval?
-  approval_authority  String?                         // e.g. "Ayuntamiento de Madrid"
+  require_approval   Boolean @default(true) // Requires external approval?
+  approval_authority String? // e.g. "Ayuntamiento de Madrid"
 
   // Verification badge
-  badge_name          String?                         // e.g. "Verificado por SAMUR"
-  badge_icon          String?                         // Icon URL
-  badge_color         String?                         // Badge color
+  badge_name  String? // e.g. "Verificado por SAMUR"
+  badge_icon  String? // Icon URL
+  badge_color String? // Badge color
 
   // Hierarchy
-  parent_org_id       String?                         @db.Uuid
-  parent_org          Organization?                   @relation("OrgHierarchy", fields: [parent_org_id], references: [id])
-  child_orgs          Organization[]                  @relation("OrgHierarchy")
+  parent_org_id String?        @db.Uuid
+  parent_org    Organization?  @relation("OrgHierarchy", fields: [parent_org_id], references: [id])
+  child_orgs    Organization[] @relation("OrgHierarchy")
 
-  is_active           Boolean                         @default(true)
+  is_active Boolean @default(true)
 
-  members             OrganizationMember[]
-  aed_assignments     AedOrganizationAssignment[]
-  verifications       AedOrganizationVerification[]
+  members         OrganizationMember[]
+  aed_assignments AedOrganizationAssignment[]
+  verifications   AedOrganizationVerification[]
 
-  created_at          DateTime                        @default(now())
-  updated_at          DateTime                        @updatedAt
-  created_by          String?                         @db.Uuid
-  updated_by          String?                         @db.Uuid
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by String?  @db.Uuid
+  updated_by String?  @db.Uuid
 
   @@index([city_code])
   @@index([scope_type])
@@ -760,46 +736,46 @@ model Organization {
 }
 
 enum OrganizationType {
-  CIVIL_PROTECTION       // Protección Civil
-  CERTIFIED_COMPANY      // Empresa homologada/certificada
-  VOLUNTEER_GROUP        // Grupo de voluntarios
-  MUNICIPALITY           // Ayuntamiento
-  HEALTH_SERVICE         // Servicio de salud
-  OWNER                  // Propietario del establecimiento
+  CIVIL_PROTECTION // Protección Civil
+  CERTIFIED_COMPANY // Empresa homologada/certificada
+  VOLUNTEER_GROUP // Grupo de voluntarios
+  MUNICIPALITY // Ayuntamiento
+  HEALTH_SERVICE // Servicio de salud
+  OWNER // Propietario del establecimiento
 }
 
 enum OrgScopeType {
-  NATIONAL      // National scope
-  REGIONAL      // Regional (Comunidad autónoma)
-  CITY          // Municipality/city
-  DISTRICT      // District within city
-  CUSTOM        // Custom area
+  NATIONAL // National scope
+  REGIONAL // Regional (Comunidad autónoma)
+  CITY // Municipality/city
+  DISTRICT // District within city
+  CUSTOM // Custom area
 }
 
 // ============================================
 // ORGANIZATION MEMBERS - Who belongs to what
 // ============================================
 model OrganizationMember {
-  id                  String           @id @default(uuid()) @db.Uuid
-  organization_id     String           @db.Uuid
-  user_id             String           @db.Uuid
+  id              String @id @default(uuid()) @db.Uuid
+  organization_id String @db.Uuid
+  user_id         String @db.Uuid
 
-  role                OrgMemberRole    @default(MEMBER)
+  role OrgMemberRole @default(MEMBER)
 
   // Permissions
-  can_verify          Boolean          @default(true)
-  can_edit            Boolean          @default(false)
-  can_approve         Boolean          @default(false)
-  can_manage_members  Boolean          @default(false)
+  can_verify         Boolean @default(true)
+  can_edit           Boolean @default(false)
+  can_approve        Boolean @default(false)
+  can_manage_members Boolean @default(false)
 
-  notes               String?
+  notes String?
 
-  joined_at           DateTime         @default(now())
-  added_by            String?          @db.Uuid
-  updated_by          String?          @db.Uuid
+  joined_at  DateTime @default(now())
+  added_by   String?  @db.Uuid
+  updated_by String?  @db.Uuid
 
-  organization        Organization     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  user                User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([organization_id, user_id])
   @@index([user_id])
@@ -808,42 +784,42 @@ model OrganizationMember {
 }
 
 enum OrgMemberRole {
-  OWNER       // Owner of the organization
-  ADMIN       // Administrator
-  VERIFIER    // Can perform verifications
-  MEMBER      // Basic member
-  VIEWER      // Read-only
+  OWNER // Owner of the organization
+  ADMIN // Administrator
+  VERIFIER // Can perform verifications
+  MEMBER // Basic member
+  VIEWER // Read-only
 }
 
 // ============================================
 // AED ORGANIZATION ASSIGNMENT - Who manages what AED
 // ============================================
 model AedOrganizationAssignment {
-  id                      String                @id @default(uuid()) @db.Uuid
-  aed_id                  String                @db.Uuid
-  organization_id         String                @db.Uuid
+  id              String @id @default(uuid()) @db.Uuid
+  aed_id          String @db.Uuid
+  organization_id String @db.Uuid
 
   // Assignment type - Only ONE ACTIVE per type
-  assignment_type         AssignmentType        @default(VERIFICATION)
+  assignment_type AssignmentType @default(VERIFICATION)
 
   // Status
-  status                  AssignmentStatus      @default(ACTIVE)
+  status AssignmentStatus @default(ACTIVE)
 
   // Publication control per organization
-  publication_mode        PublicationMode       @default(LOCATION_ONLY)
-  approved_for_full       Boolean               @default(false)
-  approved_by_authority   Boolean               @default(false) // Approved by municipality?
-  approval_notes          String?
+  publication_mode      PublicationMode @default(LOCATION_ONLY)
+  approved_for_full     Boolean         @default(false)
+  approved_by_authority Boolean         @default(false) // Approved by municipality?
+  approval_notes        String?
 
   // Assignment metadata
-  assigned_by             String?               @db.Uuid
-  assigned_at             DateTime              @default(now())
-  revoked_at              DateTime?
-  revoked_by              String?               @db.Uuid
-  revoked_reason          String?
+  assigned_by    String?   @db.Uuid
+  assigned_at    DateTime  @default(now())
+  revoked_at     DateTime?
+  revoked_by     String?   @db.Uuid
+  revoked_reason String?
 
-  aed                     Aed                   @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-  organization            Organization          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  aed          Aed          @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@unique([aed_id, assignment_type, status], name: "unique_active_assignment_per_type")
   @@index([aed_id, status])
@@ -853,11 +829,11 @@ model AedOrganizationAssignment {
 }
 
 enum AssignmentType {
-  CIVIL_PROTECTION      // Only 1 active prote per AED
-  CERTIFIED_COMPANY     // Multiple companies can have active assignments
-  OWNERSHIP             // Only 1 owner
-  MAINTENANCE           // Only 1 maintenance company
-  VERIFICATION          // General verification
+  CIVIL_PROTECTION // Only 1 active prote per AED
+  CERTIFIED_COMPANY // Multiple companies can have active assignments
+  OWNERSHIP // Only 1 owner
+  MAINTENANCE // Only 1 maintenance company
+  VERIFICATION // General verification
 }
 
 enum AssignmentStatus {
@@ -871,36 +847,36 @@ enum AssignmentStatus {
 // AED ORGANIZATION VERIFICATION - Verification history
 // ============================================
 model AedOrganizationVerification {
-  id                  String            @id @default(uuid()) @db.Uuid
-  aed_id              String            @db.Uuid
-  organization_id     String            @db.Uuid
+  id              String @id @default(uuid()) @db.Uuid
+  aed_id          String @db.Uuid
+  organization_id String @db.Uuid
 
-  verification_type   VerificationType
+  verification_type VerificationType
 
   // Verification details
-  verified_by         String            @db.Uuid  // User ID
-  verified_at         DateTime          @default(now())
+  verified_by String   @db.Uuid // User ID
+  verified_at DateTime @default(now())
 
   // What was verified
-  verified_address    Boolean           @default(false)
-  verified_schedule   Boolean           @default(false)
-  verified_photos     Boolean           @default(false)
-  verified_access     Boolean           @default(false)
-  verified_signage    Boolean           @default(false)
+  verified_address  Boolean @default(false)
+  verified_schedule Boolean @default(false)
+  verified_photos   Boolean @default(false)
+  verified_access   Boolean @default(false)
+  verified_signage  Boolean @default(false)
 
   // Certificate (for official reviews)
-  certificate_number  String?
-  certificate_expiry  DateTime?
+  certificate_number String?
+  certificate_expiry DateTime?
 
   // Status - Latest verification tracking
-  is_current          Boolean           @default(true)
-  superseded_by       String?           @db.Uuid  // If there's a more recent verification
-  superseded_at       DateTime?
+  is_current    Boolean   @default(true)
+  superseded_by String?   @db.Uuid // If there's a more recent verification
+  superseded_at DateTime?
 
-  notes               String?
+  notes String?
 
-  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-  organization        Organization      @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  aed          Aed          @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@index([aed_id, is_current])
   @@index([organization_id, verified_at])
@@ -909,39 +885,39 @@ model AedOrganizationVerification {
 }
 
 enum VerificationType {
-  INFORMAL           // Informal verification (protes, volunteers)
-  OFFICIAL           // Official certified review
-  SELF_REPORTED      // Self-reported by owner
-  FIELD_INSPECTION   // Field inspection
+  INFORMAL // Informal verification (protes, volunteers)
+  OFFICIAL // Official certified review
+  SELF_REPORTED // Self-reported by owner
+  FIELD_INSPECTION // Field inspection
 }
 
 // ============================================
 // AED CHANGE PROPOSALS - For users without organizations
 // ============================================
 model AedChangeProposal {
-  id                  String                @id @default(uuid()) @db.Uuid
-  aed_id              String                @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  aed_id String @db.Uuid
 
   // Who proposed
-  proposed_by         String                @db.Uuid
-  proposed_at         DateTime              @default(now())
+  proposed_by String   @db.Uuid
+  proposed_at DateTime @default(now())
 
   // What changes
-  change_type         ProposalChangeType
-  proposed_changes    Json                  // Diff of proposed changes
+  change_type      ProposalChangeType
+  proposed_changes Json // Diff of proposed changes
 
   // Images/files attached
-  attached_images     String[]              // URLs
+  attached_images String[] // URLs
 
   // Status
-  status              ProposalStatus        @default(PENDING)
+  status ProposalStatus @default(PENDING)
 
   // Review
-  reviewed_by         String?               @db.Uuid
-  reviewed_at         DateTime?
-  review_notes        String?
+  reviewed_by  String?   @db.Uuid
+  reviewed_at  DateTime?
+  review_notes String?
 
-  aed                 Aed                   @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  aed Aed @relation(fields: [aed_id], references: [id], onDelete: Cascade)
 
   @@index([aed_id, status])
   @@index([proposed_by, status])
@@ -950,41 +926,41 @@ model AedChangeProposal {
 }
 
 enum ProposalChangeType {
-  UPDATE_SCHEDULE      // Propose schedule change
-  UPDATE_LOCATION      // Correct location
-  ADD_PHOTOS           // Add photos
-  UPDATE_ACCESS        // Update access info
-  REPORT_ISSUE         // Report issue (AED not working, etc)
+  UPDATE_SCHEDULE // Propose schedule change
+  UPDATE_LOCATION // Correct location
+  ADD_PHOTOS // Add photos
+  UPDATE_ACCESS // Update access info
+  REPORT_ISSUE // Report issue (AED not working, etc)
 }
 
 enum ProposalStatus {
-  PENDING              // Pending review
-  APPROVED             // Approved (changes applied)
-  REJECTED             // Rejected
-  NEEDS_MORE_INFO      // Needs more information
+  PENDING // Pending review
+  APPROVED // Approved (changes applied)
+  REJECTED // Rejected
+  NEEDS_MORE_INFO // Needs more information
 }
 
 // ============================================
 // AED FIELD CHANGES - Granular audit trail
 // ============================================
 model AedFieldChange {
-  id                  String            @id @default(uuid()) @db.Uuid
-  aed_id              String            @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  aed_id String @db.Uuid
 
   // What changed
-  field_name          String            // e.g. "schedule.weekday_opening"
-  old_value           String?
-  new_value           String?
+  field_name String // e.g. "schedule.weekday_opening"
+  old_value  String?
+  new_value  String?
 
   // Who & when
-  changed_by          String            @db.Uuid
-  changed_by_org      String?           @db.Uuid  // If belongs to an org
-  changed_at          DateTime          @default(now())
+  changed_by     String   @db.Uuid
+  changed_by_org String?  @db.Uuid // If belongs to an org
+  changed_at     DateTime @default(now())
 
   // Source
-  change_source       ChangeSource
+  change_source ChangeSource
 
-  aed                 Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  aed Aed @relation(fields: [aed_id], references: [id], onDelete: Cascade)
 
   @@index([aed_id, changed_at])
   @@index([field_name])
@@ -993,40 +969,40 @@ model AedFieldChange {
 }
 
 enum ChangeSource {
-  WEB_UI               // Manual change from UI
-  API                  // Change via API
-  IMPORT               // Mass import
-  VERIFICATION         // During verification process
-  PROPOSAL_APPROVAL    // Proposal approval
+  WEB_UI // Manual change from UI
+  API // Change via API
+  IMPORT // Mass import
+  VERIFICATION // During verification process
+  PROPOSAL_APPROVAL // Proposal approval
 }
 
 // ============================================
 // AED OWNERSHIP CLAIMS - Property claims
 // ============================================
 model AedOwnershipClaim {
-  id                      String            @id @default(uuid()) @db.Uuid
-  aed_id                  String            @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  aed_id String @db.Uuid
 
   // Claimant
-  claimed_by              String            @db.Uuid
-  claimed_by_org          String?           @db.Uuid  // If claiming on behalf of org
-  claim_type              ClaimType
+  claimed_by     String    @db.Uuid
+  claimed_by_org String?   @db.Uuid // If claiming on behalf of org
+  claim_type     ClaimType
 
   // Evidence
-  evidence_description    String
-  evidence_files          String[]          // Document URLs
+  evidence_description String
+  evidence_files       String[] // Document URLs
 
   // Status
-  status                  ClaimStatus       @default(PENDING)
+  status ClaimStatus @default(PENDING)
 
   // Review
-  reviewed_by             String?           @db.Uuid
-  reviewed_at             DateTime?
-  review_notes            String?
+  reviewed_by  String?   @db.Uuid
+  reviewed_at  DateTime?
+  review_notes String?
 
-  created_at              DateTime          @default(now())
+  created_at DateTime @default(now())
 
-  aed                     Aed               @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  aed Aed @relation(fields: [aed_id], references: [id], onDelete: Cascade)
 
   @@index([aed_id, status])
   @@index([claimed_by])
@@ -1035,9 +1011,9 @@ model AedOwnershipClaim {
 }
 
 enum ClaimType {
-  ESTABLISHMENT_OWNER   // Establishment owner
-  EQUIPMENT_OWNER       // DEA equipment owner
-  AUTHORIZED_MANAGER    // Authorized manager
+  ESTABLISHMENT_OWNER // Establishment owner
+  EQUIPMENT_OWNER // DEA equipment owner
+  AUTHORIZED_MANAGER // Authorized manager
 }
 
 enum ClaimStatus {
@@ -1051,64 +1027,64 @@ enum ClaimStatus {
 // BATCH JOBS - Generic batch processing system
 // ============================================
 model BatchJob {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  type                  BatchJobType
-  name                  String
-  description           String?
+  id          String       @id @default(uuid()) @db.Uuid
+  type        BatchJobType
+  name        String
+  description String?
 
   // Status and progress
-  status                BatchJobStatus          @default(PENDING)
+  status BatchJobStatus @default(PENDING)
 
   // Configuration (JSON with type-specific settings)
-  config                Json
+  config Json
 
   // Progress tracking
-  total_records         Int                     @default(0)
-  processed_records     Int                     @default(0)
-  successful_records    Int                     @default(0)
-  failed_records        Int                     @default(0)
-  skipped_records       Int                     @default(0)
-  warning_records       Int                     @default(0)
-  current_chunk         Int                     @default(0)
-  total_chunks          Int                     @default(0)
+  total_records      Int @default(0)
+  processed_records  Int @default(0)
+  successful_records Int @default(0)
+  failed_records     Int @default(0)
+  skipped_records    Int @default(0)
+  warning_records    Int @default(0)
+  current_chunk      Int @default(0)
+  total_chunks       Int @default(0)
 
   // Result (populated after completion)
-  result                Json?
-  error_summary         Json?
+  result        Json?
+  error_summary Json?
 
   // Timestamps
-  started_at            DateTime?
-  completed_at          DateTime?
-  duration_seconds      Int?
+  started_at       DateTime?
+  completed_at     DateTime?
+  duration_seconds Int?
 
   // Recovery & Resume
   last_heartbeat        DateTime?
-  last_checkpoint_index Int                     @default(-1)
-  resume_count          Int                     @default(0)
+  last_checkpoint_index Int       @default(-1)
+  resume_count          Int       @default(0)
 
   // Ownership and context
-  created_by            String                  @db.Uuid
-  organization_id       String?                 @db.Uuid
-  parent_job_id         String?                 @db.Uuid
-  parent_job            BatchJob?               @relation("JobHierarchy", fields: [parent_job_id], references: [id])
-  child_jobs            BatchJob[]              @relation("JobHierarchy")
+  created_by      String     @db.Uuid
+  organization_id String?    @db.Uuid
+  parent_job_id   String?    @db.Uuid
+  parent_job      BatchJob?  @relation("JobHierarchy", fields: [parent_job_id], references: [id])
+  child_jobs      BatchJob[] @relation("JobHierarchy")
 
   // External references
-  data_source_id        String?                 @db.Uuid
-  data_source           ExternalDataSource?     @relation("BatchJobDataSource", fields: [data_source_id], references: [id])
+  data_source_id String?             @db.Uuid
+  data_source    ExternalDataSource? @relation("BatchJobDataSource", fields: [data_source_id], references: [id])
 
   // Metadata and tags
-  metadata              Json?
-  tags                  String[]                @default([])
+  metadata Json?
+  tags     String[] @default([])
 
   // Relations
-  checkpoints           BatchJobCheckpoint[]
-  errors                BatchJobError[]
-  artifacts             BatchJobArtifact[]
-  created_aeds          Aed[]                   @relation("AedBatchJob")
+  checkpoints  BatchJobCheckpoint[]
+  errors       BatchJobError[]
+  artifacts    BatchJobArtifact[]
+  created_aeds Aed[]                @relation("AedBatchJob")
 
-  created_at            DateTime                @default(now())
-  updated_at            DateTime                @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([status])
   @@index([type])
@@ -1147,39 +1123,39 @@ enum BatchJobType {
 }
 
 enum BatchJobStatus {
-  PENDING              // Job created, waiting to start
-  QUEUED               // Job queued for processing
-  IN_PROGRESS          // Currently processing
-  PAUSED               // Paused by user, can be resumed
-  WAITING              // Waiting for next chunk invocation
-  COMPLETED            // Successfully completed
+  PENDING // Job created, waiting to start
+  QUEUED // Job queued for processing
+  IN_PROGRESS // Currently processing
+  PAUSED // Paused by user, can be resumed
+  WAITING // Waiting for next chunk invocation
+  COMPLETED // Successfully completed
   COMPLETED_WITH_WARNINGS // Completed but with some warnings
-  FAILED               // Failed completely
-  CANCELLED            // Cancelled by user
-  INTERRUPTED          // Interrupted (timeout, crash), can be resumed
-  RESUMING             // Being resumed from interruption
+  FAILED // Failed completely
+  CANCELLED // Cancelled by user
+  INTERRUPTED // Interrupted (timeout, crash), can be resumed
+  RESUMING // Being resumed from interruption
 }
 
 // ============================================
 // BATCH JOB CHECKPOINTS - For resumable processing
 // ============================================
 model BatchJobCheckpoint {
-  id                  String              @id @default(uuid()) @db.Uuid
-  job_id              String              @db.Uuid
-  record_index        Int
-  record_reference    String?
-  record_hash         String?
+  id               String  @id @default(uuid()) @db.Uuid
+  job_id           String  @db.Uuid
+  record_index     Int
+  record_reference String?
+  record_hash      String?
 
-  status              BatchCheckpointStatus
-  error_message       String?
-  processing_time_ms  Int?
+  status             BatchCheckpointStatus
+  error_message      String?
+  processing_time_ms Int?
 
   // Context data
-  record_data         Json?
+  record_data Json?
 
-  job                 BatchJob            @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  job BatchJob @relation(fields: [job_id], references: [id], onDelete: Cascade)
 
-  created_at          DateTime            @default(now())
+  created_at DateTime @default(now())
 
   @@unique([job_id, record_index])
   @@index([job_id, status])
@@ -1197,22 +1173,22 @@ enum BatchCheckpointStatus {
 // BATCH JOB ERRORS - Detailed error logging
 // ============================================
 model BatchJobError {
-  id                  String              @id @default(uuid()) @db.Uuid
-  job_id              String              @db.Uuid
-  record_index        Int?
-  record_reference    String?
+  id               String  @id @default(uuid()) @db.Uuid
+  job_id           String  @db.Uuid
+  record_index     Int?
+  record_reference String?
 
-  error_type          String
-  error_message       String
-  severity            BatchErrorSeverity
+  error_type    String
+  error_message String
+  severity      BatchErrorSeverity
 
   // Context
-  row_data            Json?
+  row_data              Json?
   correction_suggestion String?
 
-  job                 BatchJob            @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  job BatchJob @relation(fields: [job_id], references: [id], onDelete: Cascade)
 
-  created_at          DateTime            @default(now())
+  created_at DateTime @default(now())
 
   @@index([job_id])
   @@index([error_type])
@@ -1231,28 +1207,28 @@ enum BatchErrorSeverity {
 // BATCH JOB ARTIFACTS - Output files and data
 // ============================================
 model BatchJobArtifact {
-  id                  String              @id @default(uuid()) @db.Uuid
-  job_id              String              @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  job_id String @db.Uuid
 
-  type                ArtifactType
-  name                String
-  description         String?
+  type        ArtifactType
+  name        String
+  description String?
 
   // File info
-  mime_type           String?
-  file_size           Int?
-  file_url            String?
-  file_hash           String?
+  mime_type String?
+  file_size Int?
+  file_url  String?
+  file_hash String?
 
   // Data (for small inline data)
-  data                Json?
+  data Json?
 
   // Expiration
-  expires_at          DateTime?
+  expires_at DateTime?
 
-  job                 BatchJob            @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  job BatchJob @relation(fields: [job_id], references: [id], onDelete: Cascade)
 
-  created_at          DateTime            @default(now())
+  created_at DateTime @default(now())
 
   @@index([job_id])
   @@index([type])

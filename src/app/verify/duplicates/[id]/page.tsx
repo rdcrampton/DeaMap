@@ -30,9 +30,9 @@ interface AedData {
     postal_code: string | null;
     district_name: string | null;
     neighborhood_name: string | null;
-    specific_location: string | null;
+    location_details: string | null;
     floor: string | null;
-    access_description: string | null;
+    access_instructions: string | null;
   } | null;
   images: Array<{
     id: string;
@@ -371,17 +371,17 @@ export default function DuplicateComparePage({ params }: DuplicateComparePagePro
                   </div>
                 )}
 
-                {aed.location?.specific_location && (
+                {aed.location?.location_details && (
                   <div>
                     <p className="text-sm font-medium text-gray-500">Ubicación Específica</p>
-                    <p className="text-gray-900">{aed.location.specific_location}</p>
+                    <p className="text-gray-900">{aed.location.location_details}</p>
                   </div>
                 )}
 
-                {aed.location?.access_description && (
+                {aed.location?.access_instructions && (
                   <div>
                     <p className="text-sm font-medium text-gray-500">Descripción de Acceso</p>
-                    <p className="text-sm text-gray-700">{aed.location.access_description}</p>
+                    <p className="text-sm text-gray-700">{aed.location.access_instructions}</p>
                   </div>
                 )}
 
@@ -486,18 +486,18 @@ export default function DuplicateComparePage({ params }: DuplicateComparePagePro
                     </div>
                   )}
 
-                  {candidateAed.location?.specific_location && (
+                  {candidateAed.location?.location_details && (
                     <div>
                       <p className="text-sm font-medium text-gray-500">Ubicación Específica</p>
-                      <p className="text-gray-900">{candidateAed.location.specific_location}</p>
+                      <p className="text-gray-900">{candidateAed.location.location_details}</p>
                     </div>
                   )}
 
-                  {candidateAed.location?.access_description && (
+                  {candidateAed.location?.access_instructions && (
                     <div>
                       <p className="text-sm font-medium text-gray-500">Descripción de Acceso</p>
                       <p className="text-sm text-gray-700">
-                        {candidateAed.location.access_description}
+                        {candidateAed.location.access_instructions}
                       </p>
                     </div>
                   )}

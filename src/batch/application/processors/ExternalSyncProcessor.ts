@@ -374,7 +374,7 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
     record: ImportRecord,
     config: ExternalSyncConfig
   ): Promise<{ id: string }> {
-    // Create location first
+    // Create location first (coordinates are now only in Aed table)
     const location = await this.prisma.aedLocation.create({
       data: {
         street_name: record.streetName,
@@ -383,8 +383,6 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
         city_name: record.city,
         city_code: record.cityCode,
         district_name: record.district,
-        latitude: record.latitude,
-        longitude: record.longitude,
       },
     });
 
@@ -409,7 +407,7 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
   }
 
   private async updateAed(aedId: string, record: ImportRecord): Promise<void> {
-    // Update location
+    // Update location (coordinates are now only in Aed table)
     const aed = await this.prisma.aed.findUnique({
       where: { id: aedId },
       select: { location_id: true },
@@ -425,13 +423,11 @@ export class ExternalSyncProcessor extends BaseBatchJobProcessor<ExternalSyncCon
           city_name: record.city,
           city_code: record.cityCode,
           district_name: record.district,
-          latitude: record.latitude,
-          longitude: record.longitude,
         },
       });
     }
 
-    // Update AED
+    // Update AED (coordinates are now here)
     await this.prisma.aed.update({
       where: { id: aedId },
       data: {

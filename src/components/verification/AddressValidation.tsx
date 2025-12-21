@@ -11,16 +11,15 @@ interface AddressValidationProps {
   onValidationComplete: (validatedAddress: AddressData) => void;
 }
 
-// Interfaz completa con TODOS los campos de AedLocation
+// Interfaz completa con campos de AedLocation (v2)
 interface AddressData {
   // Dirección básica
   street_type?: string;
   street_name?: string;
   street_number?: string;
-  additional_info?: string;
   postal_code?: string;
 
-  // Coordenadas
+  // Coordenadas (now in Aed, but kept here for validation flow)
   latitude?: number;
   longitude?: number;
   coordinates_precision?: string;
@@ -33,15 +32,15 @@ interface AddressData {
   neighborhood_code?: string;
   neighborhood_name?: string;
 
-  // Acceso y ubicación específica
-  access_description?: string;
-  visible_references?: string;
+  // Acceso y ubicación (v2 - simplified)
   floor?: string;
-  specific_location?: string;
+  location_details?: string;
+  access_instructions?: string;
 
-  // Observaciones
-  location_observations?: string;
-  access_warnings?: string;
+  // Legacy fields (for backwards compatibility in validation flow)
+  additional_info?: string;
+  specific_location?: string;
+  access_description?: string;
 }
 
 interface SearchResult {
@@ -99,7 +98,6 @@ export default function AddressValidation({
     street_type: currentAddress?.street_type || "",
     street_name: currentAddress?.street_name || "",
     street_number: currentAddress?.street_number || "",
-    additional_info: currentAddress?.additional_info || "",
     postal_code: currentAddress?.postal_code || "",
     latitude: currentAddress?.latitude,
     longitude: currentAddress?.longitude,
@@ -110,12 +108,9 @@ export default function AddressValidation({
     district_name: currentAddress?.district_name,
     neighborhood_code: currentAddress?.neighborhood_code,
     neighborhood_name: currentAddress?.neighborhood_name,
-    access_description: currentAddress?.access_description,
-    visible_references: currentAddress?.visible_references,
     floor: currentAddress?.floor,
-    specific_location: currentAddress?.specific_location,
-    location_observations: currentAddress?.location_observations,
-    access_warnings: currentAddress?.access_warnings,
+    location_details: currentAddress?.location_details || currentAddress?.specific_location || "",
+    access_instructions: currentAddress?.access_instructions || currentAddress?.access_description || "",
   });
 
   const hasAddress = addressForm.street_name || addressForm.street_type;
@@ -718,11 +713,10 @@ export default function AddressValidation({
               🏢 Ubicación Detallada
             </h5>
             {renderFieldComparison("Piso", "floor", true)}
-            {renderFieldComparison("Ubicación Específica", "specific_location", true)}
-            {renderFieldComparison("Referencias Visibles", "visible_references", true)}
+            {renderFieldComparison("Ubicación Específica", "location_details", true)}
 
             <h5 className="text-xs font-semibold text-blue-800 mt-4 mb-2">🚪 Acceso</h5>
-            {renderFieldComparison("Descripción de Acceso", "access_description", true)}
+            {renderFieldComparison("Instrucciones de Acceso", "access_instructions", true)}
 
             {/* Coordinates - Mejoradas */}
             {(addressForm.latitude || suggestedAddress?.latitude) && (
@@ -937,32 +931,18 @@ export default function AddressValidation({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ubicación Específica
+                    Detalles de Ubicación
                   </label>
                   <input
                     type="text"
-                    value={addressForm.specific_location || ""}
+                    value={addressForm.location_details || ""}
                     onChange={(e) =>
-                      setAddressForm((prev) => ({ ...prev, specific_location: e.target.value }))
+                      setAddressForm((prev) => ({ ...prev, location_details: e.target.value }))
                     }
-                    placeholder="Ej: Recepción, Vestíbulo..."
+                    placeholder="Ej: Recepción, Vestíbulo, Junto a la escalera..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Referencias Visibles
-                </label>
-                <input
-                  type="text"
-                  value={addressForm.visible_references || ""}
-                  onChange={(e) =>
-                    setAddressForm((prev) => ({ ...prev, visible_references: e.target.value }))
-                  }
-                  placeholder="Ej: Junto a la escalera principal..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                />
               </div>
 
               <h5 className="text-xs font-semibold text-gray-700 mb-2 mt-4">🚪 Acceso</h5>
@@ -971,7 +951,7 @@ export default function AddressValidation({
                   Descripción de Acceso
                 </label>
                 <textarea
-                  value={addressForm.access_description || ""}
+                  value={addressForm.access_instructions || ""}
                   onChange={(e) =>
                     setAddressForm((prev) => ({ ...prev, access_description: e.target.value }))
                   }

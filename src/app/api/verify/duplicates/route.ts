@@ -11,7 +11,8 @@ interface DuplicateAedData {
   establishment_type: string | null;
   latitude: number | null;
   longitude: number | null;
-  attention_reason: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  internal_notes: any | null;
   status: string;
   location: {
     street_type: string | null;
@@ -20,7 +21,7 @@ interface DuplicateAedData {
     postal_code: string | null;
     district_name: string | null;
     neighborhood_name: string | null;
-    specific_location: string | null;
+    location_details: string | null;
     floor: string | null;
   } | null;
   images: Array<{
@@ -61,13 +62,10 @@ export async function GET(request: NextRequest) {
     const minScore = searchParams.get("min_score");
     const maxScore = searchParams.get("max_score");
 
-    // Construir WHERE clause
+    // Construir WHERE clause - Now we just filter by requires_attention
+    // Duplicate info is stored in internal_notes JSON
     const whereClause: Record<string, unknown> = {
       requires_attention: true,
-      attention_reason: {
-        contains: "duplicado",
-        mode: "insensitive",
-      },
       status: {
         in: ["DRAFT", "PENDING_REVIEW"],
       },
@@ -90,7 +88,7 @@ export async function GET(request: NextRequest) {
               postal_code: true,
               district_name: true,
               neighborhood_name: true,
-              specific_location: true,
+              location_details: true,
               floor: true,
             },
           },
@@ -119,11 +117,19 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // Filtrar por score si se especifica
-    let filteredAeds = aeds as DuplicateAedData[];
+    // Filtrar por score si se especifica (search in internal_notes JSON)
+    let filteredAeds = aeds as unknown as DuplicateAedData[];
     if (minScore || maxScore) {
-      filteredAeds = aeds.filter((aed) => {
-        const scoreMatch = aed.attention_reason?.match(/score:\s*(\d+)/);
+      filteredAeds = filteredAeds.filter((aed) => {
+        if (!aed.internal_notes || !Array.isArray(aed.internal_notes)) return false;
+
+        // Look for duplicate note with score
+        const duplicateNote = (aed.internal_notes as Array<{ text?: string }>).find((n) =>
+          n.text?.includes("score:")
+        );
+        if (!duplicateNote?.text) return false;
+
+        const scoreMatch = duplicateNote.text.match(/score:\s*(\d+)/);
         if (!scoreMatch) return false;
 
         const score = parseInt(scoreMatch[1]);
