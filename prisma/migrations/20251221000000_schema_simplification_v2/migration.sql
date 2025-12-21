@@ -12,6 +12,9 @@ ALTER TABLE "aed_locations" ADD COLUMN IF NOT EXISTS "location_details" TEXT;
 -- Add notes to aed_schedules (if not exists)
 ALTER TABLE "aed_schedules" ADD COLUMN IF NOT EXISTS "notes" TEXT;
 
+-- Add notes (JSONB) to aed_responsibles (if not exists)
+ALTER TABLE "aed_responsibles" ADD COLUMN IF NOT EXISTS "notes" JSONB;
+
 -- ============================================
 -- PHASE 2: MIGRATE DATA (PRESERVE EXISTING INFO)
 -- ============================================
