@@ -135,7 +135,7 @@ export default function AdminDashboard() {
 
           {/* Importaciones */}
           <Link
-            href="/import"
+            href="/admin/imports"
             className="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center">
@@ -217,7 +217,7 @@ export default function AdminDashboard() {
               <div className="ml-4">
                 <h2 className="text-lg font-semibold text-gray-900">Exportaciones</h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  Exportar datos de DEAs a diferentes formatos
+                  Exportar datos de DEAs en formato CSV
                 </p>
               </div>
             </div>
