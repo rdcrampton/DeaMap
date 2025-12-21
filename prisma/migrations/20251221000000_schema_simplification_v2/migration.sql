@@ -15,14 +15,17 @@ ALTER TABLE "aed_schedules" ADD COLUMN IF NOT EXISTS "notes" TEXT;
 -- Add notes (JSONB) to aed_responsibles (if not exists)
 ALTER TABLE "aed_responsibles" ADD COLUMN IF NOT EXISTS "notes" JSONB;
 
+-- Add temporary JSONB column for internal_notes migration
+ALTER TABLE "aeds" ADD COLUMN IF NOT EXISTS "internal_notes_new" JSONB;
+
 -- ============================================
 -- PHASE 2: MIGRATE DATA (PRESERVE EXISTING INFO)
 -- ============================================
 
--- 2.1 AEDS TABLE: Consolidate notes into internal_notes (JSON format)
--- Convert existing internal_notes to JSON array and merge with other note fields
+-- 2.1 AEDS TABLE: Consolidate notes into internal_notes_new (JSON format)
+-- Convert existing internal_notes (TEXT) to JSON array and merge with other note fields
 UPDATE "aeds" SET
-  internal_notes = jsonb_build_array(
+  internal_notes_new = jsonb_build_array(
     jsonb_strip_nulls(jsonb_build_object(
       'text', CONCAT_WS(E'\n\n',
         CASE WHEN internal_notes IS NOT NULL AND internal_notes != '' THEN internal_notes END,
@@ -40,13 +43,17 @@ UPDATE "aeds" SET
       'migrated_at', NOW()::TEXT,
       'type', 'migration_consolidation'
     ))
-  )::jsonb
+  )
 WHERE internal_notes IS NOT NULL
    OR origin_observations IS NOT NULL
    OR validation_notes IS NOT NULL
    OR validation_observations IS NOT NULL
    OR attention_reason IS NOT NULL
    OR publication_notes IS NOT NULL;
+
+-- Drop the old TEXT column and rename the new JSONB column
+ALTER TABLE "aeds" DROP COLUMN IF EXISTS "internal_notes";
+ALTER TABLE "aeds" RENAME COLUMN "internal_notes_new" TO "internal_notes";
 
 -- 2.2 AED_LOCATIONS TABLE: Migrate coordinates to aeds table (if not already there)
 UPDATE "aeds" a SET
