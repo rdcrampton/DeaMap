@@ -25,7 +25,6 @@ export interface AedFullData {
     street_type: string | null;
     street_name: string | null;
     street_number: string | null;
-    additional_info: string | null;
     postal_code: string | null;
     city_name: string | null;
     city_code: string | null;
@@ -33,12 +32,9 @@ export interface AedFullData {
     district_name: string | null;
     neighborhood_code: string | null;
     neighborhood_name: string | null;
-    access_description: string | null;
-    visible_references: string | null;
     floor: string | null;
-    specific_location: string | null;
-    location_observations: string | null;
-    access_warnings: string | null;
+    location_details: string | null;
+    access_instructions: string | null;
   } | null;
 
   schedule?: {
@@ -55,9 +51,7 @@ export interface AedFullData {
     holidays_as_weekday: boolean;
     closed_on_holidays: boolean;
     closed_in_august: boolean;
-    observations: string | null;
-    schedule_exceptions: string | null;
-    access_instructions: string | null;
+    notes: string | null;
   } | null;
 
   responsible?: {
@@ -72,8 +66,8 @@ export interface AedFullData {
     organization: string | null;
     position: string | null;
     department: string | null;
-    observations: string | null;
-    contact_notes: string | null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    notes: any | null;
   } | null;
 
   images?: Array<{
@@ -134,16 +128,12 @@ export function filterAedByPublicationMode(aed: AedFullData): AedFilteredData | 
             street_name: aed.location.street_name,
             street_number: aed.location.street_number,
             floor: aed.location.floor,
-            specific_location: aed.location.specific_location,
+            location_details: aed.location.location_details,
             // Explicitly exclude sensitive fields
-            additional_info: null,
             city_code: null,
             district_code: null,
             neighborhood_code: null,
-            access_description: null,
-            visible_references: null,
-            location_observations: null,
-            access_warnings: null,
+            access_instructions: null,
           }
         : null,
     };
@@ -174,9 +164,7 @@ export function filterAedByPublicationMode(aed: AedFullData): AedFilteredData | 
             holidays_as_weekday: aed.schedule.holidays_as_weekday,
             closed_on_holidays: aed.schedule.closed_on_holidays,
             closed_in_august: aed.schedule.closed_in_august,
-            observations: aed.schedule.observations,
-            schedule_exceptions: aed.schedule.schedule_exceptions,
-            access_instructions: aed.schedule.access_instructions,
+            notes: aed.schedule.notes,
           }
         : null,
     };

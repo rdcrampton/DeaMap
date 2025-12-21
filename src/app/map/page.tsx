@@ -182,7 +182,7 @@ export default function MapPage() {
 
             <p className="text-gray-400 text-sm mb-4">
               <strong>Instrucciones:</strong>{" "}
-              {selectedAed.location.access_description || "Preguntar en recepción."}
+              {selectedAed.location.access_instructions || "Preguntar en recepción."}
             </p>
 
             <Link

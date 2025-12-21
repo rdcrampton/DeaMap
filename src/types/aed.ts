@@ -28,7 +28,7 @@ export interface Aed {
     district_name?: string | null;
     neighborhood_name?: string | null;
     city_name?: string | null;
-    access_description?: string | null;
+    access_instructions?: string | null;
   };
   schedule: {
     has_24h_surveillance: boolean;

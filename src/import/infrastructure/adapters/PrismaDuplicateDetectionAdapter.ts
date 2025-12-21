@@ -33,10 +33,9 @@ export class PrismaDuplicateDetectionAdapter implements IDuplicateDetectionServi
       establishmentType,
       latitude,
       longitude,
-      accessDescription,
-      specificLocation,
+      accessInstructions,
+      locationDetails,
       floor,
-      visibleReferences,
     } = criteria;
 
     const address = this.formatAddress(streetType, streetName, streetNumber);
@@ -98,10 +97,9 @@ export class PrismaDuplicateDetectionAdapter implements IDuplicateDetectionServi
       establishmentType,
       latitude,
       longitude,
-      accessDescription,
-      specificLocation,
+      locationDetails,
+      accessInstructions,
       floor,
-      visibleReferences,
     };
 
     for (const aed of potentialDuplicates) {
@@ -115,10 +113,10 @@ export class PrismaDuplicateDetectionAdapter implements IDuplicateDetectionServi
         establishmentType: aed.establishment_type,
         latitude: aed.latitude,
         longitude: aed.longitude,
-        accessDescription: aed.access_description ?? aed.location?.access_description,
-        specificLocation: aed.specific_location ?? aed.location?.specific_location,
+        // Use new consolidated field names
+        locationDetails: aed.location_details ?? aed.location?.location_details,
+        accessInstructions: aed.access_instructions ?? aed.location?.access_instructions,
         floor: aed.floor ?? aed.location?.floor,
-        visibleReferences: aed.visible_references ?? aed.location?.visible_references,
       };
 
       // Calcular score usando el servicio de scoring
@@ -209,7 +207,7 @@ export class PrismaDuplicateDetectionAdapter implements IDuplicateDetectionServi
     try {
       // Query raw con PostGIS - búsqueda por radio
       const results = await this.prisma.$queryRaw<any[]>`
-        SELECT 
+        SELECT
           a.id,
           a.name,
           a.status,
@@ -223,10 +221,9 @@ export class PrismaDuplicateDetectionAdapter implements IDuplicateDetectionServi
           l.street_name,
           l.street_number,
           l.postal_code,
-          l.access_description,
-          l.specific_location,
-          l.floor,
-          l.visible_references
+          l.location_details,
+          l.access_instructions,
+          l.floor
         FROM aeds a
         LEFT JOIN aed_locations l ON a.location_id = l.id
         WHERE

@@ -34,8 +34,8 @@ interface AedExportData {
     local_ownership?: string | null;
     local_use?: string | null;
   } | null;
-  internal_notes?: string | null;
-  origin_observations?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  internal_notes?: any | null;
 }
 
 /**
@@ -250,7 +250,15 @@ export function aedsToCsv(aeds: AedExportData[]): string {
 
   // Crear filas de datos
   const rows = aeds.map((aed) => {
-    const notesContent = aed.internal_notes || aed.origin_observations || "";
+    // Handle JSON internal_notes or string fallback
+    let notesContent = "";
+    if (aed.internal_notes) {
+      if (Array.isArray(aed.internal_notes)) {
+        notesContent = aed.internal_notes.map((n: { text?: string }) => n.text || "").join("\n");
+      } else if (typeof aed.internal_notes === "string") {
+        notesContent = aed.internal_notes;
+      }
+    }
     const parsedNotes = parseNotesContent(notesContent);
 
     return [

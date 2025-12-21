@@ -262,7 +262,7 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     const latitude = data.latitude ? parseFloat(data.latitude) : undefined;
     const longitude = data.longitude ? parseFloat(data.longitude) : undefined;
 
-    // Create location
+    // Create location (coordinates are now only in Aed table)
     const location = await this.prisma.aedLocation.create({
       data: {
         street_name: data.streetName,
@@ -271,8 +271,6 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
         city_name: data.city,
         city_code: data.cityCode,
         district_name: data.district,
-        latitude,
-        longitude,
       },
     });
 

@@ -259,25 +259,22 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                 street_type: data.aed.location?.street_type ?? undefined,
                 street_name: data.aed.location?.street_name ?? undefined,
                 street_number: data.aed.location?.street_number ?? undefined,
-                additional_info: data.aed.location?.additional_info ?? undefined,
+                additional_info: data.aed.location?.location_details ?? undefined,
                 postal_code: data.aed.location?.postal_code ?? undefined,
-                latitude: data.aed.location?.latitude ?? undefined,
-                longitude: data.aed.location?.longitude ?? undefined,
-                coordinates_precision: data.aed.location?.coordinates_precision ?? undefined,
+                latitude: data.aed.latitude ?? undefined,
+                longitude: data.aed.longitude ?? undefined,
+                coordinates_precision: data.aed.coordinates_precision ?? undefined,
                 city_name: data.aed.location?.city_name ?? undefined,
                 city_code: data.aed.location?.city_code ?? undefined,
                 district_code: data.aed.location?.district_code ?? undefined,
                 district_name: data.aed.location?.district_name ?? undefined,
                 neighborhood_code: data.aed.location?.neighborhood_code ?? undefined,
                 neighborhood_name: data.aed.location?.neighborhood_name ?? undefined,
-                access_description: data.aed.location?.access_description ?? undefined,
-                visible_references: data.aed.location?.visible_references ?? undefined,
+                access_description: data.aed.location?.access_instructions ?? undefined,
                 floor: data.aed.location?.floor ?? undefined,
-                specific_location: data.aed.location?.specific_location ?? undefined,
-                location_observations: data.aed.location?.location_observations ?? undefined,
-                access_warnings: data.aed.location?.access_warnings ?? undefined,
+                specific_location: data.aed.location?.location_details ?? undefined,
               }}
-              observations={data.aed.origin_observations ?? undefined}
+              observations={undefined}
               onValidationComplete={(validatedAddress: AddressData) => {
                 updateStep(VerificationStep.IMAGE_SELECTION, {
                   validated_address: validatedAddress,
@@ -300,7 +297,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                 type: img.type || undefined,
                 order: img.order,
               }))}
-              descripcionAcceso={data.aed.location?.access_description || undefined}
+              descripcionAcceso={data.aed.location?.access_instructions || undefined}
               onValidationComplete={async (result) => {
                 try {
                   let finalImages: AedImage[] = data.aed.images;
@@ -515,7 +512,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                       organization: data.aed.responsible.organization ?? undefined,
                       position: data.aed.responsible.position ?? undefined,
                       department: data.aed.responsible.department ?? undefined,
-                      observations: data.aed.responsible.observations ?? undefined,
+                      observations: undefined,
                     }
                   : undefined
               }
