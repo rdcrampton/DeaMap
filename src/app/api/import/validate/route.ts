@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
       errors: summary.errors,
       errorSummary: summary.errorSummary,
       warnings: summary.warnings,
+      previewRecords: summary.previewRecords,
+      sharepoint: summary.sharepoint,
     });
   } catch (error) {
     console.error("Error in validate API:", error);

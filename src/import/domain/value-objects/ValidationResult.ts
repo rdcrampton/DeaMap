@@ -11,6 +11,20 @@ import { ValidationError, ValidationErrorData, ValidationErrorType, ValidationSe
 export { ValidationError };
 export type { ValidationErrorData, ValidationErrorType, ValidationSeverity };
 
+export interface PreviewRecord {
+  rowNumber: number;
+  status: 'valid' | 'invalid' | 'skipped';
+  mappedData: Record<string, unknown>;
+  originalData: Record<string, unknown>;
+  errors?: ValidationErrorData[];
+}
+
+export interface SharePointInfo {
+  detected: boolean;
+  sampleUrls: string[];
+  imageFields: string[];
+}
+
 export interface ValidationSummary {
   isValid: boolean;
   totalRecords: number;
@@ -28,6 +42,8 @@ export interface ValidationSummary {
     byField: Record<string, number>;
     total: number;
   };
+  previewRecords?: PreviewRecord[];
+  sharepoint?: SharePointInfo;
 }
 
 export class ValidationResult {
@@ -40,7 +56,9 @@ export class ValidationResult {
       invalidRecords: number;
       skippedRecords: number;
       warningRecords: number;
-    }
+    },
+    private readonly previewRecords?: PreviewRecord[],
+    private readonly sharePointInfo?: SharePointInfo
   ) {}
 
   static empty(): ValidationResult {
@@ -50,7 +68,7 @@ export class ValidationResult {
       invalidRecords: 0,
       skippedRecords: 0,
       warningRecords: 0,
-    });
+    }, [], undefined);
   }
 
   static create(
@@ -62,9 +80,11 @@ export class ValidationResult {
       invalidRecords: number;
       skippedRecords: number;
       warningRecords: number;
-    }
+    },
+    previewRecords?: PreviewRecord[],
+    sharePointInfo?: SharePointInfo
   ): ValidationResult {
-    return new ValidationResult(errors, warnings, stats);
+    return new ValidationResult(errors, warnings, stats, previewRecords, sharePointInfo);
   }
 
   get isValid(): boolean {
@@ -152,6 +172,8 @@ export class ValidationResult {
         byField: this.getErrorsByField(),
         total: this.errors.length,
       },
+      previewRecords: this.previewRecords,
+      sharepoint: this.sharePointInfo,
     };
   }
 
@@ -239,7 +261,7 @@ export class ValidationResult {
       invalidRecords: errors.length,
       skippedRecords: 0,
       warningRecords: warnings.length,
-    });
+    }, undefined, undefined);
   }
 
   /**

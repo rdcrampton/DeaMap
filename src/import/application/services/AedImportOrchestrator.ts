@@ -6,12 +6,13 @@
  * Este orchestrador es reutilizable tanto para validación previa como para importación real.
  */
 
-import { ValidationResult } from "../../domain/value-objects/ValidationResult";
+import { ValidationResult, PreviewRecord, SharePointInfo } from "../../domain/value-objects/ValidationResult";
 import { ValidationError } from "../../domain/value-objects/ValidationError";
 import { AedImportData } from "../../domain/value-objects/AedImportData";
 import { AedValidationService } from "../../domain/services/AedValidationService";
 import { CoordinateValidationService } from "../../domain/services/CoordinateValidationService";
 import { DuplicateDetectionService } from "../../domain/services/DuplicateDetectionService";
+import { SharePointDetectionService } from "../../domain/services/SharePointDetectionService";
 import { CsvParsingService } from "./CsvParsingService";
 import { ColumnMappingService, ColumnMapping } from "./ColumnMappingService";
 
@@ -25,13 +26,17 @@ export interface ValidationOptions {
 }
 
 export class AedImportOrchestrator {
+  private readonly sharepointDetector: SharePointDetectionService;
+
   constructor(
     private readonly csvParser: CsvParsingService,
     private readonly mapper: ColumnMappingService,
     private readonly aedValidator: AedValidationService,
     private readonly coordValidator: CoordinateValidationService,
     private readonly duplicateDetector: DuplicateDetectionService
-  ) {}
+  ) {
+    this.sharepointDetector = new SharePointDetectionService();
+  }
 
   /**
    * Valida registros de un archivo CSV (usado para validación previa)
@@ -77,13 +82,36 @@ export class AedImportOrchestrator {
       const mappedRecords = this.mapper.mapRecords(parseResult.records, mappings);
       const mappingIndex = this.mapper.createMappingIndex(mappings);
 
-      // 3. Validar cada registro
+      // 3. Detectar URLs de SharePoint en campos de imagen
+      const sharePointInfo: SharePointInfo = this.sharepointDetector.detectSharePointUrls(
+        mappedRecords,
+        mappings
+      );
+
+      if (sharePointInfo.detected) {
+        console.log(
+          `🔍 SharePoint detectado en campos: ${sharePointInfo.imageFields.join(", ")}`
+        );
+        console.log(`📸 URLs de muestra (${sharePointInfo.sampleUrls.length}):`);
+        sharePointInfo.sampleUrls.forEach((url) => console.log(`  - ${url}`));
+      }
+
+      // 4. Validar cada registro
       const allErrors: ValidationError[] = [];
       const allWarnings: ValidationError[] = [];
+      const previewRecords: PreviewRecord[] = [];
       let validCount = 0;
       let invalidCount = 0;
       let skippedCount = 0;
       let warningCount = 0;
+
+      // Límites para preview
+      const MAX_VALID_PREVIEW = 5;
+      const MAX_INVALID_PREVIEW = 5;
+      const MAX_SKIPPED_PREVIEW = 3;
+      let validPreviewCount = 0;
+      let invalidPreviewCount = 0;
+      let skippedPreviewCount = 0;
 
       for (let i = 0; i < mappedRecords.length; i++) {
         // Check timeout si está configurado
@@ -93,17 +121,22 @@ export class AedImportOrchestrator {
         }
 
         const data = mappedRecords[i];
+        const originalData = parseResult.records[i];
         const row = i + 2; // +2 porque Excel empieza en 1 y tiene header
         let hasErrors = false;
         let hasWarnings = false;
+        const recordErrors: ValidationError[] = [];
 
         // Validar campos obligatorios y formato
         const aedValidation = this.aedValidator.validateAedRecord(data, row, mappingIndex);
         if (!aedValidation.isValid) {
           hasErrors = true;
-          allErrors.push(...aedValidation.errors.filter((e) => e.severity === "error"));
-          allWarnings.push(...aedValidation.errors.filter((e) => e.severity === "warning"));
-          if (aedValidation.errors.some((e) => e.severity === "warning")) {
+          const errorsList = aedValidation.errors.filter((e) => e.severity === "error");
+          const warningsList = aedValidation.errors.filter((e) => e.severity === "warning");
+          allErrors.push(...errorsList);
+          allWarnings.push(...warningsList);
+          recordErrors.push(...errorsList);
+          if (warningsList.length > 0) {
             hasWarnings = true;
           }
         }
@@ -119,6 +152,7 @@ export class AedImportOrchestrator {
         if (!coordValidation.isValid && coordValidation.error) {
           hasErrors = true;
           allErrors.push(coordValidation.error);
+          recordErrors.push(coordValidation.error);
         }
 
         // Verificar duplicados
@@ -128,19 +162,56 @@ export class AedImportOrchestrator {
           skipDuplicates
         );
 
+        let recordStatus: 'valid' | 'invalid' | 'skipped' = 'valid';
+
         if (duplicateCheck.isDuplicate) {
           if (skipDuplicates) {
             skippedCount++;
+            recordStatus = 'skipped';
+            // Capturar registro omitido para preview
+            if (skippedPreviewCount < MAX_SKIPPED_PREVIEW) {
+              previewRecords.push({
+                rowNumber: row,
+                status: 'skipped',
+                mappedData: this.serializeAedData(data),
+                originalData,
+                errors: recordErrors.map(e => e.toJSON()),
+              });
+              skippedPreviewCount++;
+            }
           } else if (duplicateCheck.error) {
             hasErrors = true;
             allErrors.push(duplicateCheck.error);
+            recordErrors.push(duplicateCheck.error);
           }
         } else if (!hasErrors) {
           validCount++;
+          // Capturar registro válido para preview
+          if (validPreviewCount < MAX_VALID_PREVIEW) {
+            previewRecords.push({
+              rowNumber: row,
+              status: 'valid',
+              mappedData: this.serializeAedData(data),
+              originalData,
+            });
+            validPreviewCount++;
+          }
         }
 
         if (hasErrors) {
           invalidCount++;
+          recordStatus = 'invalid';
+          // Capturar registro inválido para preview
+          if (invalidPreviewCount < MAX_INVALID_PREVIEW && recordStatus === 'invalid') {
+            previewRecords.push({
+              rowNumber: row,
+              status: 'invalid',
+              mappedData: this.serializeAedData(data),
+              originalData,
+              errors: recordErrors.map(e => e.toJSON()),
+            });
+            invalidPreviewCount++;
+          }
         }
 
         if (hasWarnings && !hasErrors) {
@@ -156,13 +227,19 @@ export class AedImportOrchestrator {
         }
       }
 
-      return ValidationResult.create(allErrors, allWarnings, {
-        totalRecords: parseResult.totalRows,
-        validRecords: validCount,
-        invalidRecords: invalidCount,
-        skippedRecords: skippedCount,
-        warningRecords: warningCount,
-      });
+      return ValidationResult.create(
+        allErrors,
+        allWarnings,
+        {
+          totalRecords: parseResult.totalRows,
+          validRecords: validCount,
+          invalidRecords: invalidCount,
+          skippedRecords: skippedCount,
+          warningRecords: warningCount,
+        },
+        previewRecords,
+        sharePointInfo
+      );
     } catch (error) {
       return ValidationResult.create(
         [
@@ -180,9 +257,18 @@ export class AedImportOrchestrator {
           invalidRecords: 0,
           skippedRecords: 0,
           warningRecords: 0,
-        }
+        },
+        undefined,
+        undefined
       );
     }
+  }
+
+  /**
+   * Serializa los datos de AED para preview
+   */
+  private serializeAedData(data: AedImportData): Record<string, unknown> {
+    return { ...data.toPlainObject() };
   }
 
   /**

@@ -457,6 +457,13 @@ export class BatchJobOrchestrator {
         // All done - finalize
         const finalResult = await processor.finalize(job);
         job.updateResult(finalResult);
+        
+        // If job is in WAITING state, transition to IN_PROGRESS before completing
+        // to avoid invalid state transition error
+        if (job.status === JobStatus.WAITING) {
+          job.continueProcessing();
+        }
+        
         job.complete();
         await processor.cleanup(job);
       } else if (!chunkResult.shouldContinue) {
