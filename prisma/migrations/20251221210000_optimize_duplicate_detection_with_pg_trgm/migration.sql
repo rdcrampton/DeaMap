@@ -1,4 +1,4 @@
- unico-- Migration: Optimize Duplicate Detection with PostgreSQL
+-- Migration: Optimize Duplicate Detection with PostgreSQL
 -- Date: 2025-12-21
 -- Description: Add normalized columns for optimized duplicate detection
 
