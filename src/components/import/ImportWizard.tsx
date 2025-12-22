@@ -11,6 +11,7 @@ import toast from "react-hot-toast";
 
 import ColumnMappingEditor from "./ColumnMappingEditor";
 import SharePointCookiesModal from "./SharePointCookiesModal";
+import ValidationErrorsTable from "./ValidationErrorsTable";
 
 type Step = "upload" | "preview" | "mapping" | "validation";
 
@@ -202,6 +203,7 @@ export default function ImportWizard({ onComplete: _onComplete }: ImportWizardPr
             <ColumnMappingEditor
               preview={sessionData.preview}
               suggestions={sessionData.suggestions}
+              initialMappings={sessionData.mappings}
               onMappingsConfirmed={handleMappingComplete}
             />
           </div>
@@ -380,13 +382,44 @@ function ValidationStep({
               </p>
             </div>
 
-            {/* Mostrar errores si existen */}
-            {validationResult.validation && (
-              <div className="bg-white border rounded-lg p-4 max-h-96 overflow-y-auto">
-                <h4 className="font-medium text-gray-900 mb-3">Resultados de validación</h4>
-                <pre className="text-xs text-gray-700 whitespace-pre-wrap">
-                  {JSON.stringify(validationResult.validation, null, 2)}
-                </pre>
+            {/* Estadísticas de validación */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white border rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-gray-900">
+                  {validationResult.validation?.totalRecords || 0}
+                </div>
+                <div className="text-sm text-gray-600">Total registros</div>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-green-900">
+                  {validationResult.validation?.validRecords || 0}
+                </div>
+                <div className="text-sm text-green-700">Válidos</div>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-red-900">
+                  {validationResult.validation?.invalidRecords || 0}
+                </div>
+                <div className="text-sm text-red-700">Con errores</div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-blue-900">
+                  {validationResult.validation?.skippedRecords || 0}
+                </div>
+                <div className="text-sm text-blue-700">Omitidos</div>
+              </div>
+            </div>
+
+            {/* Mostrar errores detallados si existen */}
+            {validationResult.errors && validationResult.errors.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                  Errores encontrados ({validationResult.errors.length})
+                </h4>
+                <ValidationErrorsTable
+                  errors={validationResult.errors}
+                  errorSummary={validationResult.errorSummary}
+                />
               </div>
             )}
 

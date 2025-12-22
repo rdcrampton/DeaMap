@@ -59,7 +59,7 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
 
     // Check required field mappings
     const mappedFields = config.columnMappings?.map((m) => m.systemField) || [];
-    const requiredFields = ["name"];
+    const requiredFields = ["proposedName"];
 
     for (const field of requiredFields) {
       if (!mappedFields.includes(field)) {
@@ -193,11 +193,124 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     try {
       // Map CSV columns to system fields
       const mappedData = this.mapRecord(record, config.columnMappings);
-      const recordRef = mappedData.name || `row-${index + 2}`;
+      const recordRef = mappedData.proposedName || `Fila ${index + 2}`;
+      const rowNumber = index + 2; // +2 porque Excel empieza en 1 y tiene header
 
       // Validate required fields
-      if (!mappedData.name) {
-        return this.createFailedResult(recordRef, "MISSING_DATA", "Name is required", "error");
+      if (!mappedData.proposedName) {
+        const nameMapping = config.columnMappings.find((m) => m.systemField === "proposedName");
+        return this.createFailedResult(
+          recordRef,
+          "MISSING_DATA",
+          "El campo 'nombre' es obligatorio y no puede estar vacío",
+          "error",
+          rowNumber,
+          {
+            field: "proposedName",
+            csvColumn: nameMapping?.csvColumn || "proposedName",
+            value: mappedData.proposedName || "",
+            correctionSuggestion: `Completa el campo '${nameMapping?.csvColumn || "proposedName"}' en la fila ${rowNumber}`,
+            rowData: record,
+          }
+        );
+      }
+
+      // Validate coordinates if provided
+      if (mappedData.latitude) {
+        const lat = mappedData.latitude.replace(",", ".");
+        if (isNaN(parseFloat(lat))) {
+          const latMapping = config.columnMappings.find((m) => m.systemField === "latitude");
+          return this.createFailedResult(
+            recordRef,
+            "INVALID_COORDINATE",
+            `La latitud "${mappedData.latitude}" no es un número válido`,
+            "error",
+            rowNumber,
+            {
+              field: "latitude",
+              csvColumn: latMapping?.csvColumn || "latitude",
+              value: mappedData.latitude,
+              correctionSuggestion: `Usa formato decimal con punto (ej: 40.4165). Si usas coma, reemplázala por punto.`,
+              rowData: record,
+            }
+          );
+        }
+        const latValue = parseFloat(lat);
+        if (latValue < -90 || latValue > 90) {
+          const latMapping = config.columnMappings.find((m) => m.systemField === "latitude");
+          return this.createFailedResult(
+            recordRef,
+            "INVALID_COORDINATE",
+            `La latitud ${latValue} está fuera del rango válido (-90 a 90)`,
+            "error",
+            rowNumber,
+            {
+              field: "latitude",
+              csvColumn: latMapping?.csvColumn || "latitude",
+              value: mappedData.latitude,
+              correctionSuggestion: `Verifica las coordenadas. Para Madrid, la latitud debe estar cerca de 40.4`,
+              rowData: record,
+            }
+          );
+        }
+      }
+
+      if (mappedData.longitude) {
+        const lon = mappedData.longitude.replace(",", ".");
+        if (isNaN(parseFloat(lon))) {
+          const lonMapping = config.columnMappings.find((m) => m.systemField === "longitude");
+          return this.createFailedResult(
+            recordRef,
+            "INVALID_COORDINATE",
+            `La longitud "${mappedData.longitude}" no es un número válido`,
+            "error",
+            rowNumber,
+            {
+              field: "longitude",
+              csvColumn: lonMapping?.csvColumn || "longitude",
+              value: mappedData.longitude,
+              correctionSuggestion: `Usa formato decimal con punto (ej: -3.7038). Si usas coma, reemplázala por punto.`,
+              rowData: record,
+            }
+          );
+        }
+        const lonValue = parseFloat(lon);
+        if (lonValue < -180 || lonValue > 180) {
+          const lonMapping = config.columnMappings.find((m) => m.systemField === "longitude");
+          return this.createFailedResult(
+            recordRef,
+            "INVALID_COORDINATE",
+            `La longitud ${lonValue} está fuera del rango válido (-180 a 180)`,
+            "error",
+            rowNumber,
+            {
+              field: "longitude",
+              csvColumn: lonMapping?.csvColumn || "longitude",
+              value: mappedData.longitude,
+              correctionSuggestion: `Verifica las coordenadas. Para Madrid, la longitud debe estar cerca de -3.7`,
+              rowData: record,
+            }
+          );
+        }
+      }
+
+      // Validate postal code format
+      if (mappedData.postalCode && mappedData.postalCode.length !== 5) {
+        const pcMapping = config.columnMappings.find((m) => m.systemField === "postalCode");
+        return this.createFailedResult(
+          recordRef,
+          "INVALID_POSTAL_CODE",
+          `El código postal "${mappedData.postalCode}" debe tener exactamente 5 dígitos`,
+          "error",
+          rowNumber,
+          {
+            field: "postalCode",
+            csvColumn: pcMapping?.csvColumn || "postalCode",
+            value: mappedData.postalCode,
+            correctionSuggestion: `Los códigos postales de Madrid tienen 5 dígitos (ej: 28001, 28042)`,
+            rowData: record,
+          }
+        );
       }
 
       // Check for duplicates if enabled
@@ -227,10 +340,15 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
       return this.createSuccessResult("created", aed.id, recordRef);
     } catch (error) {
       return this.createFailedResult(
-        `row-${index + 2}`,
+        `Fila ${index + 2}`,
         "PROCESSING_ERROR",
-        error instanceof Error ? error.message : "Unknown error",
-        "error"
+        error instanceof Error ? error.message : "Error desconocido",
+        "error",
+        index + 2,
+        {
+          correctionSuggestion: "Contacta con soporte si el error persiste",
+          rowData: record,
+        }
       );
     }
   }
@@ -386,7 +504,7 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     // Create AED
     const aed = await this.prisma.aed.create({
       data: {
-        name: data.name,
+        name: data.proposedName,
         establishment_type: data.establishmentType,
         latitude,
         longitude,
