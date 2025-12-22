@@ -24,6 +24,15 @@ interface CsvRecord {
   [key: string]: string;
 }
 
+// Minimal outcome for duplicate checks
+interface DuplicateCheckOutcome {
+  isDuplicate: boolean;
+  matchedBy?: "id" | "code" | "externalReference";
+  matchedAedId?: string;
+  matchedCode?: string | null;
+  matchedExternalReference?: string | null;
+}
+
 export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportConfig> {
   readonly jobType = JobType.AED_CSV_IMPORT;
 
@@ -193,10 +202,14 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
 
       // Check for duplicates if enabled
       if (config.skipDuplicates) {
-        const isDuplicate = await this.checkDuplicate(mappedData, config.duplicateThreshold);
-        if (isDuplicate) {
+        const duplicate = await this.checkDuplicate(mappedData, config.duplicateThreshold);
+        if (duplicate.isDuplicate) {
           return this.createSuccessResult("skipped", undefined, recordRef, {
             reason: "duplicate",
+            matchedBy: duplicate.matchedBy,
+            matchedAedId: duplicate.matchedAedId,
+            matchedCode: duplicate.matchedCode,
+            matchedExternalReference: duplicate.matchedExternalReference,
           });
         }
       }
@@ -238,20 +251,116 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     return result;
   }
 
-  private async checkDuplicate(data: Record<string, string>, _threshold: number): Promise<boolean> {
-    // Simple duplicate check by name and location
-    if (!data.name) return false;
+  /**
+   * Verifica duplicados con cascada de matching:
+   * 1. Por ID (si el usuario lo proporciona)
+   * 2. Por code
+   * 3. Por external_reference
+   * 
+   * Esto permite re-ejecutar importaciones de forma segura
+   */
+  private async checkDuplicate(
+    data: Record<string, string>,
+    _threshold: number
+  ): Promise<DuplicateCheckOutcome> {
+    const outcome: DuplicateCheckOutcome = { isDuplicate: false };
 
-    const existing = await this.prisma.aed.findFirst({
-      where: {
-        name: {
-          equals: data.name,
-          mode: "insensitive",
+    const id = data.id?.trim();
+    const code = data.code?.trim();
+    const externalRef = data.externalReference?.trim();
+
+    // Si no hay ningún identificador, no podemos verificar duplicados
+    if (!id && !code && !externalRef) return outcome;
+
+    // ========================================
+    // PRIORIDAD 1: Buscar por ID
+    // ========================================
+    if (id) {
+      try {
+        const existingById = await this.prisma.aed.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            code: true,
+            external_reference: true,
+          },
+        });
+
+        if (existingById) {
+          return {
+            isDuplicate: true,
+            matchedBy: "id",
+            matchedAedId: existingById.id,
+            matchedCode: existingById.code,
+            matchedExternalReference: existingById.external_reference,
+          };
+        }
+      } catch (error) {
+        // ID no válido o no es UUID, continuar con otros métodos
+        console.warn(`Invalid ID format: ${id}`, error);
+      }
+    }
+
+    // ========================================
+    // PRIORIDAD 2: Buscar por code
+    // ========================================
+    if (code) {
+      const existingByCode = await this.prisma.aed.findFirst({
+        where: {
+          code: {
+            equals: code,
+            mode: "insensitive",
+          },
         },
-      },
-    });
+        select: {
+          id: true,
+          code: true,
+          external_reference: true,
+        },
+      });
 
-    return !!existing;
+      if (existingByCode) {
+        return {
+          isDuplicate: true,
+          matchedBy: "code",
+          matchedAedId: existingByCode.id,
+          matchedCode: existingByCode.code,
+          matchedExternalReference: existingByCode.external_reference,
+        };
+      }
+    }
+
+    // ========================================
+    // PRIORIDAD 3: Buscar por external_reference
+    // ========================================
+    if (externalRef) {
+      const existingByExtRef = await this.prisma.aed.findFirst({
+        where: {
+          external_reference: {
+            equals: externalRef,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          code: true,
+          external_reference: true,
+        },
+      });
+
+      if (existingByExtRef) {
+        return {
+          isDuplicate: true,
+          matchedBy: "externalReference",
+          matchedAedId: existingByExtRef.id,
+          matchedCode: existingByExtRef.code,
+          matchedExternalReference: existingByExtRef.external_reference,
+        };
+      }
+    }
+
+    // No se encontró ningún duplicado
+    return outcome;
   }
 
   private async createAed(
