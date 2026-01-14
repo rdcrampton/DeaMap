@@ -30,12 +30,16 @@ export const REQUIRED_FIELDS: FieldDefinition[] = [
     description: "Nombre del establecimiento donde está el DEA",
     examples: ["Hospital General", "Centro Comercial Plaza", "Ayuntamiento"],
     keywords: [
+      "proposedName", // Nombre técnico exacto
       "denominacion",
       "propuesta",
       "nombre",
       "establecimiento",
       "name",
       "propuesta de denominacion",
+      "proposed name", // Inglés
+      "establishment name", // Inglés
+      "facility name", // Inglés
     ],
   },
   {
@@ -45,7 +49,19 @@ export const REQUIRED_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Nombre de la calle o vía",
     examples: ["Gran Vía", "Calle Mayor", "Paseo de la Castellana"],
-    keywords: ["calle", "via", "nombre de la via", "street", "avenida", "paseo", "plaza"],
+    keywords: [
+      "streetName", // Nombre técnico exacto
+      "calle",
+      "via",
+      "nombre de la via",
+      "street",
+      "avenida",
+      "paseo",
+      "plaza",
+      "street name", // Inglés
+      "road name", // Inglés
+      "avenue", // Inglés
+    ],
   },
   {
     key: "streetNumber",
@@ -54,7 +70,17 @@ export const REQUIRED_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Número del portal",
     examples: ["1", "25", "123 bis"],
-    keywords: ["numero", "num", "portal", "numero de la via", "street number", "nº"],
+    keywords: [
+      "streetNumber", // Nombre técnico exacto
+      "numero",
+      "num",
+      "portal",
+      "numero de la via",
+      "street number",
+      "nº",
+      "number", // Inglés
+      "building number", // Inglés
+    ],
   },
 ];
 
@@ -70,7 +96,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Código único asignado al DEA",
-    keywords: ["codigo", "code", "identificador", "id"],
+    keywords: ["code", "codigo", "identificador", "id", "aed code", "defibrillator code"],
   },
   {
     key: "provisionalNumber",
@@ -78,7 +104,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Número provisional asignado",
-    keywords: ["provisional", "numero provisional", "num provisional", "temporal"],
+    keywords: [
+      "provisionalNumber",
+      "provisional",
+      "numero provisional",
+      "num provisional",
+      "temporal",
+      "provisional number",
+      "temporary number",
+    ],
   },
   {
     key: "establishmentType",
@@ -87,7 +121,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Tipo de establecimiento",
     examples: ["Hospital", "Centro deportivo", "Centro comercial"],
-    keywords: ["tipo", "establecimiento", "category", "categoria"],
+    keywords: [
+      "establishmentType",
+      "tipo",
+      "establecimiento",
+      "category",
+      "categoria",
+      "establishment type",
+      "facility type",
+      "type",
+    ],
   },
   {
     key: "sourceOrigin",
@@ -95,7 +138,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Origen del registro",
-    keywords: ["origen", "fuente", "source", "procedencia"],
+    keywords: [
+      "sourceOrigin",
+      "origen",
+      "fuente",
+      "source",
+      "procedencia",
+      "data source",
+      "origin",
+    ],
   },
   {
     key: "sourceDetails",
@@ -103,7 +154,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Información adicional del origen",
-    keywords: ["detalles", "details", "info origen"],
+    keywords: [
+      "sourceDetails",
+      "detalles",
+      "details",
+      "info origen",
+      "source details",
+      "source info",
+    ],
   },
   {
     key: "externalReference",
@@ -111,7 +169,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "ID o referencia en sistema externo",
-    keywords: ["referencia", "reference", "id externo", "external id"],
+    keywords: [
+      "externalReference",
+      "referencia",
+      "reference",
+      "id externo",
+      "external id",
+      "external reference",
+      "ref",
+    ],
   },
 
   // === LOCATION ===
@@ -122,7 +188,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Distrito de Madrid donde se ubica el DEA",
     examples: ["Centro", "1. Centro", "Retiro", "3. Retiro"],
-    keywords: ["distrito", "district", "zona", "demarcacion"],
+    keywords: ["district", "distrito", "zona", "demarcacion", "area", "region"],
   },
   {
     key: "streetType",
@@ -131,7 +197,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Tipo de vía (calle, avenida, plaza, etc.)",
     examples: ["Calle", "Avenida", "Plaza", "Paseo"],
-    keywords: ["tipo de via", "tipo via", "street type"],
+    keywords: ["streetType", "tipo de via", "tipo via", "street type", "road type"],
   },
   {
     key: "additionalInfo",
@@ -140,7 +206,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Información adicional de la dirección",
     examples: ["Edificio A", "Local 3", "Planta 2"],
-    keywords: ["complemento", "adicional", "extra", "detalle direccion"],
+    keywords: [
+      "additionalInfo",
+      "complemento",
+      "adicional",
+      "extra",
+      "detalle direccion",
+      "additional info",
+      "address complement",
+      "address details",
+    ],
   },
   {
     key: "postalCode",
@@ -149,7 +224,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Código postal de 5 dígitos",
     examples: ["28001", "28013", "28080"],
-    keywords: ["cp", "postal", "codigo postal", "zip", "zip code"],
+    keywords: ["postalCode", "cp", "postal", "codigo postal", "zip", "zip code", "postcode"],
   },
   {
     key: "latitude",
@@ -158,7 +233,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "number",
     description: "Coordenada de latitud (formato decimal)",
     examples: ["40.4168", "40.416775"],
-    keywords: ["lat", "latitud", "coordenada", "coord y", "norte", "latitude", "y"],
+    keywords: [
+      "latitude",
+      "lat",
+      "latitud",
+      "coordenada",
+      "coord y",
+      "norte",
+      "y",
+      "coordenadas-latitud",
+    ],
   },
   {
     key: "longitude",
@@ -167,7 +251,17 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "number",
     description: "Coordenada de longitud (formato decimal, negativa para oeste)",
     examples: ["-3.7038", "-3.703790"],
-    keywords: ["lon", "lng", "longitud", "coordenada", "coord x", "oeste", "longitude", "x"],
+    keywords: [
+      "longitude",
+      "lon",
+      "lng",
+      "longitud",
+      "coordenada",
+      "coord x",
+      "oeste",
+      "x",
+      "coordenadas-longitud",
+    ],
   },
   {
     key: "coordinatesPrecision",
@@ -175,7 +269,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Nivel de precisión de las coordenadas",
-    keywords: ["precision", "accuracy", "exactitud coordenadas"],
+    keywords: [
+      "coordinatesPrecision",
+      "precision",
+      "accuracy",
+      "exactitud coordenadas",
+      "coordinates precision",
+      "precision coordenadas",
+    ],
   },
   {
     key: "cityName",
@@ -184,7 +285,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Nombre de la ciudad",
     examples: ["Madrid"],
-    keywords: ["ciudad", "city", "municipio", "localidad"],
+    keywords: ["cityName", "ciudad", "city", "municipio", "localidad", "city name", "municipality"],
   },
   {
     key: "cityCode",
@@ -192,7 +293,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Código de la ciudad",
-    keywords: ["codigo ciudad", "city code"],
+    keywords: ["cityCode", "codigo ciudad", "city code", "municipality code"],
   },
   {
     key: "districtCode",
@@ -200,7 +301,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Código del distrito",
-    keywords: ["codigo distrito", "district code", "cod distrito"],
+    keywords: ["districtCode", "codigo distrito", "district code", "cod distrito"],
   },
   {
     key: "districtName",
@@ -208,7 +309,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Nombre completo del distrito",
-    keywords: ["nombre distrito", "district name"],
+    keywords: ["districtName", "nombre distrito", "district name"],
   },
   {
     key: "neighborhoodCode",
@@ -216,7 +317,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Código del barrio",
-    keywords: ["codigo barrio", "barrio", "neighborhood code", "cod barrio"],
+    keywords: [
+      "neighborhoodCode",
+      "codigo barrio",
+      "barrio",
+      "neighborhood code",
+      "cod barrio",
+      "neighbourhood code",
+    ],
   },
   {
     key: "neighborhoodName",
@@ -224,7 +332,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Nombre del barrio",
-    keywords: ["nombre barrio", "barrio", "neighborhood"],
+    keywords: [
+      "neighborhoodName",
+      "nombre barrio",
+      "barrio",
+      "neighborhood",
+      "neighbourhood",
+      "neighborhood name",
+    ],
   },
   {
     key: "accessDescription",
@@ -232,7 +347,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Cómo acceder al DEA",
-    keywords: ["acceso", "access", "como llegar", "descripcion acceso"],
+    keywords: [
+      "accessDescription",
+      "acceso",
+      "access",
+      "como llegar",
+      "descripcion acceso",
+      "access description",
+      "how to access",
+    ],
   },
   {
     key: "visibleReferences",
@@ -240,7 +363,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Elementos de referencia cercanos",
-    keywords: ["referencias", "references", "puntos de referencia"],
+    keywords: [
+      "visibleReferences",
+      "referencias",
+      "references",
+      "puntos de referencia",
+      "visible references",
+      "landmarks",
+    ],
   },
   {
     key: "floor",
@@ -249,7 +379,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Número de planta",
     examples: ["0", "1", "2", "Baja"],
-    keywords: ["planta", "floor", "nivel", "piso"],
+    keywords: ["floor", "planta", "nivel", "piso", "level", "storey", "story"],
   },
   {
     key: "specificLocation",
@@ -257,7 +387,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Ubicación exacta dentro del edificio",
-    keywords: ["ubicacion", "location", "posicion", "lugar especifico"],
+    keywords: [
+      "specificLocation",
+      "ubicacion",
+      "location",
+      "posicion",
+      "lugar especifico",
+      "specific location",
+      "exact location",
+      "position",
+    ],
   },
   {
     key: "locationObservations",
@@ -265,7 +404,13 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Observaciones adicionales sobre la ubicación",
-    keywords: ["observaciones ubicacion", "notas ubicacion"],
+    keywords: [
+      "locationObservations",
+      "observaciones ubicacion",
+      "notas ubicacion",
+      "location observations",
+      "location notes",
+    ],
   },
   {
     key: "accessWarnings",
@@ -273,7 +418,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Advertencias o restricciones de acceso",
-    keywords: ["advertencias", "warnings", "restricciones acceso"],
+    keywords: [
+      "accessWarnings",
+      "advertencias",
+      "warnings",
+      "restricciones acceso",
+      "access warnings",
+      "access restrictions",
+    ],
   },
 
   // === RESPONSIBLE ===
@@ -284,7 +436,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "email",
     description: "Email del responsable",
     examples: ["admin@hospital.com"],
-    keywords: ["correo", "email", "mail", "e-mail", "correo electronico", "correo-e"],
+    keywords: [
+      "submitterEmail",
+      "correo",
+      "email",
+      "mail",
+      "e-mail",
+      "correo electronico",
+      "correo-e",
+      "contact email",
+    ],
   },
   {
     key: "submitterName",
@@ -292,7 +453,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Nombre de la persona responsable",
-    keywords: ["nombre", "responsable", "contacto", "titular", "name"],
+    keywords: [
+      "submitterName",
+      "nombre",
+      "responsable",
+      "contacto",
+      "titular",
+      "name",
+      "contact name",
+      "responsible",
+    ],
   },
   {
     key: "submitterPhone",
@@ -301,7 +471,17 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Teléfono de contacto",
     examples: ["+34 600 000 000", "912345678"],
-    keywords: ["telefono", "tel", "phone", "movil", "celular", "contacto"],
+    keywords: [
+      "submitterPhone",
+      "telefono",
+      "tel",
+      "phone",
+      "movil",
+      "celular",
+      "contacto",
+      "contact phone",
+      "mobile",
+    ],
   },
   {
     key: "alternativePhone",
@@ -309,7 +489,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Teléfono alternativo de contacto",
-    keywords: ["telefono alternativo", "tel alternativo", "segundo telefono"],
+    keywords: [
+      "alternativePhone",
+      "telefono alternativo",
+      "tel alternativo",
+      "segundo telefono",
+      "alternative phone",
+      "secondary phone",
+    ],
   },
   {
     key: "ownership",
@@ -317,7 +504,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Titularidad del DEA",
-    keywords: ["titularidad", "ownership", "propiedad", "titular"],
+    keywords: ["ownership", "titularidad", "propiedad", "titular", "owner"],
   },
   {
     key: "localOwnership",
@@ -325,7 +512,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Titularidad del establecimiento",
-    keywords: ["titularidad local", "propiedad local", "titular establecimiento"],
+    keywords: [
+      "localOwnership",
+      "titularidad local",
+      "propiedad local",
+      "titular establecimiento",
+      "local ownership",
+      "facility ownership",
+    ],
   },
   {
     key: "localUse",
@@ -333,7 +527,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Uso del establecimiento",
-    keywords: ["uso", "uso local", "actividad", "finalidad"],
+    keywords: [
+      "localUse",
+      "uso",
+      "uso local",
+      "actividad",
+      "finalidad",
+      "local use",
+      "facility use",
+      "purpose",
+    ],
   },
   {
     key: "organization",
@@ -341,7 +544,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Organización responsable",
-    keywords: ["organizacion", "empresa", "entidad", "institution"],
+    keywords: [
+      "organization",
+      "organizacion",
+      "empresa",
+      "entidad",
+      "institution",
+      "company",
+      "entity",
+    ],
   },
   {
     key: "position",
@@ -349,7 +560,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Cargo del responsable",
-    keywords: ["cargo", "puesto", "position", "role"],
+    keywords: ["position", "cargo", "puesto", "role", "title", "job title"],
   },
   {
     key: "department",
@@ -357,7 +568,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Departamento del responsable",
-    keywords: ["departamento", "department", "area", "seccion"],
+    keywords: ["department", "departamento", "area", "seccion", "division", "section"],
   },
   {
     key: "contactObservations",
@@ -365,7 +576,13 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Notas sobre el contacto",
-    keywords: ["observaciones contacto", "notas contacto"],
+    keywords: [
+      "contactObservations",
+      "observaciones contacto",
+      "notas contacto",
+      "contact observations",
+      "contact notes",
+    ],
   },
 
   // === SCHEDULE ===
@@ -376,11 +593,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Descripción general del horario",
     keywords: [
+      "scheduleDescription",
       "horario",
       "schedule",
       "descripcion horario",
       "horario apertura",
       "horario establecimiento",
+      "schedule description",
+      "opening hours",
     ],
   },
   {
@@ -391,6 +611,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     description: "Hora de apertura entre semana (HH:MM)",
     examples: ["09:00", "08:30"],
     keywords: [
+      "weekdayOpening",
       "apertura",
       "hora apertura",
       "lunes",
@@ -398,6 +619,8 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
       "entre semana",
       "opening",
       "hora de apertura de lunes a viernes",
+      "weekday opening",
+      "monday to friday opening",
     ],
   },
   {
@@ -408,6 +631,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     description: "Hora de cierre entre semana (HH:MM)",
     examples: ["18:00", "20:00"],
     keywords: [
+      "weekdayClosing",
       "cierre",
       "hora cierre",
       "lunes",
@@ -415,6 +639,8 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
       "entre semana",
       "closing",
       "hora de cierre de lunes a viernes",
+      "weekday closing",
+      "monday to friday closing",
     ],
   },
   {
@@ -423,7 +649,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Hora de apertura los sábados (HH:MM)",
-    keywords: ["sabado", "sabados", "saturday", "apertura sabado", "hora de apertura los sabados"],
+    keywords: [
+      "saturdayOpening",
+      "sabado",
+      "sabados",
+      "saturday",
+      "apertura sabado",
+      "hora de apertura los sabados",
+      "saturday opening",
+    ],
   },
   {
     key: "saturdayClosing",
@@ -431,7 +665,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Hora de cierre los sábados (HH:MM)",
-    keywords: ["sabado", "sabados", "saturday", "cierre sabado", "hora de cierre los sabados"],
+    keywords: [
+      "saturdayClosing",
+      "sabado",
+      "sabados",
+      "saturday",
+      "cierre sabado",
+      "hora de cierre los sabados",
+      "saturday closing",
+    ],
   },
   {
     key: "sundayOpening",
@@ -440,11 +682,13 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     type: "string",
     description: "Hora de apertura los domingos (HH:MM)",
     keywords: [
+      "sundayOpening",
       "domingo",
       "domingos",
       "sunday",
       "apertura domingo",
       "hora de apertura los domingos",
+      "sunday opening",
     ],
   },
   {
@@ -453,7 +697,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Hora de cierre los domingos (HH:MM)",
-    keywords: ["domingo", "domingos", "sunday", "cierre domingo", "hora de cierre los domingos"],
+    keywords: [
+      "sundayClosing",
+      "domingo",
+      "domingos",
+      "sunday",
+      "cierre domingo",
+      "hora de cierre los domingos",
+      "sunday closing",
+    ],
   },
   {
     key: "has24hSurveillance",
@@ -463,6 +715,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     description: "Si tiene vigilancia 24 horas",
     examples: ["Sí", "No", "Si", "true", "false"],
     keywords: [
+      "has24hSurveillance",
       "vigilancia",
       "vigilante",
       "24h",
@@ -470,6 +723,8 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
       "surveillance",
       "seguridad",
       "tiene vigilante 24 horas",
+      "24h surveillance",
+      "security",
     ],
   },
   {
@@ -478,7 +733,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "boolean",
     description: "Si el acceso está restringido",
-    keywords: ["acceso restringido", "restricted", "limitado"],
+    keywords: [
+      "hasRestrictedAccess",
+      "acceso restringido",
+      "restricted",
+      "limitado",
+      "restricted access",
+      "limited access",
+    ],
   },
   {
     key: "holidaysAsWeekday",
@@ -486,7 +748,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "boolean",
     description: "Si en festivos tiene el horario de entre semana",
-    keywords: ["festivos", "holidays", "dias festivos"],
+    keywords: [
+      "holidaysAsWeekday",
+      "festivos",
+      "holidays",
+      "dias festivos",
+      "holidays as weekday",
+      "public holidays",
+    ],
   },
   {
     key: "closedOnHolidays",
@@ -494,7 +763,12 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "boolean",
     description: "Si cierra en días festivos",
-    keywords: ["cerrado festivos", "closed holidays"],
+    keywords: [
+      "closedOnHolidays",
+      "cerrado festivos",
+      "closed holidays",
+      "closed on public holidays",
+    ],
   },
   {
     key: "closedInAugust",
@@ -502,7 +776,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "boolean",
     description: "Si cierra en agosto",
-    keywords: ["agosto", "august", "cerrado agosto", "vacaciones"],
+    keywords: [
+      "closedInAugust",
+      "agosto",
+      "august",
+      "cerrado agosto",
+      "vacaciones",
+      "closed in august",
+      "vacation",
+    ],
   },
   {
     key: "scheduleExceptions",
@@ -510,7 +792,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Excepciones o cambios en el horario",
-    keywords: ["excepciones", "exceptions", "cambios horario"],
+    keywords: [
+      "scheduleExceptions",
+      "excepciones",
+      "exceptions",
+      "cambios horario",
+      "schedule exceptions",
+      "special hours",
+    ],
   },
   {
     key: "accessInstructions",
@@ -518,7 +807,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Instrucciones para acceder al DEA",
-    keywords: ["instrucciones", "instructions", "como acceder"],
+    keywords: [
+      "accessInstructions",
+      "instrucciones",
+      "instructions",
+      "como acceder",
+      "access instructions",
+      "how to reach",
+    ],
   },
 
   // === IMAGES ===
@@ -528,7 +824,18 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "url",
     description: "URL de la primera foto",
-    keywords: ["foto", "photo", "imagen", "image", "foto 1", "picture"],
+    keywords: [
+      "photo1Url",
+      "foto",
+      "photo",
+      "imagen",
+      "image",
+      "foto 1",
+      "picture",
+      "photo 1",
+      "photo1",
+      "image 1",
+    ],
   },
   {
     key: "photo2Url",
@@ -536,7 +843,18 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "url",
     description: "URL de la segunda foto",
-    keywords: ["foto", "photo", "imagen", "image", "foto 2", "picture"],
+    keywords: [
+      "photo2Url",
+      "foto",
+      "photo",
+      "imagen",
+      "image",
+      "foto 2",
+      "picture",
+      "photo 2",
+      "photo2",
+      "image 2",
+    ],
   },
   {
     key: "photoFrontUrl",
@@ -544,7 +862,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "url",
     description: "URL de la foto frontal del DEA",
-    keywords: ["foto frontal", "front", "frontal"],
+    keywords: [
+      "photoFrontUrl",
+      "foto frontal",
+      "front",
+      "frontal",
+      "photo front",
+      "front photo",
+      "front image",
+    ],
   },
   {
     key: "photoLocationUrl",
@@ -552,7 +878,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "url",
     description: "URL de la foto de ubicación",
-    keywords: ["foto ubicacion", "location", "contexto"],
+    keywords: [
+      "photoLocationUrl",
+      "foto ubicacion",
+      "location",
+      "contexto",
+      "location photo",
+      "location image",
+      "context photo",
+    ],
   },
   {
     key: "photoAccessUrl",
@@ -560,7 +894,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "url",
     description: "URL de la foto del acceso",
-    keywords: ["foto acceso", "access"],
+    keywords: [
+      "photoAccessUrl",
+      "foto acceso",
+      "access",
+      "access photo",
+      "access image",
+      "entrance photo",
+    ],
   },
 
   // === OBSERVATIONS AND NOTES ===
@@ -570,7 +911,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Observaciones del registro original",
-    keywords: ["observaciones origen", "notas origen"],
+    keywords: [
+      "originObservations",
+      "observaciones origen",
+      "notas origen",
+      "origin observations",
+      "origin notes",
+      "source observations",
+    ],
   },
   {
     key: "validationObservations",
@@ -578,7 +926,13 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Observaciones del proceso de validación",
-    keywords: ["observaciones validacion", "notas validacion"],
+    keywords: [
+      "validationObservations",
+      "observaciones validacion",
+      "notas validacion",
+      "validation observations",
+      "validation notes",
+    ],
   },
   {
     key: "internalNotes",
@@ -586,7 +940,16 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Notas internas del sistema",
-    keywords: ["notas", "notes", "comentarios", "observaciones internas"],
+    keywords: [
+      "internalNotes",
+      "notas",
+      "notes",
+      "comentarios",
+      "observaciones internas",
+      "internal notes",
+      "comments",
+      "internal comments",
+    ],
   },
   {
     key: "freeComment",
@@ -594,7 +957,17 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Comentario o nota adicional",
-    keywords: ["comentario", "comment", "nota libre", "observaciones", "comentario libre"],
+    keywords: [
+      "freeComment",
+      "comentario",
+      "comment",
+      "nota libre",
+      "observaciones",
+      "comentario libre",
+      "free comment",
+      "additional comment",
+      "remarks",
+    ],
   },
 
   // === STATUS AND METADATA ===
@@ -604,7 +977,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Estado del DEA (DRAFT, PUBLISHED, etc.)",
-    keywords: ["estado", "status", "situacion"],
+    keywords: ["status", "estado", "situacion", "state", "condition"],
   },
   {
     key: "requiresAttention",
@@ -612,7 +985,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "boolean",
     description: "Si el registro requiere revisión",
-    keywords: ["atencion", "attention", "requiere revision"],
+    keywords: [
+      "requiresAttention",
+      "atencion",
+      "attention",
+      "requiere revision",
+      "requires attention",
+      "needs review",
+    ],
   },
   {
     key: "attentionReason",
@@ -620,7 +1000,13 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Motivo por el que requiere atención",
-    keywords: ["motivo atencion", "razon atencion"],
+    keywords: [
+      "attentionReason",
+      "motivo atencion",
+      "razon atencion",
+      "attention reason",
+      "reason for attention",
+    ],
   },
   {
     key: "rejectionReason",
@@ -628,7 +1014,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Motivo de rechazo del registro",
-    keywords: ["rechazo", "rejection", "motivo rechazo"],
+    keywords: [
+      "rejectionReason",
+      "rechazo",
+      "rejection",
+      "motivo rechazo",
+      "rejection reason",
+      "reason for rejection",
+    ],
   },
 
   // === DATES ===
@@ -638,7 +1031,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "date",
     description: "Fecha en que se publicó el registro",
-    keywords: ["fecha publicacion", "published", "publicado"],
+    keywords: [
+      "publishedAt",
+      "fecha publicacion",
+      "published",
+      "publicado",
+      "publication date",
+      "published date",
+    ],
   },
   {
     key: "createdAt",
@@ -646,7 +1046,14 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "date",
     description: "Fecha de creación del registro",
-    keywords: ["fecha creacion", "created", "creado"],
+    keywords: [
+      "createdAt",
+      "fecha creacion",
+      "created",
+      "creado",
+      "creation date",
+      "created date",
+    ],
   },
   {
     key: "updatedAt",
@@ -654,7 +1061,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "date",
     description: "Fecha de última actualización",
-    keywords: ["fecha actualizacion", "updated", "modificado"],
+    keywords: [
+      "updatedAt",
+      "fecha actualizacion",
+      "updated",
+      "modificado",
+      "update date",
+      "modified date",
+      "last modified",
+    ],
   },
 
   // === TIMESTAMPS (from CSV) ===
@@ -664,7 +1079,7 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Hora de inicio del registro",
-    keywords: ["hora inicio", "start time", "inicio"],
+    keywords: ["startTime", "hora inicio", "start time", "inicio", "start", "begin time"],
   },
   {
     key: "endTime",
@@ -672,7 +1087,15 @@ export const OPTIONAL_FIELDS: FieldDefinition[] = [
     required: false,
     type: "string",
     description: "Hora de finalización del registro",
-    keywords: ["hora finalizacion", "end time", "fin", "hora final"],
+    keywords: [
+      "endTime",
+      "hora finalizacion",
+      "end time",
+      "fin",
+      "hora final",
+      "end",
+      "finish time",
+    ],
   },
 ];
 
