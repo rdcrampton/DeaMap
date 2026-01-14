@@ -649,11 +649,33 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     // ========================================
     // 5. DOWNLOAD AND UPLOAD IMAGES TO S3 (if image URLs exist)
     // ========================================
-    const imageUrls = [
-      { url: data.photo1Url, type: "FRONT" as const, imageId: randomUUID() },
-      { url: data.photo2Url, type: "LOCATION" as const, imageId: randomUUID() },
-      { url: data.photo3Url, type: "CONTEXT" as const, imageId: randomUUID() },
-    ].filter((img) => img.url && img.url.trim() !== "");
+    // Recopilar todas las posibles URLs de imágenes (soporta múltiples nomenclaturas)
+    const potentialImages = [
+      // Nomenclatura específica (tiene prioridad)
+      { url: data.photoFrontUrl, type: "FRONT" as const },
+      { url: data.photoLocationUrl, type: "LOCATION" as const },
+      { url: data.photoAccessUrl, type: "ACCESS" as const },
+      // Nomenclatura genérica (fallback)
+      { url: data.photo1Url, type: "FRONT" as const },
+      { url: data.photo2Url, type: "LOCATION" as const },
+      { url: data.photo3Url, type: "CONTEXT" as const },
+    ];
+
+    // Filtrar y eliminar duplicados (por URL)
+    const seenUrls = new Set<string>();
+    const imageUrls = potentialImages
+      .filter((img) => {
+        if (!img.url || img.url.trim() === "") return false;
+        const normalizedUrl = img.url.trim();
+        if (seenUrls.has(normalizedUrl)) return false;
+        seenUrls.add(normalizedUrl);
+        return true;
+      })
+      .map((img) => ({
+        url: img.url!.trim(),
+        type: img.type,
+        imageId: randomUUID(),
+      }));
 
     if (imageUrls.length > 0) {
       // Process images sequentially to avoid overwhelming the system

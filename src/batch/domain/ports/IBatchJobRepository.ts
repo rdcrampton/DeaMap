@@ -101,6 +101,20 @@ export interface IBatchJobRepository {
   findWaitingJobs(limit?: number): Promise<BatchJob[]>;
 
   /**
+   * Atomically acquire a lock on a job by transitioning it from WAITING to IN_PROGRESS
+   * Returns true if lock was acquired, false if job is not in WAITING state
+   * 
+   * This prevents race conditions when multiple processes try to process the same job
+   */
+  tryAcquireJobLock(jobId: string): Promise<boolean>;
+
+  /**
+   * Release a job lock and return it to WAITING state
+   * Used when a process needs to yield processing (e.g., timeout approaching)
+   */
+  releaseJobLock(jobId: string): Promise<void>;
+
+  /**
    * Delete a job and all its checkpoints
    */
   delete(id: string): Promise<void>;

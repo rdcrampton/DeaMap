@@ -21,7 +21,14 @@ export class SharePointDetectionService {
     "microsoft.sharepoint.com",
   ];
 
-  private readonly IMAGE_FIELDS = ["photo1Url", "photo2Url", "photo3Url"];
+  private readonly IMAGE_FIELDS = [
+    "photo1Url",
+    "photo2Url",
+    "photo3Url",
+    "photoFrontUrl",
+    "photoLocationUrl",
+    "photoAccessUrl",
+  ];
 
   /**
    * Detecta si hay URLs de SharePoint en los registros de importación

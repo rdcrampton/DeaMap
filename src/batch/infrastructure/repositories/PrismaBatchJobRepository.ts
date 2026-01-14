@@ -198,6 +198,51 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
     return jobs.map((j) => this.mapToDomain(j));
   }
 
+  /**
+   * Atomically transition a job from WAITING to IN_PROGRESS
+   * Returns true if the transition was successful (lock acquired)
+   * Returns false if the job is already being processed or not in WAITING state
+   * 
+   * This prevents race conditions when multiple cron jobs run concurrently
+   */
+  async tryAcquireJobLock(jobId: string): Promise<boolean> {
+    try {
+      // Use raw SQL for atomic update with WHERE condition
+      const result = await this.prisma.$executeRaw`
+        UPDATE "BatchJob" 
+        SET 
+          status = 'IN_PROGRESS',
+          last_heartbeat = NOW(),
+          updated_at = NOW()
+        WHERE id = ${jobId}::uuid
+          AND status = 'WAITING'
+      `;
+
+      // result is the number of affected rows
+      // 1 = lock acquired successfully
+      // 0 = job was not in WAITING state (already processing or completed)
+      return result === 1;
+    } catch (error) {
+      console.error(`Error acquiring lock for job ${jobId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Release job lock and return to WAITING state
+   * Used when a cron job needs to yield processing (e.g., timeout approaching)
+   */
+  async releaseJobLock(jobId: string): Promise<void> {
+    await this.prisma.batchJob.update({
+      where: { id: jobId },
+      data: {
+        status: "WAITING" as BatchJobStatus,
+        last_heartbeat: new Date(),
+        updated_at: new Date(),
+      },
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.prisma.batchJob.delete({
       where: { id },

@@ -68,8 +68,16 @@ export class CsvPreview {
 
   /**
    * Valida que todas las filas tengan el mismo número de columnas
+   * 🔧 MEJORADO: También verifica que no haya headers vacíos
    */
   isValid(): boolean {
+    // Verificar que no haya headers vacíos
+    const hasEmptyHeaders = this.headers.some((h) => h.trim().length === 0);
+    if (hasEmptyHeaders) {
+      return false;
+    }
+
+    // Verificar que todas las filas tengan el mismo número de columnas
     return this.sampleRows.every((row) => row.length === this.headers.length);
   }
 
@@ -104,6 +112,7 @@ export class CsvPreview {
 
   /**
    * Crea un CsvPreview desde datos parseados
+   * 🔧 MEJORADO: Limpia y valida los datos antes de crear el preview
    */
   static create(
     headers: string[],
@@ -111,7 +120,20 @@ export class CsvPreview {
     totalRows: number,
     delimiter: string = ";"
   ): CsvPreview {
-    return new CsvPreview(headers, sampleRows, totalRows, delimiter);
+    // 🔧 FIX: Asegurar que los headers estén limpios (ya viene filtrado del parser)
+    const cleanHeaders = headers.filter((h) => h.trim().length > 0);
+    
+    // 🔧 FIX: Normalizar filas para que coincidan con el número de headers
+    const normalizedRows = sampleRows.map((row) => {
+      // Si la fila tiene menos columnas, rellenar con vacíos
+      if (row.length < cleanHeaders.length) {
+        return [...row, ...Array(cleanHeaders.length - row.length).fill("")];
+      }
+      // Si tiene más, truncar
+      return row.slice(0, cleanHeaders.length);
+    });
+
+    return new CsvPreview(cleanHeaders, normalizedRows, totalRows, delimiter);
   }
 
   /**

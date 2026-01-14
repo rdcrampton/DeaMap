@@ -229,18 +229,25 @@ export default function MappingRow({
                                     }
                                   }}
                                   disabled={isMapped && !isSelected}
+                                  title={
+                                    isMapped && !isSelected
+                                      ? `Este campo ya está mapeado a otra columna`
+                                      : field.description || field.label
+                                  }
                                   className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
                                     isSelected
                                       ? "bg-blue-100 text-blue-900 font-medium"
                                       : isMapped
-                                        ? "text-gray-400 cursor-not-allowed"
+                                        ? "text-gray-400 cursor-not-allowed bg-gray-50"
                                         : "hover:bg-gray-100 text-gray-700"
                                   }`}
                                 >
                                   <div className="flex items-center justify-between">
                                     <span>{field.label}</span>
                                     {isMapped && !isSelected && (
-                                      <span className="text-xs">(ya mapeado)</span>
+                                      <span className="text-xs bg-gray-200 px-2 py-0.5 rounded">
+                                        ya mapeado
+                                      </span>
                                     )}
                                   </div>
                                   {field.description && (
@@ -273,18 +280,25 @@ export default function MappingRow({
                                     }
                                   }}
                                   disabled={isMapped && !isSelected}
+                                  title={
+                                    isMapped && !isSelected
+                                      ? `Este campo ya está mapeado a otra columna`
+                                      : field.description || field.label
+                                  }
                                   className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
                                     isSelected
                                       ? "bg-blue-100 text-blue-900 font-medium"
                                       : isMapped
-                                        ? "text-gray-400 cursor-not-allowed"
+                                        ? "text-gray-400 cursor-not-allowed bg-gray-50"
                                         : "hover:bg-gray-100 text-gray-700"
                                   }`}
                                 >
                                   <div className="flex items-center justify-between">
                                     <span>{field.label}</span>
                                     {isMapped && !isSelected && (
-                                      <span className="text-xs">(ya mapeado)</span>
+                                      <span className="text-xs bg-gray-200 px-2 py-0.5 rounded">
+                                        ya mapeado
+                                      </span>
                                     )}
                                   </div>
                                   {field.description && (

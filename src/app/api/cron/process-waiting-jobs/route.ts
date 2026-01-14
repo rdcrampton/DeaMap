@@ -30,14 +30,14 @@ initializeProcessors(prisma, dataSourceRepository);
 const orchestrator = new BatchJobOrchestrator(repository);
 
 /**
- * POST /api/cron/process-waiting-jobs
- * Automatically process waiting batch jobs
+ * Process waiting jobs (main logic)
+ * Used by both GET (Vercel Cron) and POST (manual trigger)
  */
-export async function POST(request: NextRequest) {
+async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
 
   try {
-    // Verify Vercel Cron Secret
+    // Verify Vercel Cron Secret (optional)
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
       totalRecords: number;
       percentage: number;
       hasMore: boolean;
+      lockAcquired?: boolean;
       error?: string;
     }> = [];
 
@@ -81,6 +82,28 @@ export async function POST(request: NextRequest) {
       console.log(`\n🔄 [Cron] Processing job ${job.id} (${job.name})`);
 
       try {
+        // 1. Try to acquire lock atomically
+        const lockAcquired = await repository.tryAcquireJobLock(job.id);
+
+        if (!lockAcquired) {
+          console.log(`⏭️  [Cron] Job ${job.id} already being processed by another instance, skipping`);
+          results.push({
+            jobId: job.id,
+            jobName: job.name,
+            success: true,
+            status: "SKIPPED",
+            processedRecords: 0,
+            totalRecords: 0,
+            percentage: 0,
+            hasMore: true,
+            lockAcquired: false,
+          });
+          continue;
+        }
+
+        console.log(`🔒 [Cron] Lock acquired for job ${job.id}`);
+
+        // 2. Process the job
         const result = await orchestrator.continue(job.id);
 
         const jobResult = {
@@ -92,6 +115,7 @@ export async function POST(request: NextRequest) {
           totalRecords: result.chunkResult.progress.totalRecords,
           percentage: result.chunkResult.progress.percentage,
           hasMore: result.chunkResult.progress.hasMore,
+          lockAcquired: true,
         };
 
         results.push(jobResult);
@@ -121,10 +145,10 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Check if we're running out of time (Vercel cron has 10 second timeout for free plan)
+      // 3. Check if we're running out of time (Vercel cron timeout)
       const elapsed = Date.now() - startTime;
       if (elapsed > 50000) {
-        // 50 seconds - leave buffer for response
+        // 50 seconds - leave 10s buffer for response
         console.warn(
           `⏰ [Cron] Approaching timeout (${elapsed}ms), stopping after processing ${results.length} jobs`
         );
@@ -134,18 +158,20 @@ export async function POST(request: NextRequest) {
 
     const totalDuration = Date.now() - startTime;
     const successCount = results.filter((r) => r.success).length;
+    const skippedCount = results.filter((r) => r.lockAcquired === false).length;
 
     console.log(
-      `\n🏁 [Cron] Batch processing complete: ${successCount}/${results.length} jobs successful in ${totalDuration}ms`
+      `\n🏁 [Cron] Batch processing complete: ${successCount}/${results.length} jobs successful (${skippedCount} skipped) in ${totalDuration}ms`
     );
 
     return NextResponse.json(
       {
         success: true,
-        message: `Processed ${results.length} jobs (${successCount} successful)`,
+        message: `Processed ${results.length} jobs (${successCount} successful, ${skippedCount} skipped)`,
         processed: results.length,
         successful: successCount,
-        failed: results.length - successCount,
+        skipped: skippedCount,
+        failed: results.length - successCount - skippedCount,
         duration: totalDuration,
         results,
       },
@@ -168,34 +194,16 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/cron/process-waiting-jobs
- * Health check endpoint
+ * Called by Vercel Cron (every minute)
  */
-export async function GET() {
-  try {
-    const waitingJobs = await repository.findWaitingJobs(10);
+export async function GET(request: NextRequest) {
+  return processWaitingJobs(request);
+}
 
-    return NextResponse.json({
-      success: true,
-      message: "Cron endpoint is healthy",
-      waitingJobs: waitingJobs.length,
-      jobs: waitingJobs.map((job) => ({
-        id: job.id,
-        name: job.name,
-        status: job.status,
-        progress: {
-          processedRecords: job.progress.processedRecords,
-          totalRecords: job.progress.totalRecords,
-          percentage: job.progress.percentage,
-        },
-      })),
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
-  }
+/**
+ * POST /api/cron/process-waiting-jobs
+ * Manual trigger (for testing and development)
+ */
+export async function POST(request: NextRequest) {
+  return processWaitingJobs(request);
 }

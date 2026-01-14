@@ -43,7 +43,12 @@ export class ParseCsvPreviewUseCase {
 
       // Obtener headers (primera línea)
       const headerLine = lines[0]!;
-      const headers = this.parseRow(headerLine, delimiter);
+      const rawHeaders = this.parseRow(headerLine, delimiter);
+
+      // 🔧 FIX: Filtrar headers vacíos y limpiar espacios
+      const headers = rawHeaders
+        .map((h) => h.trim())
+        .filter((h) => h.length > 0);
 
       if (headers.length === 0) {
         return {
@@ -57,7 +62,13 @@ export class ParseCsvPreviewUseCase {
       const dataLines = lines.slice(1);
       const totalRows = dataLines.length;
       const sampleLines = dataLines.slice(0, sampleSize);
-      const sampleRows = sampleLines.map((line) => this.parseRow(line, delimiter));
+      
+      // 🔧 FIX: Normalizar filas al mismo número de columnas que headers válidos
+      const sampleRows = sampleLines.map((line) => {
+        const rawRow = this.parseRow(line, delimiter);
+        // Tomar solo las mismas columnas que headers válidos
+        return rawRow.slice(0, headers.length).map((cell) => cell.trim());
+      });
 
       // Validar que todas las filas tengan el mismo número de columnas
       const invalidRows = sampleRows.filter((row) => row.length !== headers.length);
@@ -86,11 +97,13 @@ export class ParseCsvPreviewUseCase {
 
   /**
    * Parsea una línea del CSV respetando comillas y delimitadores
+   * 🔧 MEJORADO: Maneja correctamente delimitadores finales y columnas vacías
    */
   private parseRow(line: string, delimiter: string): string[] {
     const result: string[] = [];
     let current = "";
     let inQuotes = false;
+    let fieldStarted = false;
 
     for (let i = 0; i < line.length; i++) {
       const char = line[i]!;
@@ -104,17 +117,23 @@ export class ParseCsvPreviewUseCase {
         } else {
           inQuotes = !inQuotes;
         }
+        fieldStarted = true;
       } else if (char === delimiter && !inQuotes) {
         // Encontramos un delimitador fuera de comillas
         result.push(current.trim());
         current = "";
+        fieldStarted = false;
       } else {
         current += char;
+        if (char.trim()) fieldStarted = true;
       }
     }
 
-    // Agregar el último campo
-    result.push(current.trim());
+    // 🔧 FIX: Solo agregar el último campo si tiene contenido o si se inició un campo
+    const trimmedLast = current.trim();
+    if (trimmedLast.length > 0 || fieldStarted) {
+      result.push(trimmedLast);
+    }
 
     return result;
   }

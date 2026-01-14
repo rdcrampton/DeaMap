@@ -6,7 +6,7 @@
 'use client';
 
 import { Search, RotateCcw } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 
 import { useColumnMapping } from '@/hooks/useColumnMapping';
 
@@ -51,29 +51,41 @@ export default function ColumnMappingEditor({
     getMappingsForSubmit,
   } = useColumnMapping(preview.headers, initialMappings || suggestions);
 
+  // Obtener datos de muestra para cada columna
+  const getSampleDataForColumn = useCallback(
+    (csvColumn: string): string[] => {
+      if (!preview.headers || !preview.rows) return [];
+
+      const columnIndex = preview.headers.indexOf(csvColumn);
+      if (columnIndex === -1) return [];
+
+      return preview.rows.slice(0, 3).map((row) => {
+        if (!row || !Array.isArray(row)) return '';
+        const value = row[columnIndex];
+        return value?.toString().trim() || '';
+      });
+    },
+    [preview.headers, preview.rows]
+  );
+
   // Filtrar columnas según término de búsqueda
+  // 🔧 MEJORADO: También filtra columnas completamente vacías
   const filteredMappingStates = useMemo(() => {
-    if (!searchTerm.trim()) return mappingStates;
+    // Primero filtrar columnas vacías
+    const nonEmptyStates = mappingStates.filter((state) => {
+      const sampleData = getSampleDataForColumn(state.csvColumn);
+      const hasData = sampleData.some((value) => value.trim().length > 0);
+      return hasData || state.csvColumn.trim().length > 0; // Mantener si tiene nombre aunque datos vacíos
+    });
+
+    // Luego aplicar filtro de búsqueda
+    if (!searchTerm.trim()) return nonEmptyStates;
 
     const term = searchTerm.toLowerCase();
-    return mappingStates.filter((state) =>
+    return nonEmptyStates.filter((state) =>
       state.csvColumn.toLowerCase().includes(term)
     );
-  }, [mappingStates, searchTerm]);
-
-  // Obtener datos de muestra para cada columna
-  const getSampleDataForColumn = (csvColumn: string): string[] => {
-    if (!preview.headers || !preview.rows) return [];
-    
-    const columnIndex = preview.headers.indexOf(csvColumn);
-    if (columnIndex === -1) return [];
-
-    return preview.rows.slice(0, 3).map((row) => {
-      if (!row || !Array.isArray(row)) return '';
-      const value = row[columnIndex];
-      return value?.toString().trim() || '';
-    });
-  };
+  }, [mappingStates, searchTerm, getSampleDataForColumn]);
 
   const handleConfirm = () => {
     const mappings = getMappingsForSubmit();
