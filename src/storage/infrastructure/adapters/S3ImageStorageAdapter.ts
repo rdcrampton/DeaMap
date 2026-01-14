@@ -90,6 +90,7 @@ export class S3ImageStorageAdapter implements IImageStorage {
   }
 
   getPublicUrl(key: string): string {
-    return `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`;
+    // Use the centralized buildS3Url utility which handles CDN logic
+    return buildS3Url(this.bucketName, this.region, key);
   }
 }

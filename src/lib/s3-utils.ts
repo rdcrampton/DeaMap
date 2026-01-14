@@ -102,12 +102,23 @@ export function parseS3Url(url: string): {
 }
 
 /**
- * Build public S3 URL
+ * Build public URL for image delivery
+ * Uses CDN (CloudFront) if configured, otherwise falls back to S3 direct
  * @param bucket - S3 bucket name
  * @param region - AWS region
  * @param key - S3 key (path)
  * @returns Full public URL
  */
 export function buildS3Url(bucket: string, region: string, key: string): string {
+  const cdnBaseUrl = process.env.CDN_BASE_URL;
+  
+  if (cdnBaseUrl) {
+    // Use CDN (CloudFront or other CDN)
+    // Remove trailing slash if present
+    const baseUrl = cdnBaseUrl.endsWith('/') ? cdnBaseUrl.slice(0, -1) : cdnBaseUrl;
+    return `${baseUrl}/${key}`;
+  }
+  
+  // Fallback to S3 direct URL
   return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 }

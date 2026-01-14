@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { buildS3Url } from "./s3-utils";
 
 // Initialize S3 client
 const s3Client = new S3Client({
@@ -43,8 +44,7 @@ export async function uploadToS3({
 
   await s3Client.send(command);
 
-  // Return the public URL
-  // Format: https://bucket-name.s3.region.amazonaws.com/key
+  // Return the public URL using centralized utility (handles CDN logic)
   const region = process.env.AWS_REGION || "eu-west-1";
-  return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+  return buildS3Url(bucketName, region, key);
 }

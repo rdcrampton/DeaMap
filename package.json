@@ -47,6 +47,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "migrate:legacy": "tsx scripts/legacy-migration/migrate-legacy-deas.ts",
+    "migrate-cdn": "tsx scripts/migrate-image-urls-to-cdn.ts",
     "prepare": "husky"
   },
   "dependencies": {
