@@ -48,20 +48,45 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
 
     console.log("⏰ [Cron] Starting batch job processing...");
 
-    // Find waiting jobs (limit to avoid overwhelming the system)
-    const waitingJobs = await repository.findWaitingJobs(5); // Process max 5 jobs per cron run
+    // 1. RECOVER ORPHANED JOBS (IN_PROGRESS without heartbeat for >3 minutes)
+    const orphanedJobs = await repository.findTimedOutJobs(180000); // 3 minutes
+    
+    if (orphanedJobs.length > 0) {
+      console.log(`🔧 [Cron] Found ${orphanedJobs.length} orphaned jobs, marking as INTERRUPTED`);
+      
+      for (const orphanJob of orphanedJobs) {
+        try {
+          orphanJob.markInterrupted();
+          await repository.update(orphanJob);
+          console.log(`✅ [Cron] Job ${orphanJob.id} marked as INTERRUPTED and will be recovered`);
+        } catch (error) {
+          console.error(`❌ [Cron] Error marking job ${orphanJob.id} as INTERRUPTED:`, error);
+        }
+      }
+    }
 
-    if (waitingJobs.length === 0) {
-      console.log("💤 [Cron] No waiting jobs found");
+    // 2. FIND PENDING JOBS (not started yet)
+    const pendingJobs = await repository.findResumableJobs({ types: undefined });
+    const justPendingJobs = pendingJobs.filter(j => j.status === 'PENDING' || j.status === 'QUEUED');
+    
+    // 3. FIND WAITING JOBS (already started but waiting for continuation)
+    const waitingJobs = await repository.findWaitingJobs(5);
+    
+    // 4. COMBINE: PENDING jobs first (FIFO), then WAITING jobs
+    const jobsToProcess = [...justPendingJobs, ...waitingJobs].slice(0, 5);
+
+    if (jobsToProcess.length === 0) {
+      console.log("💤 [Cron] No jobs to process");
       return NextResponse.json({
         success: true,
-        message: "No waiting jobs to process",
+        message: "No jobs to process",
         processed: 0,
+        recovered: orphanedJobs.length,
         duration: Date.now() - startTime,
       });
     }
 
-    console.log(`📋 [Cron] Found ${waitingJobs.length} waiting jobs`);
+    console.log(`📋 [Cron] Found ${jobsToProcess.length} jobs to process (${justPendingJobs.length} pending, ${waitingJobs.length} waiting)`);
 
     const results: Array<{
       jobId: string;
@@ -73,38 +98,48 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
       percentage: number;
       hasMore: boolean;
       lockAcquired?: boolean;
+      wasPending?: boolean;
       error?: string;
     }> = [];
 
     // Process each job
-    for (const job of waitingJobs) {
+    for (const job of jobsToProcess) {
       const jobStartTime = Date.now();
       console.log(`\n🔄 [Cron] Processing job ${job.id} (${job.name})`);
 
       try {
-        // 1. Try to acquire lock atomically
-        const lockAcquired = await repository.tryAcquireJobLock(job.id);
+        const wasPending = job.status === 'PENDING' || job.status === 'QUEUED';
+        
+        // 1. For WAITING jobs, try to acquire lock atomically
+        //    For PENDING jobs, start them directly
+        let lockAcquired = true;
+        
+        if (!wasPending) {
+          lockAcquired = await repository.tryAcquireJobLock(job.id);
 
-        if (!lockAcquired) {
-          console.log(`⏭️  [Cron] Job ${job.id} already being processed by another instance, skipping`);
-          results.push({
-            jobId: job.id,
-            jobName: job.name,
-            success: true,
-            status: "SKIPPED",
-            processedRecords: 0,
-            totalRecords: 0,
-            percentage: 0,
-            hasMore: true,
-            lockAcquired: false,
-          });
-          continue;
+          if (!lockAcquired) {
+            console.log(`⏭️  [Cron] Job ${job.id} already being processed by another instance, skipping`);
+            results.push({
+              jobId: job.id,
+              jobName: job.name,
+              success: true,
+              status: "SKIPPED",
+              processedRecords: 0,
+              totalRecords: 0,
+              percentage: 0,
+              hasMore: true,
+              lockAcquired: false,
+            });
+            continue;
+          }
+
+          console.log(`🔒 [Cron] Lock acquired for job ${job.id}`);
         }
 
-        console.log(`🔒 [Cron] Lock acquired for job ${job.id}`);
-
-        // 2. Process the job
-        const result = await orchestrator.continue(job.id);
+        // 2. Process the job (start or continue depending on state)
+        const result = wasPending 
+          ? await orchestrator.start(job.id)
+          : await orchestrator.continue(job.id);
 
         const jobResult = {
           jobId: job.id,
@@ -116,6 +151,7 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
           percentage: result.chunkResult.progress.percentage,
           hasMore: result.chunkResult.progress.hasMore,
           lockAcquired: true,
+          wasPending,
         };
 
         results.push(jobResult);
@@ -159,18 +195,21 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
     const totalDuration = Date.now() - startTime;
     const successCount = results.filter((r) => r.success).length;
     const skippedCount = results.filter((r) => r.lockAcquired === false).length;
+    const startedCount = results.filter((r) => r.wasPending).length;
 
     console.log(
-      `\n🏁 [Cron] Batch processing complete: ${successCount}/${results.length} jobs successful (${skippedCount} skipped) in ${totalDuration}ms`
+      `\n🏁 [Cron] Batch processing complete: ${successCount}/${results.length} jobs successful (${startedCount} started, ${skippedCount} skipped, ${orphanedJobs.length} recovered) in ${totalDuration}ms`
     );
 
     return NextResponse.json(
       {
         success: true,
-        message: `Processed ${results.length} jobs (${successCount} successful, ${skippedCount} skipped)`,
+        message: `Processed ${results.length} jobs (${successCount} successful, ${startedCount} started, ${skippedCount} skipped, ${orphanedJobs.length} recovered)`,
         processed: results.length,
         successful: successCount,
+        started: startedCount,
         skipped: skippedCount,
+        recovered: orphanedJobs.length,
         failed: results.length - successCount - skippedCount,
         duration: totalDuration,
         results,

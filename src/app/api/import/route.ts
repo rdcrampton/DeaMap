@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
         : undefined,
     });
 
-    // Create and start the batch job
+    // Create the batch job (DO NOT START IT - let the CRON handle it)
     const job = await orchestrator.create({
       type: JobType.AED_CSV_IMPORT,
       name: batchName || `Importación CSV ${new Date().toISOString()}`,
@@ -181,16 +181,22 @@ export async function POST(request: NextRequest) {
       tags: ["csv-import", "manual-upload"],
     });
 
-    // Start the job (process first chunk)
-    const { job: startedJob, chunkResult } = await orchestrator.start(job.id);
+    // Return immediately - CRON will pick it up and start processing
+    console.log(`📋 [Import] Job ${job.id} created and queued for CRON processing`);
 
     return NextResponse.json({
       success: true,
-      batchId: startedJob.id,
-      status: startedJob.status,
-      progress: chunkResult.progress,
-      shouldContinue: chunkResult.shouldContinue,
-      message: "Importación iniciada correctamente",
+      batchId: job.id,
+      status: job.status, // Will be PENDING
+      progress: {
+        totalRecords: 0,
+        processedRecords: 0,
+        successfulRecords: 0,
+        failedRecords: 0,
+        percentage: 0,
+        hasMore: true,
+      },
+      message: "Importación en cola. El procesamiento comenzará automáticamente en breve.",
     });
   } catch (error) {
     console.error("Error creating import batch:", error);
