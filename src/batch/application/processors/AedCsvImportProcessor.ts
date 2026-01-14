@@ -21,6 +21,8 @@ import { PrismaClient } from "@/generated/client/client";
 import * as fs from "fs";
 import { randomUUID } from "crypto";
 import { DownloadAndUploadImageUseCase } from "@/storage/application/use-cases/DownloadAndUploadImageUseCase";
+import * as os from "os";
+import * as path from "path";
 
 interface CsvRecord {
   [key: string]: string;
@@ -37,6 +39,7 @@ interface DuplicateCheckOutcome {
 
 export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportConfig> {
   readonly jobType = JobType.AED_CSV_IMPORT;
+  private tempFilePath?: string; // Store temp file path for cleanup
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -45,14 +48,80 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     super();
   }
 
+  /**
+   * Resolve file path - downloads from S3 if URL, returns local path
+   */
+  private async resolveFilePath(filePath: string): Promise<string> {
+    // Check if it's an S3 URL
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      console.log(`📥 [AedCsvImportProcessor] Downloading CSV from S3: ${filePath}`);
+
+      try {
+        // Download file from S3 URL
+        const response = await fetch(filePath);
+
+        if (!response.ok) {
+          throw new Error(`Failed to download file: ${response.statusText} (${response.status})`);
+        }
+
+        const buffer = await response.arrayBuffer();
+        const content = Buffer.from(buffer);
+
+        // Create temp file
+        const tmpDir = path.join(os.tmpdir(), "dea-batch-processing");
+        await fs.promises.mkdir(tmpDir, { recursive: true });
+
+        const timestamp = Date.now();
+        const randomId = randomUUID().substring(0, 8);
+        const tempFileName = `batch-csv-${timestamp}-${randomId}.csv`;
+        const tempPath = path.join(tmpDir, tempFileName);
+
+        // Write to temp file
+        await fs.promises.writeFile(tempPath, content);
+
+        console.log(`✅ [AedCsvImportProcessor] CSV downloaded to temp file: ${tempPath} (${content.length} bytes)`);
+
+        // Store for cleanup later
+        this.tempFilePath = tempPath;
+
+        return tempPath;
+      } catch (error) {
+        console.error(`❌ [AedCsvImportProcessor] Failed to download CSV from S3:`, error);
+        throw new Error(`Failed to download CSV from S3: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+
+    // It's a local file path
+    return filePath;
+  }
+
+  /**
+   * Cleanup temporary files
+   */
+  private async cleanupTempFile(): Promise<void> {
+    if (this.tempFilePath) {
+      try {
+        await fs.promises.unlink(this.tempFilePath);
+        console.log(`🗑️ [AedCsvImportProcessor] Temporary file deleted: ${this.tempFilePath}`);
+        this.tempFilePath = undefined;
+      } catch (error) {
+        console.warn(`⚠️ [AedCsvImportProcessor] Failed to delete temp file ${this.tempFilePath}:`, error);
+      }
+    }
+  }
+
   validateConfig(config: AedCsvImportConfig): ProcessorValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
 
     if (!config.filePath) {
       errors.push("filePath is required");
-    } else if (!fs.existsSync(config.filePath)) {
-      errors.push(`File not found: ${config.filePath}`);
+    } else {
+      // Only validate local file paths - S3 URLs will be validated during download
+      const isUrl = config.filePath.startsWith("http://") || config.filePath.startsWith("https://");
+      if (!isUrl && !fs.existsSync(config.filePath)) {
+        errors.push(`File not found: ${config.filePath}`);
+      }
     }
 
     if (!config.columnMappings || config.columnMappings.length === 0) {
@@ -74,9 +143,12 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
 
   async initialize(config: AedCsvImportConfig): Promise<ProcessorInitResult> {
     try {
-      const { totalRecords, headers } = this.readCsvFile(config);
+      // Resolve file path (download from S3 if needed)
+      const resolvedPath = await this.resolveFilePath(config.filePath);
+      const { totalRecords, headers } = this.readCsvFile(resolvedPath, config);
 
       if (totalRecords === 0) {
+        await this.cleanupTempFile();
         return {
           success: false,
           totalRecords: 0,
@@ -93,6 +165,7 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
         },
       };
     } catch (error) {
+      await this.cleanupTempFile();
       return {
         success: false,
         totalRecords: 0,
@@ -104,12 +177,15 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
   /**
    * Read CSV file and return records (stateless - reads on demand)
    */
-  private readCsvFile(config: AedCsvImportConfig): {
+  private readCsvFile(
+    filePath: string,
+    config: AedCsvImportConfig
+  ): {
     records: CsvRecord[];
     headers: string[];
     totalRecords: number;
   } {
-    const content = fs.readFileSync(config.filePath, "utf-8");
+    const content = fs.readFileSync(filePath, "utf-8");
     const delimiter = config.delimiter || ";";
     const lines = content.split("\n").filter((line) => line.trim());
 
@@ -141,77 +217,85 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     const config = job.config as AedCsvImportConfig;
     const results: ProcessRecordResult[] = [];
 
-    // Read CSV file on-demand (stateless)
-    const { records } = this.readCsvFile(config);
+    try {
+      // Resolve file path (download from S3 if needed)
+      const resolvedPath = await this.resolveFilePath(config.filePath);
 
-    let processedCount = 0;
-    let successCount = 0;
-    let failedCount = 0;
-    let skippedCount = 0;
+      // Read CSV file on-demand (stateless)
+      const { records } = this.readCsvFile(resolvedPath, config);
 
-    const endIndex = Math.min(startIndex + chunkSize, records.length);
+      let processedCount = 0;
+      let successCount = 0;
+      let failedCount = 0;
+      let skippedCount = 0;
 
-    console.log(
-      `📋 [AedCsvImportProcessor] Processing records ${startIndex}-${endIndex - 1} of ${records.length}`
-    );
+      const endIndex = Math.min(startIndex + chunkSize, records.length);
 
-    for (let i = startIndex; i < endIndex; i++) {
-      // Check timeout
-      if (this.isApproachingTimeout(context)) {
-        console.log(`⏰ [AedCsvImportProcessor] Approaching timeout at record ${i}`);
-        break;
-      }
+      console.log(
+        `📋 [AedCsvImportProcessor] Processing records ${startIndex}-${endIndex - 1} of ${records.length}`
+      );
 
-      const record = records[i];
-      const result = await this.processRecord(record, config, i, job.id);
-      results.push(result);
+      for (let i = startIndex; i < endIndex; i++) {
+        // Check timeout
+        if (this.isApproachingTimeout(context)) {
+          console.log(`⏰ [AedCsvImportProcessor] Approaching timeout at record ${i}`);
+          break;
+        }
 
-      if (result.success) {
-        if (result.action === "skipped") {
-          skippedCount++;
+        const record = records[i];
+        const result = await this.processRecord(record, config, i, job.id);
+        results.push(result);
+
+        if (result.success) {
+          if (result.action === "skipped") {
+            skippedCount++;
+          } else {
+            successCount++;
+          }
         } else {
-          successCount++;
+          failedCount++;
         }
-      } else {
-        failedCount++;
-      }
 
-      processedCount++;
+        processedCount++;
 
-      // Save checkpoint
-      if (processedCount % config.checkpointFrequency === 0) {
-        if (onCheckpoint) {
-          await onCheckpoint(i);
+        // Save checkpoint
+        if (processedCount % config.checkpointFrequency === 0) {
+          if (onCheckpoint) {
+            await onCheckpoint(i);
+          }
+        }
+
+        // Heartbeat
+        if (onHeartbeat && processedCount % 10 === 0) {
+          await onHeartbeat();
         }
       }
 
-      // Heartbeat
-      if (onHeartbeat && processedCount % 10 === 0) {
-        await onHeartbeat();
+      // Final checkpoint
+      if (onCheckpoint && processedCount > 0) {
+        await onCheckpoint(startIndex + processedCount - 1);
       }
+
+      const hasMore = startIndex + processedCount < records.length;
+
+      console.log(
+        `✅ [AedCsvImportProcessor] Processed ${processedCount} records (success: ${successCount}, failed: ${failedCount}, skipped: ${skippedCount}, hasMore: ${hasMore})`
+      );
+
+      return {
+        processedCount,
+        successCount,
+        failedCount,
+        skippedCount,
+        results,
+        hasMore,
+        nextIndex: startIndex + processedCount,
+        shouldContinue: failedCount < processedCount * 0.5,
+      };
+    } finally {
+      // Clean up temporary file if downloaded from S3
+      await this.cleanupTempFile();
     }
-
-    // Final checkpoint
-    if (onCheckpoint && processedCount > 0) {
-      await onCheckpoint(startIndex + processedCount - 1);
-    }
-
-    const hasMore = startIndex + processedCount < records.length;
-
-    console.log(
-      `✅ [AedCsvImportProcessor] Processed ${processedCount} records (success: ${successCount}, failed: ${failedCount}, skipped: ${skippedCount}, hasMore: ${hasMore})`
-    );
-
-    return {
-      processedCount,
-      successCount,
-      failedCount,
-      skippedCount,
-      results,
-      hasMore,
-      nextIndex: startIndex + processedCount,
-      shouldContinue: failedCount < processedCount * 0.5,
-    };
   }
 
   private async processRecord(

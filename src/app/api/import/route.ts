@@ -16,6 +16,10 @@ import { BatchJobOrchestrator } from "@/batch/application/orchestrator/BatchJobO
 import { PrismaBatchJobRepository } from "@/batch/infrastructure/repositories/PrismaBatchJobRepository";
 import { initializeProcessors } from "@/batch/application/processors";
 import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
+import { uploadToS3 } from "@/lib/s3";
+import fs from "fs/promises";
+import path from "path";
+import crypto from "crypto";
 
 /**
  * GET /api/import
@@ -151,10 +155,47 @@ export async function POST(request: NextRequest) {
     const repository = new PrismaBatchJobRepository(prisma);
     const orchestrator = new BatchJobOrchestrator(repository);
 
-    // Create configuration with defaults
+    // Upload CSV file to S3 for persistent storage
+    console.log(`📤 [Import] Uploading CSV to S3: ${filePath}`);
+
+    let s3Url: string;
+    let fileSize: number;
+    let fileHash: string;
+    const fileName = path.basename(filePath);
+
+    try {
+      // Read file from /tmp
+      const fileBuffer = await fs.readFile(filePath);
+      fileSize = fileBuffer.length;
+
+      // Calculate file hash for integrity verification
+      fileHash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+      // Upload to S3
+      s3Url = await uploadToS3({
+        buffer: fileBuffer,
+        filename: fileName,
+        contentType: "text/csv",
+        prefix: "batch-jobs/csv-imports",
+      });
+
+      console.log(`✅ [Import] CSV uploaded to S3: ${s3Url} (${fileSize} bytes, hash: ${fileHash.substring(0, 8)}...)`);
+
+      // Clean up temporary file
+      await fs.unlink(filePath);
+      console.log(`🗑️ [Import] Temporary file deleted: ${filePath}`);
+    } catch (error) {
+      console.error(`❌ [Import] Failed to upload CSV to S3:`, error);
+      return NextResponse.json(
+        { error: "Error al subir el archivo CSV a almacenamiento permanente" },
+        { status: 500 }
+      );
+    }
+
+    // Create configuration with S3 URL instead of /tmp path
     const config: JobConfig = mergeWithDefaults({
       type: JobType.AED_CSV_IMPORT,
-      filePath,
+      filePath: s3Url, // Use S3 URL instead of /tmp path
       columnMappings: mappings.map((m: { csvColumn: string; systemField: string }) => ({
         csvColumn: m.csvColumn,
         systemField: m.systemField,
@@ -175,14 +216,27 @@ export async function POST(request: NextRequest) {
     const job = await orchestrator.create({
       type: JobType.AED_CSV_IMPORT,
       name: batchName || `Importación CSV ${new Date().toISOString()}`,
-      description: `Importación de ${filePath}`,
+      description: `Importación de ${fileName}`,
       config,
       createdBy: user.userId, // JWT payload has userId as UUID
       tags: ["csv-import", "manual-upload"],
     });
 
-    // Return immediately - CRON will pick it up and start processing
-    console.log(`📋 [Import] Job ${job.id} created and queued for CRON processing`);
+    // Create artifact record to track the uploaded CSV file
+    await prisma.batchJobArtifact.create({
+      data: {
+        job_id: job.id,
+        type: "FILE",
+        name: fileName,
+        description: `CSV source file for import job`,
+        mime_type: "text/csv",
+        file_size: fileSize,
+        file_url: s3Url,
+        file_hash: fileHash,
+      },
+    });
+
+    console.log(`📋 [Import] Job ${job.id} created with S3 artifact and queued for CRON processing`);
 
     return NextResponse.json({
       success: true,
