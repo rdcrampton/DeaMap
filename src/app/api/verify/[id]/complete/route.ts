@@ -69,36 +69,66 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     console.log(`✅ ${processedBuffers.size} imágenes procesadas`);
 
-    // Subir imágenes procesadas a S3 y actualizar BD
-    for (const [imageId, buffer] of processedBuffers) {
+    // Subir imágenes (originales y procesadas) a S3 y actualizar BD
+    for (const [imageId, processedBuffer] of processedBuffers) {
       const imageRecord = validation.aed.images.find(img => img.id === imageId);
       if (!imageRecord) continue;
 
-      // Generar key para imagen procesada
       const extension = extractExtension(imageRecord.original_url);
-      const processedKey = buildImageKey(id, imageId, 'processed', extension);
 
-      // Subir a S3
-      console.log(`☁️ Subiendo ${imageId} a S3...`);
-      const processedUrl = await uploadToS3({
-        buffer,
-        filename: processedKey,
-        contentType: 'image/jpeg',
-        prefix: id, // Usar AED ID como prefix
-      });
+      // 1. Re-subir imagen original con formato estructurado correcto
+      console.log(`☁️ Descargando y re-subiendo imagen original ${imageId}...`);
+      try {
+        // Descargar imagen original
+        const originalResponse = await fetch(imageRecord.original_url);
+        if (!originalResponse.ok) {
+          throw new Error(`Failed to download original image: ${originalResponse.statusText}`);
+        }
+        const originalArrayBuffer = await originalResponse.arrayBuffer();
+        const originalBuffer = Buffer.from(originalArrayBuffer);
 
-      // Actualizar registro de imagen con verificación
-      await prisma.aedImage.update({
-        where: { id: imageId },
-        data: {
-          processed_url: processedUrl,
-          is_verified: true,
-          verified_at: new Date(),
-          verified_by: user.userId,
-        },
-      });
+        // Generar key para imagen original con formato correcto
+        const originalKey = buildImageKey(id, imageId, 'original', extension);
 
-      console.log(`✅ Imagen ${imageId} guardada y verificada: ${processedUrl}`);
+        // Subir imagen original a S3 con formato estructurado
+        const newOriginalUrl = await uploadToS3({
+          buffer: originalBuffer,
+          filename: originalKey,
+          contentType: imageRecord.original_url.includes('.png') ? 'image/png' : 'image/jpeg',
+          prefix: id,
+        });
+
+        console.log(`✅ Imagen original ${imageId} re-subida: ${newOriginalUrl}`);
+
+        // 2. Subir imagen procesada
+        const processedKey = buildImageKey(id, imageId, 'processed', extension);
+
+        console.log(`☁️ Subiendo imagen procesada ${imageId} a S3...`);
+        const processedUrl = await uploadToS3({
+          buffer: processedBuffer,
+          filename: processedKey,
+          contentType: 'image/jpeg',
+          prefix: id,
+        });
+
+        // 3. Actualizar registro de imagen con ambas URLs y verificación
+        await prisma.aedImage.update({
+          where: { id: imageId },
+          data: {
+            original_url: newOriginalUrl,
+            processed_url: processedUrl,
+            is_verified: true,
+            verified_at: new Date(),
+            verified_by: user.userId,
+          },
+        });
+
+        console.log(`✅ Imagen ${imageId} guardada y verificada - Original: ${newOriginalUrl}, Procesada: ${processedUrl}`);
+      } catch (error) {
+        console.error(`❌ Error procesando imagen ${imageId}:`, error);
+        // Continue with other images even if one fails
+        throw error; // Re-throw to rollback transaction
+      }
     }
 
     // Update validation status to COMPLETED
