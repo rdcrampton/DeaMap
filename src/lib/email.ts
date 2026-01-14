@@ -1,4 +1,5 @@
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { getAppUrl } from './url';
 
 export interface SendPasswordResetEmailParams {
   to: string;
@@ -11,7 +12,7 @@ export async function sendPasswordResetEmail({
   resetToken,
   userName,
 }: SendPasswordResetEmailParams): Promise<void> {
-  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+  const resetUrl = `${getAppUrl()}/reset-password?token=${resetToken}`;
 
   // Validate AWS SES configuration
   if (!process.env.AWS_REGION || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
