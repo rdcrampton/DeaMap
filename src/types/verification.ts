@@ -1,7 +1,10 @@
+import type { CropData, ArrowData, BlurArea } from './shared';
+
 export enum VerificationStep {
   ADDRESS_VALIDATION = "address_validation",
   IMAGE_SELECTION = "image_selection",
   IMAGE_CROP = "image_crop",
+  IMAGE_BLUR = "image_blur",
   IMAGE_ARROW = "image_arrow",
   RESPONSIBLE_ASSIGNMENT = "responsible_assignment",
   REVIEW = "review",
@@ -65,22 +68,6 @@ export interface ResponsibleData {
   observations?: string;
 }
 
-export interface CropData {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface ArrowData {
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-  color?: string;
-  thickness?: number;
-}
-
 // Multi-image validation types
 export interface ImageValidationItem {
   id: string;
@@ -111,6 +98,7 @@ export interface ValidatedImageData {
 export interface ProcessedImageData {
   image_id: string;
   crop_data?: CropData;
+  blur_areas?: BlurArea[];
   arrow_data?: ArrowData;
 }
 
@@ -135,6 +123,11 @@ export const VERIFICATION_STEPS_CONFIG = {
     title: "Recortar Imagen",
     description: "Recorta la imagen seleccionada",
     required: true,
+  },
+  [VerificationStep.IMAGE_BLUR]: {
+    title: "Difuminar Áreas Sensibles",
+    description: "Difumina caras, matrículas u otras áreas sensibles (opcional)",
+    required: false,
   },
   [VerificationStep.IMAGE_ARROW]: {
     title: "Marcar DEA en Imagen",

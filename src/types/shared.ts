@@ -41,12 +41,21 @@ export interface ArrowData {
   width: number;
 }
 
+export interface BlurArea {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  intensity?: number;
+}
+
 export interface ImageProcessingStep {
   id: string;
-  type: 'crop' | 'arrow' | 'filter' | 'resize';
+  type: 'crop' | 'blur' | 'arrow' | 'filter' | 'resize';
   config: CropperConfig | ArrowConfig | Record<string, unknown>;
   completed: boolean;
-  data?: CropData | ArrowData | Record<string, unknown>;
+  data?: CropData | BlurArea[] | ArrowData | Record<string, unknown>;
 }
 
 export interface StepContainerProps {

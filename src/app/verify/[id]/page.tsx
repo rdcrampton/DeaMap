@@ -15,11 +15,12 @@ import AddressValidation from "@/components/verification/AddressValidation";
 import ArrowPlacer from "@/components/verification/ArrowPlacer";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DeaInfoEdit from "@/components/verification/DeaInfoEdit";
+import ImageBlur from "@/components/verification/ImageBlur";
 import ImageCropper from "@/components/verification/ImageCropper";
 import ImageMultiSelector from "@/components/verification/ImageMultiSelector";
 import ResponsibleForm from "@/components/verification/ResponsibleForm";
 import { useAuth } from "@/contexts/AuthContext";
-import type { CropData, ArrowData } from "@/types/shared";
+import type { CropData, ArrowData, BlurArea } from "@/types/shared";
 import type {
   AddressData,
   ResponsibleData,
@@ -414,14 +415,75 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               onCropChange={(_cropData: CropData) => {
                 // Track crop changes
               }}
-              onCropComplete={async (cropData: CropData) => {
-                // Guardar crop data y pasar al siguiente paso (arrow)
-                updateStep(VerificationStep.IMAGE_ARROW, {
+              onCropComplete={async (cropData: CropData, croppedImageUrl?: string) => {
+                // Guardar crop data, imagen recortada y pasar al siguiente paso (blur)
+                updateStep(VerificationStep.IMAGE_BLUR, {
                   ...validationData,
                   current_crop_data: cropData,
+                  current_cropped_image_url: croppedImageUrl || currentImage.url,
                 });
               }}
               onCancel={() => updateStep(VerificationStep.IMAGE_SELECTION)}
+            />
+          </div>
+        );
+      }
+
+      case VerificationStep.IMAGE_BLUR: {
+        // Obtener el estado de procesamiento de imágenes
+        const validationData = data.validation.data as
+          | (ImageProcessingState & {
+              current_crop_data?: CropData;
+              current_cropped_image_url?: string;
+            })
+          | null;
+        const validatedImages = validationData?.validated_images || [];
+        const currentIndex = validationData?.current_image_index || 0;
+        const currentImage = validatedImages[currentIndex];
+        const currentCropData = validationData?.current_crop_data;
+        const currentCroppedImageUrl = validationData?.current_cropped_image_url;
+
+        if (!currentImage) {
+          console.error("No current image found for blur");
+          return null;
+        }
+
+        const imageNumber = currentIndex + 1;
+        const totalImages = validatedImages.length;
+
+        return (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold">{stepConfig.title}</h2>
+              <p className="text-gray-600 mt-2">{stepConfig.description}</p>
+              <div className="mt-2 text-sm text-blue-600 font-medium">
+                Procesando imagen {imageNumber} de {totalImages} - Tipo: {currentImage.type}
+              </div>
+            </div>
+
+            <ImageBlur
+              imageUrl={currentCroppedImageUrl || currentImage.url}
+              onBlurComplete={async (blurAreas: BlurArea[], blurredImageUrl?: string) => {
+                // Guardar blur areas, imagen con blur y pasar al siguiente paso (arrow)
+                updateStep(VerificationStep.IMAGE_ARROW, {
+                  ...validationData,
+                  current_crop_data: currentCropData,
+                  current_cropped_image_url: currentCroppedImageUrl,
+                  current_blur_areas: blurAreas,
+                  current_blurred_image_url: blurredImageUrl || currentCroppedImageUrl || currentImage.url,
+                });
+              }}
+              onSkip={async () => {
+                // Continuar sin blur (usar imagen recortada)
+                updateStep(VerificationStep.IMAGE_ARROW, {
+                  ...validationData,
+                  current_crop_data: currentCropData,
+                  current_cropped_image_url: currentCroppedImageUrl,
+                  current_blur_areas: [],
+                  current_blurred_image_url: currentCroppedImageUrl || currentImage.url,
+                });
+              }}
+              onCancel={() => updateStep(VerificationStep.IMAGE_CROP)}
             />
           </div>
         );
@@ -432,6 +494,9 @@ export default function VerifyPage({ params }: VerifyPageProps) {
         const validationData = data.validation.data as
           | (ImageProcessingState & {
               current_crop_data?: CropData;
+              current_cropped_image_url?: string;
+              current_blur_areas?: BlurArea[];
+              current_blurred_image_url?: string;
             })
           | null;
         const validatedImages = validationData?.validated_images || [];
@@ -439,6 +504,8 @@ export default function VerifyPage({ params }: VerifyPageProps) {
         const processedImages = validationData?.processed_images || [];
         const currentImage = validatedImages[currentIndex];
         const currentCropData = validationData?.current_crop_data;
+        const currentBlurAreas = validationData?.current_blur_areas || [];
+        const currentBlurredImageUrl = validationData?.current_blurred_image_url;
 
         if (!currentImage) {
           console.error("No current image found for arrow placement");
@@ -459,12 +526,13 @@ export default function VerifyPage({ params }: VerifyPageProps) {
             </div>
 
             <ArrowPlacer
-              imageUrl={currentImage.url} // TODO: Use cropped image if available
+              imageUrl={currentBlurredImageUrl || currentImage.url} // Usar imagen con blur si está disponible
               onArrowComplete={async (arrowData: ArrowData) => {
                 // Guardar la imagen procesada
                 const newProcessedImage: ProcessedImageData = {
                   image_id: currentImage.id,
                   crop_data: currentCropData,
+                  blur_areas: currentBlurAreas.length > 0 ? currentBlurAreas : undefined,
                   arrow_data: arrowData,
                 };
 
@@ -487,7 +555,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   });
                 }
               }}
-              onCancel={() => updateStep(VerificationStep.IMAGE_CROP)}
+              onCancel={() => updateStep(VerificationStep.IMAGE_BLUR)}
             />
           </div>
         );

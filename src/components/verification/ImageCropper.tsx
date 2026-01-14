@@ -8,7 +8,7 @@ import type { CropData } from '@/types/shared';
 interface ImageCropperProps {
   imageUrl: string;
   onCropChange: (cropData: CropData) => void;
-  onCropComplete: (cropData: CropData) => void;
+  onCropComplete: (cropData: CropData, croppedImageUrl?: string) => void;
   onCancel: () => void;
 }
 
@@ -594,10 +594,57 @@ export default function ImageCropper({
     setIsResizing(false);
   };
 
+  // Generar imagen recortada
+  const generateCroppedImage = async (): Promise<string | undefined> => {
+    if (!imageRef.current) {
+      return undefined;
+    }
+
+    try {
+      // Crear canvas con las dimensiones del área de recorte
+      const canvas = document.createElement('canvas');
+      canvas.width = cropArea.width;
+      canvas.height = cropArea.height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.error('No se pudo crear contexto del canvas');
+        return undefined;
+      }
+
+      // Dibujar solo el área recortada
+      ctx.drawImage(
+        imageRef.current,
+        cropArea.x, cropArea.y, cropArea.width, cropArea.height,
+        0, 0, cropArea.width, cropArea.height
+      );
+
+      // Convertir canvas a blob URL
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            console.log('✅ Imagen recortada generada:', url);
+            console.log(`   Dimensiones: ${cropArea.width}x${cropArea.height}px`);
+            resolve(url);
+          } else {
+            console.error('❌ Error generando blob de imagen recortada');
+            resolve(undefined);
+          }
+        }, 'image/jpeg', 0.95);
+      });
+    } catch (error) {
+      console.error('❌ Error generando imagen recortada:', error);
+      return undefined;
+    }
+  };
+
   const handleAccept = async () => {
     setProcessing(true);
     try {
-      await onCropComplete(cropArea);
+      // Generar imagen recortada
+      const croppedImageUrl = await generateCroppedImage();
+      await onCropComplete(cropArea, croppedImageUrl);
     } finally {
       setProcessing(false);
     }
