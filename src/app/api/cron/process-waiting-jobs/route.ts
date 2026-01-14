@@ -65,15 +65,16 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // 2. FIND PENDING JOBS (not started yet)
-    const pendingJobs = await repository.findResumableJobs({ types: undefined });
-    const justPendingJobs = pendingJobs.filter(j => j.status === 'PENDING' || j.status === 'QUEUED');
+    // 2. FIND RESUMABLE JOBS (PENDING, INTERRUPTED, PAUSED)
+    const resumableJobs = await repository.findResumableJobs({ types: undefined });
+    const pendingJobs = resumableJobs.filter(j => j.status === 'PENDING' || j.status === 'QUEUED');
+    const interruptedJobs = resumableJobs.filter(j => j.status === 'INTERRUPTED' || j.status === 'PAUSED');
     
     // 3. FIND WAITING JOBS (already started but waiting for continuation)
     const waitingJobs = await repository.findWaitingJobs(5);
     
-    // 4. COMBINE: PENDING jobs first (FIFO), then WAITING jobs
-    const jobsToProcess = [...justPendingJobs, ...waitingJobs].slice(0, 5);
+    // 4. COMBINE: INTERRUPTED first (recovery priority), then PENDING (FIFO), then WAITING
+    const jobsToProcess = [...interruptedJobs, ...pendingJobs, ...waitingJobs].slice(0, 5);
 
     if (jobsToProcess.length === 0) {
       console.log("💤 [Cron] No jobs to process");
@@ -86,7 +87,7 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    console.log(`📋 [Cron] Found ${jobsToProcess.length} jobs to process (${justPendingJobs.length} pending, ${waitingJobs.length} waiting)`);
+    console.log(`📋 [Cron] Found ${jobsToProcess.length} jobs to process (${interruptedJobs.length} interrupted, ${pendingJobs.length} pending, ${waitingJobs.length} waiting)`);
 
     const results: Array<{
       jobId: string;
@@ -100,6 +101,7 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
       lockAcquired?: boolean;
       wasPending?: boolean;
       error?: string;
+      wasInterrupted?: boolean;
     }> = [];
 
     // Process each job
@@ -109,12 +111,13 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
 
       try {
         const wasPending = job.status === 'PENDING' || job.status === 'QUEUED';
+        const wasInterrupted = job.status === 'INTERRUPTED' || job.status === 'PAUSED';
         
         // 1. For WAITING jobs, try to acquire lock atomically
-        //    For PENDING jobs, start them directly
+        //    For PENDING/INTERRUPTED jobs, start/continue them directly
         let lockAcquired = true;
         
-        if (!wasPending) {
+        if (!wasPending && !wasInterrupted) {
           lockAcquired = await repository.tryAcquireJobLock(job.id);
 
           if (!lockAcquired) {
@@ -137,7 +140,7 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
         }
 
         // 2. Process the job (start or continue depending on state)
-        const result = wasPending 
+        const result = wasPending
           ? await orchestrator.start(job.id)
           : await orchestrator.continue(job.id);
 
@@ -152,6 +155,7 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
           hasMore: result.chunkResult.progress.hasMore,
           lockAcquired: true,
           wasPending,
+          wasInterrupted,
         };
 
         results.push(jobResult);
@@ -196,18 +200,20 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
     const successCount = results.filter((r) => r.success).length;
     const skippedCount = results.filter((r) => r.lockAcquired === false).length;
     const startedCount = results.filter((r) => r.wasPending).length;
+    const resumedCount = results.filter((r) => r.wasInterrupted).length;
 
     console.log(
-      `\n🏁 [Cron] Batch processing complete: ${successCount}/${results.length} jobs successful (${startedCount} started, ${skippedCount} skipped, ${orphanedJobs.length} recovered) in ${totalDuration}ms`
+      `\n🏁 [Cron] Batch processing complete: ${successCount}/${results.length} jobs successful (${startedCount} started, ${resumedCount} resumed, ${skippedCount} skipped, ${orphanedJobs.length} recovered) in ${totalDuration}ms`
     );
 
     return NextResponse.json(
       {
         success: true,
-        message: `Processed ${results.length} jobs (${successCount} successful, ${startedCount} started, ${skippedCount} skipped, ${orphanedJobs.length} recovered)`,
+        message: `Processed ${results.length} jobs (${successCount} successful, ${startedCount} started, ${resumedCount} resumed, ${skippedCount} skipped, ${orphanedJobs.length} recovered)`,
         processed: results.length,
         successful: successCount,
         started: startedCount,
+        resumed: resumedCount,
         skipped: skippedCount,
         recovered: orphanedJobs.length,
         failed: results.length - successCount - skippedCount,

@@ -152,8 +152,9 @@ export class BatchJobOrchestrator {
 
     const processor = this.getProcessor(job.type);
 
-    // If resuming from interrupted, mark as resuming
+    // If resuming from interrupted, recover progress from database
     if (job.status === JobStatus.INTERRUPTED || job.status === JobStatus.PAUSED) {
+      await this.recoverProgressFromDatabase(job);
       job.resume();
       await this.repository.update(job);
     }
@@ -261,6 +262,43 @@ export class BatchJobOrchestrator {
     }
 
     return recovered;
+  }
+
+  /**
+   * Recover progress from database after interruption
+   * Counts actually created records in DB and updates job progress
+   */
+  private async recoverProgressFromDatabase(job: BatchJob): Promise<void> {
+    console.log(`🔧 [Orchestrator] Recovering progress for job ${job.id} from database...`);
+
+    const createdCount = await this.repository.countCreatedRecords(job.id);
+    const currentProgress = job.progress.successfulRecords;
+
+    if (createdCount > currentProgress) {
+      console.log(
+        `📊 [Orchestrator] Found ${createdCount} records in DB vs ${currentProgress} in job progress. Updating...`
+      );
+
+      // Recalculate progress based on actual created records
+      const updatedProgress = job.progress.withProcessed(createdCount);
+      
+      // Manually update successful records count by incrementing the difference
+      let progress = updatedProgress;
+      const diff = createdCount - currentProgress;
+      for (let i = 0; i < diff; i++) {
+        progress = progress.incrementSuccess();
+      }
+      
+      job.updateProgress(progress);
+
+      console.log(`✅ [Orchestrator] Progress recovered: ${createdCount}/${job.progress.totalRecords} records`);
+    } else if (createdCount === currentProgress) {
+      console.log(`✅ [Orchestrator] Progress already in sync: ${createdCount} records`);
+    } else {
+      console.warn(
+        `⚠️ [Orchestrator] DB has fewer records (${createdCount}) than job progress (${currentProgress}). Keeping job progress.`
+      );
+    }
   }
 
   /**

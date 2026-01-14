@@ -175,6 +175,12 @@ export interface IBatchJobRepository {
    */
   getLastHeartbeat(jobId: string): Promise<Date | null>;
 
+  /**
+   * Count records created by this job in the database
+   * Used to recover progress after interruption
+   */
+  countCreatedRecords(jobId: string): Promise<number>;
+
   // Statistics
 
   /**

@@ -428,6 +428,16 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
     return job?.last_heartbeat ?? null;
   }
 
+  /**
+   * Count records created by this job
+   * Used to recover progress after interruption
+   */
+  async countCreatedRecords(jobId: string): Promise<number> {
+    return await this.prisma.aed.count({
+      where: { batch_job_id: jobId },
+    });
+  }
+
   // Statistics
 
   async getStats(options?: {

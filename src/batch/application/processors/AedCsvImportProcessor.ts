@@ -163,7 +163,7 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
       }
 
       const record = records[i];
-      const result = await this.processRecord(record, config, i);
+      const result = await this.processRecord(record, config, i, job.id);
       results.push(result);
 
       if (result.success) {
@@ -217,7 +217,8 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
   private async processRecord(
     record: CsvRecord,
     config: AedCsvImportConfig,
-    index: number
+    index: number,
+    jobId: string
   ): Promise<ProcessRecordResult> {
     try {
       // Map CSV columns to system fields
@@ -364,8 +365,8 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
         });
       }
 
-      // Create AED
-      const aed = await this.createAed(mappedData, config);
+      // Create AED (with transaction and batch_job_id)
+      const aed = await this.createAed(mappedData, config, jobId);
       return this.createSuccessResult("created", aed.id, recordRef);
     } catch (error) {
       return this.createFailedResult(
@@ -512,7 +513,8 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
 
   private async createAed(
     data: Record<string, string>,
-    config: AedCsvImportConfig
+    config: AedCsvImportConfig,
+    jobId: string
   ): Promise<{ id: string }> {
     // Parse coordinates
     const latitude = data.latitude ? parseFloat(data.latitude.replace(",", ".")) : undefined;
@@ -608,42 +610,47 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
     const aedId = randomUUID();
 
     // ========================================
-    // 4. CREATE AED WITH PRE-GENERATED UUID
+    // 4. CREATE AED WITH TRANSACTION (atomic operation)
     // ========================================
-    const aed = await this.prisma.aed.create({
-      data: {
-        id: aedId, // ← UUID pre-generado para que las imágenes puedan usarlo
-        
-        // Código e identificadores
-        code: data.code || null,
-        external_reference: data.externalReference || null,
-        
-        // Datos básicos
-        name: data.proposedName,
-        establishment_type: data.establishmentType || null,
-        
-        // Coordenadas
-        latitude,
-        longitude,
-        coordinates_precision: data.coordinatesPrecision || null,
-        
-        // Relaciones
-        location_id: location.id,
-        schedule_id: scheduleId,
-        responsible_id: responsibleId,
-        
-        // Origen y trazabilidad
-        source_origin: "CSV_IMPORT",
-        source_details: `Importación CSV: ${config.filePath.split("/").pop()}`,
-        // batch_job_id will be set by the orchestrator when processing
-        
-        // Notas
-        public_notes: data.publicNotes || data.freeComment || null,
-        
-        // Estado inicial
-        status: "DRAFT",
-      },
-      select: { id: true },
+    const aed = await this.prisma.$transaction(async (tx) => {
+      // Create AED in transaction
+      const createdAed = await tx.aed.create({
+        data: {
+          id: aedId, // ← UUID pre-generado para que las imágenes puedan usarlo
+          
+          // Código e identificadores
+          code: data.code || null,
+          external_reference: data.externalReference || null,
+          
+          // Datos básicos
+          name: data.proposedName,
+          establishment_type: data.establishmentType || null,
+          
+          // Coordenadas
+          latitude,
+          longitude,
+          coordinates_precision: data.coordinatesPrecision || null,
+          
+          // Relaciones
+          location_id: location.id,
+          schedule_id: scheduleId,
+          responsible_id: responsibleId,
+          
+          // Origen y trazabilidad
+          source_origin: "CSV_IMPORT",
+          source_details: `Importación CSV: ${config.filePath.split("/").pop()}`,
+          batch_job_id: jobId, // ✅ Asignar batch_job_id para rastreo y recuperación
+          
+          // Notas
+          public_notes: data.publicNotes || data.freeComment || null,
+          
+          // Estado inicial
+          status: "DRAFT",
+        },
+        select: { id: true },
+      });
+      
+      return createdAed;
     });
 
     // ========================================
