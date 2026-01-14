@@ -170,7 +170,13 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
     types?: JobType[];
     organizationId?: string;
   }): Promise<BatchJob[]> {
-    const resumableStatuses: BatchJobStatus[] = ["WAITING", "PAUSED", "INTERRUPTED"];
+    const resumableStatuses: BatchJobStatus[] = [
+      "PENDING",
+      "QUEUED",
+      "WAITING",
+      "PAUSED",
+      "INTERRUPTED",
+    ];
 
     const jobs = await this.prisma.batchJob.findMany({
       where: {
