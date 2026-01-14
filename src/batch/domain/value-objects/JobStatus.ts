@@ -185,8 +185,8 @@ export function isValidJobStatus(status: string): status is JobStatus {
  * Valid status transitions
  */
 export const VALID_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
-  [JobStatus.PENDING]: [JobStatus.QUEUED, JobStatus.IN_PROGRESS, JobStatus.CANCELLED],
-  [JobStatus.QUEUED]: [JobStatus.IN_PROGRESS, JobStatus.CANCELLED],
+  [JobStatus.PENDING]: [JobStatus.QUEUED, JobStatus.IN_PROGRESS, JobStatus.CANCELLED, JobStatus.FAILED],
+  [JobStatus.QUEUED]: [JobStatus.IN_PROGRESS, JobStatus.CANCELLED, JobStatus.FAILED],
   [JobStatus.IN_PROGRESS]: [
     JobStatus.WAITING,
     JobStatus.PAUSED,
