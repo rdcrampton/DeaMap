@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import ObservationsDisplay from "@/components/verification/ObservationsDisplay";
 import { AedImageType, IMAGE_TYPE_OPTIONS } from "@/types/image";
 import type { ImageValidationItem, ImagesValidationResult } from "@/types/verification";
+import { compressImageFile } from "@/utils/imageCompression";
 import { loadImageWithRetry } from "@/utils/imageLoader";
 
 interface ImageMultiSelectorProps {
@@ -361,20 +362,28 @@ export default function ImageMultiSelector({
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  // Usar el componente ImageUpload de forma programática
-                  const reader = new FileReader();
-                  reader.onload = (event) => {
-                    const url = event.target?.result as string;
-                    if (url) {
-                      handleAddNewImage(url);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                  // Limpiar el input para permitir subir el mismo archivo otra vez
-                  e.target.value = "";
+                  try {
+                    // Comprimir la imagen antes de subirla
+                    console.log(`📸 Subiendo imagen: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+
+                    const compressedUrl = await compressImageFile(file, {
+                      maxWidth: 1920,
+                      maxHeight: 1920,
+                      quality: 0.85,
+                      maxSizeMB: 2,
+                    });
+
+                    handleAddNewImage(compressedUrl);
+                  } catch (error) {
+                    console.error('Error comprimiendo imagen:', error);
+                    alert('Error al procesar la imagen. Por favor, intenta con otra imagen.');
+                  } finally {
+                    // Limpiar el input para permitir subir el mismo archivo otra vez
+                    e.target.value = "";
+                  }
                 }
               }}
             />
