@@ -215,8 +215,8 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
     try {
       // Use raw SQL for atomic update with WHERE condition
       const result = await this.prisma.$executeRaw`
-        UPDATE "BatchJob" 
-        SET 
+        UPDATE "batch_jobs"
+        SET
           status = 'IN_PROGRESS',
           last_heartbeat = NOW(),
           updated_at = NOW()
