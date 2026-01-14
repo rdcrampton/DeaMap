@@ -111,7 +111,7 @@ export async function processImage(options: ProcessImageOptions): Promise<Buffer
  * Genera SVG de una flecha
  */
 function generateArrowSVG(arrowData: ArrowData, width: number, height: number): string {
-  const { startX, startY, endX, endY, color = '#dc2626', width: arrowWidth = 40 } = arrowData;
+  const { startX, startY, endX, endY, color = '#dc2626', width: _arrowWidth = 40 } = arrowData;
 
   // Calcular ángulo y dimensiones
   const dx = endX - startX;

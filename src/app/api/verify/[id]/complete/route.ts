@@ -95,7 +95,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           is_verified: true,
           verified_at: new Date(),
           verified_by: user.userId,
-          updated_at: new Date(),
         },
       });
 

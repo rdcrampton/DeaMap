@@ -1,3 +1,5 @@
+import type { CropData, ArrowData, BlurArea } from './shared';
+
 export enum VerificationStep {
   ADDRESS_VALIDATION = "address_validation",
   IMAGE_SELECTION = "image_selection",
@@ -64,31 +66,6 @@ export interface ResponsibleData {
   position?: string;
   department?: string;
   observations?: string;
-}
-
-export interface CropData {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface ArrowData {
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-  color?: string;
-  thickness?: number;
-}
-
-export interface BlurArea {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  intensity?: number;
 }
 
 // Multi-image validation types

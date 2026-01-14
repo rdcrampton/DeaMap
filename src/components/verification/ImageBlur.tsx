@@ -77,8 +77,8 @@ export default function ImageBlur({
           throw new Error('No se pudo crear el contexto del canvas');
         }
 
-        let finalWidth = img.width;
-        let finalHeight = img.height;
+        const finalWidth = img.width;
+        const finalHeight = img.height;
 
         console.log('=== CARGA DE IMAGEN PARA BLUR ===');
         console.log('Dimensiones:', { width: finalWidth, height: finalHeight });
@@ -279,14 +279,6 @@ export default function ImageBlur({
 
       // Guardar contexto
       ctx.save();
-
-      // Extraer el área a difuminar
-      const imageData = ctx.getImageData(
-        scaledArea.x,
-        scaledArea.y,
-        scaledArea.width,
-        scaledArea.height
-      );
 
       // Aplicar blur (simulación simple con pixelación)
       ctx.filter = `blur(${blurIntensity}px)`;
