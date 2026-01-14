@@ -1,6 +1,7 @@
 'use client';
 
-import { Loader2, Plus, Trash2, RotateCcw } from 'lucide-react';
+import * as faceapi from '@vladmandic/face-api';
+import { Loader2, Plus, Trash2, RotateCcw, Scan } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 import type { BlurArea } from '@/types/shared';
@@ -38,6 +39,9 @@ export default function ImageBlur({
   const [loadingState, setLoadingState] = useState<string>('Cargando imagen...');
   const [retryAttempt, setRetryAttempt] = useState<number>(0);
   const [blurIntensity] = useState<number>(10); // Intensidad del blur
+  const [isDetectingFaces, setIsDetectingFaces] = useState(false);
+  const [faceDetectionStatus, setFaceDetectionStatus] = useState<string>('');
+  const [modelsLoaded, setModelsLoaded] = useState(false);
 
   // Cargar imagen
   useEffect(() => {
@@ -121,6 +125,119 @@ export default function ImageBlur({
 
     loadImageAsync();
   }, [imageUrl]);
+
+  // Cargar modelos de face-api una sola vez
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        console.log('🔄 Cargando modelos de detección facial...');
+
+        // Intentar cargar desde local primero, luego desde CDN
+        const MODEL_URLS = [
+          '/models', // Local: public/models
+          'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model', // CDN fallback
+        ];
+
+        let modelsLoaded = false;
+        let lastError: Error | null = null;
+
+        for (const MODEL_URL of MODEL_URLS) {
+          try {
+            console.log(`Intentando cargar modelos desde: ${MODEL_URL}`);
+
+            await Promise.all([
+              faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+              faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            ]);
+
+            modelsLoaded = true;
+            console.log(`✅ Modelos cargados exitosamente desde: ${MODEL_URL}`);
+            break;
+          } catch (err) {
+            console.warn(`⚠️ No se pudieron cargar modelos desde ${MODEL_URL}:`, err);
+            lastError = err as Error;
+          }
+        }
+
+        if (modelsLoaded) {
+          setModelsLoaded(true);
+        } else {
+          console.error('❌ No se pudieron cargar los modelos de ninguna fuente:', lastError);
+          setModelsLoaded(false);
+        }
+      } catch (error) {
+        console.error('❌ Error general cargando modelos de face-api:', error);
+        setModelsLoaded(false);
+      }
+    };
+
+    loadModels();
+  }, []);
+
+  // Detectar caras automáticamente
+  const detectFaces = async () => {
+    if (!imageRef.current || !imageLoaded) {
+      console.error('❌ Imagen no cargada');
+      return;
+    }
+
+    if (!modelsLoaded) {
+      setFaceDetectionStatus('Error: Modelos de detección no disponibles');
+      return;
+    }
+
+    setIsDetectingFaces(true);
+    setFaceDetectionStatus('Detectando caras...');
+
+    try {
+      console.log('🔍 Iniciando detección de caras...');
+
+      // Detectar caras con TinyFaceDetector (más rápido)
+      const detections = await faceapi
+        .detectAllFaces(imageRef.current, new faceapi.TinyFaceDetectorOptions({
+          inputSize: 416,
+          scoreThreshold: 0.5
+        }))
+        .withFaceLandmarks();
+
+      console.log(`✅ Detectadas ${detections.length} cara(s)`);
+
+      if (detections.length === 0) {
+        setFaceDetectionStatus('No se detectaron caras en la imagen');
+        setTimeout(() => setFaceDetectionStatus(''), 3000);
+        return;
+      }
+
+      // Crear áreas de blur para cada cara detectada
+      const newBlurAreas: BlurArea[] = detections.map((detection, index) => {
+        const box = detection.detection.box;
+
+        // Expandir un poco el área para cubrir mejor la cara
+        const padding = Math.max(box.width, box.height) * 0.3;
+
+        return {
+          id: `face_${Date.now()}_${index}`,
+          x: Math.max(0, box.x - padding),
+          y: Math.max(0, box.y - padding),
+          width: Math.min(box.width + padding * 2, imageDimensions.width - box.x),
+          height: Math.min(box.height + padding * 2, imageDimensions.height - box.y),
+          intensity: blurIntensity
+        };
+      });
+
+      // Añadir las nuevas áreas a las existentes
+      setBlurAreas([...blurAreas, ...newBlurAreas]);
+      setFaceDetectionStatus(`✅ ${detections.length} cara(s) detectada(s) y marcadas`);
+      setTimeout(() => setFaceDetectionStatus(''), 3000);
+
+    } catch (error) {
+      console.error('❌ Error en detección de caras:', error);
+      setFaceDetectionStatus('Error al detectar caras. Puedes marcar manualmente.');
+      setTimeout(() => setFaceDetectionStatus(''), 3000);
+    } finally {
+      setIsDetectingFaces(false);
+    }
+  };
 
   // Dibujar canvas con blur
   const drawCanvas = () => {
@@ -366,8 +483,9 @@ export default function ImageBlur({
           🔒 Protege la privacidad difuminando caras, matrículas u otras áreas sensibles
         </p>
         <p className="text-blue-700 text-sm">
-          • Haz clic y arrastra para dibujar un área rectangular sobre la zona a difuminar<br />
-          • Puedes añadir múltiples áreas<br />
+          • Usa "Detectar Caras Automáticamente" para encontrar y marcar caras en la imagen<br />
+          • O haz clic y arrastra manualmente para dibujar áreas a difuminar<br />
+          • Puedes combinar ambos métodos y añadir múltiples áreas<br />
           • Si no necesitas difuminar nada, haz clic en "Continuar sin difuminar"
         </p>
       </div>
@@ -404,24 +522,65 @@ export default function ImageBlur({
 
       {/* Controles de áreas */}
       {imageLoaded && (
-        <div className="flex flex-wrap gap-3 justify-center w-full max-w-md">
-          <button
-            onClick={handleRemoveLast}
-            disabled={blurAreas.length === 0}
-            className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Eliminar Última
-          </button>
-          <button
-            onClick={handleClearAll}
-            disabled={blurAreas.length === 0}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Limpiar Todo
-          </button>
-        </div>
+        <>
+          {/* Botón de detección automática */}
+          <div className="flex flex-col items-center gap-2 w-full max-w-md">
+            <button
+              onClick={detectFaces}
+              disabled={isDetectingFaces || !modelsLoaded}
+              className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 w-full sm:w-auto justify-center font-medium"
+            >
+              {isDetectingFaces ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Detectando caras...
+                </>
+              ) : (
+                <>
+                  <Scan className="w-5 h-5" />
+                  Detectar Caras Automáticamente
+                </>
+              )}
+            </button>
+
+            {/* Estado de la detección */}
+            {faceDetectionStatus && (
+              <p className={`text-sm ${
+                faceDetectionStatus.includes('Error') || faceDetectionStatus.includes('No se')
+                  ? 'text-orange-600'
+                  : 'text-green-600'
+              } font-medium`}>
+                {faceDetectionStatus}
+              </p>
+            )}
+
+            {!modelsLoaded && !isDetectingFaces && (
+              <p className="text-xs text-gray-500">
+                Cargando modelos de detección...
+              </p>
+            )}
+          </div>
+
+          {/* Controles de eliminación */}
+          <div className="flex flex-wrap gap-3 justify-center w-full max-w-md">
+            <button
+              onClick={handleRemoveLast}
+              disabled={blurAreas.length === 0}
+              className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Eliminar Última
+            </button>
+            <button
+              onClick={handleClearAll}
+              disabled={blurAreas.length === 0}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Limpiar Todo
+            </button>
+          </div>
+        </>
       )}
 
       {/* Botones principales */}
