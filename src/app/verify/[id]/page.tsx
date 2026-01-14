@@ -460,12 +460,13 @@ export default function VerifyPage({ params }: VerifyPageProps) {
 
             <ImageBlur
               imageUrl={currentImage.url}
-              onBlurComplete={async (blurAreas: BlurArea[]) => {
-                // Guardar blur areas y pasar al siguiente paso (arrow)
+              onBlurComplete={async (blurAreas: BlurArea[], blurredImageUrl?: string) => {
+                // Guardar blur areas, imagen con blur y pasar al siguiente paso (arrow)
                 updateStep(VerificationStep.IMAGE_ARROW, {
                   ...validationData,
                   current_crop_data: currentCropData,
                   current_blur_areas: blurAreas,
+                  current_blurred_image_url: blurredImageUrl || currentImage.url,
                 });
               }}
               onSkip={async () => {
@@ -474,6 +475,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   ...validationData,
                   current_crop_data: currentCropData,
                   current_blur_areas: [],
+                  current_blurred_image_url: currentImage.url, // Usar imagen original
                 });
               }}
               onCancel={() => updateStep(VerificationStep.IMAGE_CROP)}
@@ -488,6 +490,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
           | (ImageProcessingState & {
               current_crop_data?: CropData;
               current_blur_areas?: BlurArea[];
+              current_blurred_image_url?: string;
             })
           | null;
         const validatedImages = validationData?.validated_images || [];
@@ -496,6 +499,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
         const currentImage = validatedImages[currentIndex];
         const currentCropData = validationData?.current_crop_data;
         const currentBlurAreas = validationData?.current_blur_areas || [];
+        const currentBlurredImageUrl = validationData?.current_blurred_image_url;
 
         if (!currentImage) {
           console.error("No current image found for arrow placement");
@@ -516,7 +520,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
             </div>
 
             <ArrowPlacer
-              imageUrl={currentImage.url} // TODO: Use cropped image if available
+              imageUrl={currentBlurredImageUrl || currentImage.url} // Usar imagen con blur si está disponible
               onArrowComplete={async (arrowData: ArrowData) => {
                 // Guardar la imagen procesada
                 const newProcessedImage: ProcessedImageData = {

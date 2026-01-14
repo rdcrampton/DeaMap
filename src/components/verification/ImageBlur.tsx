@@ -8,7 +8,7 @@ import type { BlurArea } from '@/types/shared';
 
 interface ImageBlurProps {
   imageUrl: string;
-  onBlurComplete: (blurAreas: BlurArea[]) => void;
+  onBlurComplete: (blurAreas: BlurArea[], blurredImageUrl?: string) => void;
   onSkip: () => void;
   onCancel: () => void;
 }
@@ -457,10 +457,79 @@ export default function ImageBlur({
     setBlurAreas([]);
   };
 
+  // Generar imagen con blur aplicado
+  const generateBlurredImage = async (): Promise<string | undefined> => {
+    if (!imageRef.current || blurAreas.length === 0) {
+      return undefined;
+    }
+
+    try {
+      // Crear canvas temporal con dimensiones originales
+      const canvas = document.createElement('canvas');
+      canvas.width = imageDimensions.width;
+      canvas.height = imageDimensions.height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.error('No se pudo crear contexto del canvas');
+        return undefined;
+      }
+
+      // Dibujar imagen original
+      ctx.drawImage(imageRef.current, 0, 0, imageDimensions.width, imageDimensions.height);
+
+      // Aplicar blur a cada área
+      blurAreas.forEach((area) => {
+        // Extraer el área a difuminar
+        const imageData = ctx.getImageData(area.x, area.y, area.width, area.height);
+
+        // Crear canvas temporal para el área
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = area.width;
+        tempCanvas.height = area.height;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        if (!tempCtx) return;
+
+        // Dibujar el área en el canvas temporal
+        tempCtx.putImageData(imageData, 0, 0);
+
+        // Aplicar blur usando filter
+        ctx.save();
+        ctx.filter = `blur(${area.intensity || blurIntensity}px)`;
+        ctx.drawImage(tempCanvas, area.x, area.y, area.width, area.height);
+        ctx.restore();
+      });
+
+      // Convertir canvas a blob URL
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            console.log('✅ Imagen con blur generada:', url);
+            resolve(url);
+          } else {
+            console.error('❌ Error generando blob de imagen');
+            resolve(undefined);
+          }
+        }, 'image/jpeg', 0.95);
+      });
+    } catch (error) {
+      console.error('❌ Error generando imagen con blur:', error);
+      return undefined;
+    }
+  };
+
   const handleAccept = async () => {
     setProcessing(true);
     try {
-      await onBlurComplete(blurAreas);
+      // Generar imagen con blur aplicado si hay áreas marcadas
+      let blurredImageUrl: string | undefined;
+      if (blurAreas.length > 0) {
+        blurredImageUrl = await generateBlurredImage();
+      }
+
+      await onBlurComplete(blurAreas, blurredImageUrl);
     } finally {
       setProcessing(false);
     }
