@@ -87,16 +87,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         prefix: id, // Usar AED ID como prefix
       });
 
-      // Actualizar registro de imagen
+      // Actualizar registro de imagen con verificación
       await prisma.aedImage.update({
         where: { id: imageId },
         data: {
           processed_url: processedUrl,
+          is_verified: true,
+          verified_at: new Date(),
+          verified_by: user.userId,
           updated_at: new Date(),
         },
       });
 
-      console.log(`✅ Imagen ${imageId} guardada: ${processedUrl}`);
+      console.log(`✅ Imagen ${imageId} guardada y verificada: ${processedUrl}`);
     }
 
     // Update validation status to COMPLETED
@@ -113,12 +116,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
     });
 
-    // Update AED status to PUBLISHED
+    // Update AED status to PUBLISHED with verification data
+    const now = new Date();
     await prisma.aed.update({
       where: { id },
       data: {
         status: "PUBLISHED",
+        published_at: validation.aed.published_at || now, // Keep existing if already published
+        last_verified_at: now,
+        verification_method: "photo_verification",
         updated_by: user.userId,
+        updated_at: now,
       },
     });
 
