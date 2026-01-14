@@ -888,7 +888,8 @@ export class AedCsvImportProcessor extends BaseBatchJobProcessor<AedCsvImportCon
   }
 
   async cleanup(_job: BatchJob): Promise<void> {
-    // No cleanup needed - stateless processor
+    // Cleanup temporary CSV files downloaded from S3
+    await this.cleanupTempFile();
   }
 
   async preview(

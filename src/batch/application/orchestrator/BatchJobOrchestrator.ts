@@ -562,6 +562,7 @@ export class BatchJobOrchestrator {
   private canContinue(job: BatchJob): boolean {
     return (
       job.status === JobStatus.WAITING ||
+      job.status === JobStatus.IN_PROGRESS || // Allow continuing after lock acquisition
       job.status === JobStatus.PAUSED ||
       job.status === JobStatus.INTERRUPTED ||
       job.status === JobStatus.RESUMING

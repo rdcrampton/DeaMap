@@ -285,8 +285,15 @@ export class BatchJob {
 
   /**
    * Continue processing (from waiting/resuming to in_progress)
+   * Idempotent - if already in progress, just update heartbeat
    */
   continueProcessing(): void {
+    // Idempotent - if already in progress, do nothing except update heartbeat
+    if (this.data.status === JobStatus.IN_PROGRESS) {
+      this.data.lastHeartbeat = new Date();
+      this.data.updatedAt = new Date();
+      return;
+    }
     this.transitionTo(JobStatus.IN_PROGRESS);
     this.data.lastHeartbeat = new Date();
   }
