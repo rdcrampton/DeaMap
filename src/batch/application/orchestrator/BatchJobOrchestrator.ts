@@ -110,16 +110,28 @@ export class BatchJobOrchestrator {
     const processor = this.getProcessor(job.type);
 
     // Initialize processor (get total count, etc.)
+    console.log(`🔧 [Orchestrator] Initializing processor for job ${jobId} (type: ${job.type}, status: ${job.status})`);
     const initResult = await processor.initialize(job.config);
 
     if (!initResult.success) {
-      job.fail(initResult.error || "Initialization failed");
+      const errorMessage = initResult.error || "Initialization failed";
+      console.error(`❌ [Orchestrator] Initialization failed for job ${jobId}:`, {
+        jobType: job.type,
+        jobStatus: job.status,
+        errorMessage,
+        config: job.config,
+      });
+
+      console.log(`🔄 [Orchestrator] Marking job ${jobId} as FAILED (reason: ${errorMessage})`);
+      job.fail(errorMessage);
       await this.repository.update(job);
       return {
         job,
-        chunkResult: this.createFailedResult(job, initResult.error || "Initialization failed"),
+        chunkResult: this.createFailedResult(job, errorMessage),
       };
     }
+
+    console.log(`✅ [Orchestrator] Initialization successful for job ${jobId} (totalRecords: ${initResult.totalRecords})`);
 
     // Update job with total records
     job.setTotalRecords(initResult.totalRecords);
