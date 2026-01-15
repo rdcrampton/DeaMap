@@ -1,30 +1,29 @@
 "use client";
 
 import {
-  Clock,
+  AlertCircle,
   Heart,
-  Image as ImageIcon,
-  List,
-  Map,
+  Loader2,
   MapPin,
   Navigation,
   Phone,
-  Plus,
   Search,
+  Clock,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useState } from "react";
 
 import AedDetailModal from "@/components/AedDetailModal";
-import { useAeds } from "@/hooks/useAeds";
 import type { Aed } from "@/types/aed";
 
 // Dynamic import to avoid SSR issues with Leaflet
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[600px] rounded-xl bg-white/95 flex items-center justify-center">
+    <div className="w-full h-full flex items-center justify-center bg-gray-100">
       <div className="text-center">
         <MapPin className="w-12 h-12 animate-pulse mx-auto text-blue-600 mb-4" />
         <p className="text-gray-700 font-medium">Cargando mapa...</p>
@@ -33,26 +32,243 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   ),
 });
 
+interface NearbyAed extends Aed {
+  distance: number;
+}
+
+interface GeocodingResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address: {
+    road?: string;
+    house_number?: string;
+    postcode?: string;
+    city?: string;
+  };
+}
+
 export default function Home() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const [address, setAddress] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [nearbyAeds, setNearbyAeds] = useState<NearbyAed[]>([]);
   const [selectedAed, setSelectedAed] = useState<Aed | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "map">("map");
+  const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-  const { aeds, loading, error, pagination, refetch } = useAeds({
-    page,
-    limit: 50,
-    search,
-  });
+  // Debounce for address search
+  const searchAddressSuggestions = async (query: string) => {
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
 
-  const handleCardClick = (aed: Aed) => {
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data: GeocodingResult[] = await response.json();
+        setAddressSuggestions(data.slice(0, 5)); // Limit to 5 suggestions
+        setShowSuggestions(true);
+      }
+    } catch (err) {
+      console.error("Error fetching suggestions:", err);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  // Debounce effect for address search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (address.length >= 3) {
+        searchAddressSuggestions(address);
+      } else {
+        setAddressSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [address]);
+
+  // Centralized function to search nearby AEDs
+  const searchNearbyAeds = async (lat: number, lng: number) => {
+    setLoading(true);
+    setError(null);
+    setNearbyAeds([]);
+    setShowResults(true);
+
+    try {
+      const nearbyResponse = await fetch(
+        `/api/aeds/nearby?lat=${lat}&lng=${lng}&limit=10&radius=10`
+      );
+
+      if (!nearbyResponse.ok) {
+        throw new Error("Error al buscar DEAs cercanos");
+      }
+
+      const nearbyData = await nearbyResponse.json();
+
+      if (nearbyData.success && nearbyData.data) {
+        setNearbyAeds(nearbyData.data);
+        if (nearbyData.data.length === 0) {
+          setError("No se encontraron DEAs cerca de esta ubicación en un radio de 10 km.");
+        }
+      } else {
+        throw new Error(nearbyData.message || "Error al buscar DEAs");
+      }
+    } catch (err) {
+      console.error("Error searching nearby:", err);
+      setError(err instanceof Error ? err.message : "Error al buscar DEAs");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle when user drags the search location marker
+  const handleSearchLocationChange = (location: { lat: number; lng: number }) => {
+    setSearchLocation(location);
+    searchNearbyAeds(location.lat, location.lng);
+  };
+
+  // Handle address change from reverse geocoding
+  const handleAddressChange = (newAddress: string) => {
+    setAddress(newAddress);
+  };
+
+  const handleSuggestionClick = async (suggestion: GeocodingResult) => {
+    setAddress(suggestion.display_name);
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+
+    // Immediately search for DEAs at this location
+    const lat = parseFloat(suggestion.lat);
+    const lng = parseFloat(suggestion.lon);
+    setSearchLocation({ lat, lng });
+    await searchNearbyAeds(lat, lng);
+  };
+
+  const handleFindNearestByGeolocation = async () => {
+    setLoading(true);
+    setError(null);
+    setNearbyAeds([]);
+    setShowResults(true);
+
+    try {
+      // Get user's location
+      if (!navigator.geolocation) {
+        throw new Error("La geolocalización no está disponible en tu navegador");
+      }
+
+      const position = await new Promise<{
+        coords: { latitude: number; longitude: number };
+      }>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      setSearchLocation({ lat: latitude, lng: longitude });
+
+      // Use centralized search function
+      await searchNearbyAeds(latitude, longitude);
+    } catch (err) {
+      console.error("Error finding nearest AEDs:", err);
+      // Check if it's a GeolocationPositionError by checking for code property
+      if (typeof err === "object" && err !== null && "code" in err) {
+        const geoError = err as {
+          code: number;
+          PERMISSION_DENIED: number;
+          POSITION_UNAVAILABLE: number;
+        };
+        if (geoError.code === 1) {
+          // PERMISSION_DENIED
+          setError("Necesitas permitir el acceso a tu ubicación.");
+        } else if (geoError.code === 2) {
+          // POSITION_UNAVAILABLE
+          setError("No se pudo determinar tu ubicación.");
+        } else {
+          setError("Tiempo de espera agotado.");
+        }
+      } else {
+        setError(err instanceof Error ? err.message : "Error al buscar DEAs.");
+      }
+      setLoading(false);
+    }
+  };
+
+  const handleSearchByAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!address.trim()) {
+      setError("Por favor, introduce una dirección");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNearbyAeds([]);
+    setShowResults(true);
+
+    try {
+      // Geocode the address
+      const geocodeResponse = await fetch(`/api/geocode?q=${encodeURIComponent(address)}`);
+
+      if (!geocodeResponse.ok) {
+        throw new Error("Error al buscar la dirección");
+      }
+
+      const geocodeData: GeocodingResult[] = await geocodeResponse.json();
+
+      if (!geocodeData || geocodeData.length === 0) {
+        throw new Error("No se encontró la dirección. Intenta con otra más específica.");
+      }
+
+      // Use the first result
+      const location = geocodeData[0];
+      const lat = parseFloat(location.lat);
+      const lng = parseFloat(location.lon);
+
+      setSearchLocation({ lat, lng });
+
+      // Use centralized search function
+      await searchNearbyAeds(lat, lng);
+    } catch (err) {
+      console.error("Error searching by address:", err);
+      setError(err instanceof Error ? err.message : "Error al buscar por dirección");
+      setLoading(false);
+    }
+  };
+
+  const handleCardClick = (aed: NearbyAed) => {
     setSelectedAed(aed);
     setModalOpen(true);
   };
 
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setTimeout(() => setSelectedAed(null), 200);
+  };
+
+  const handleClearSearch = () => {
+    setShowResults(false);
+    setNearbyAeds([]);
+    setSearchLocation(null);
+    setError(null);
+    setAddress("");
+  };
+
   const handleMapMarkerClick = async (aed: { id: string; code: string; name: string }) => {
-    // Fetch full AED data by ID when clicking from map
     try {
       const response = await fetch(`/api/aeds/${aed.id}`);
       if (response.ok) {
@@ -67,385 +283,459 @@ export default function Home() {
     }
   };
 
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setTimeout(() => setSelectedAed(null), 200);
-  };
-
-  if (loading && aeds.length === 0) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{
-          background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
-        }}
-      >
-        <div
-          className="text-center p-8 rounded-2xl shadow-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <MapPin className="w-12 h-12 animate-pulse mx-auto text-blue-600 mb-4" />
-          <p className="text-gray-700 font-medium">Cargando DEAs...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{
-          background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
-        }}
-      >
-        <div
-          className="text-center p-8 rounded-2xl shadow-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <p className="text-red-600 mb-4 font-medium">{error}</p>
-          <button
-            onClick={refetch}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
-            style={{ minHeight: "44px" }}
-          >
-            Reintentar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
-        backgroundAttachment: "fixed",
-      }}
-    >
-      {/* Hero Header */}
-      <header className="text-center text-white px-4 sm:px-6 pt-6 pb-4 sm:pt-8 sm:pb-6">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-4">
-          <div
-            className="p-3 sm:p-4 rounded-full flex-shrink-0"
-            style={{
-              background: "rgba(255, 255, 255, 0.2)",
-              backdropFilter: "blur(20px)",
-              border: "2px solid rgba(255, 255, 255, 0.3)",
-            }}
-          >
-            <MapPin className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-pulse" />
-          </div>
-          <div className="text-center sm:text-left">
-            <h1
-              className="font-black text-3xl sm:text-4xl md:text-5xl mb-1"
-              style={{
-                background: "linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                color: "transparent",
-                lineHeight: "1.1",
-              }}
-            >
-              deamap.es
-            </h1>
-            <div className="flex items-center justify-center sm:justify-start gap-2 opacity-90 text-sm sm:text-base">
-              <Heart className="w-4 h-4 text-red-300" />
-              <span>Mapa de Desfibriladores</span>
-              <Navigation className="w-4 h-4" />
-            </div>
-          </div>
-        </div>
-        <p className="opacity-90 text-sm sm:text-base max-w-2xl mx-auto px-2">
-          {pagination.total} DEAs disponibles en Madrid
-        </p>
-      </header>
+    <>
+      {/* Fullscreen Map Section */}
+      <div className="relative w-full h-[calc(100vh-56px)]">
+        <MapView
+          onAedClick={handleMapMarkerClick}
+          searchLocation={searchLocation}
+          onSearchLocationChange={handleSearchLocationChange}
+          onAddressChange={handleAddressChange}
+        />
 
-      {/* Search Bar and View Toggle */}
-      <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4">
-        <div
-          className="rounded-xl shadow-lg p-4 sm:p-5"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+      {/* Search Controls Overlay - Desktop: Top Left, Mobile: Top */}
+      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
+        <div className="max-w-md pointer-events-auto">
+          {/* Search Box */}
+          <div className="bg-white rounded-xl shadow-2xl overflow-hidden">
+            <form onSubmit={handleSearchByAddress} className="flex items-center gap-2 p-3">
+              <Search className="w-5 h-5 text-gray-400 flex-shrink-0" />
               <input
                 type="text"
-                placeholder="Buscar por nombre o código..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
+                placeholder="Buscar dirección..."
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                onFocus={() => {
+                  if (addressSuggestions.length > 0) setShowSuggestions(true);
                 }}
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                style={{ minHeight: "48px" }}
+                disabled={loading}
+                className="flex-1 outline-none text-gray-900 placeholder-gray-400 text-sm disabled:opacity-50"
+                autoComplete="off"
               />
-            </div>
+              {loadingSuggestions && (
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+              )}
+              {address && !loadingSuggestions && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddress("");
+                    setShowSuggestions(false);
+                    setAddressSuggestions([]);
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              )}
+            </form>
 
-            {/* Add DEA Button */}
-            <Link href="/dea/new">
-              <button
-                className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 whitespace-nowrap"
-                style={{ minHeight: "48px" }}
-              >
-                <Plus className="w-5 h-5" />
-                <span>Agregar DEA</span>
-              </button>
-            </Link>
+            {/* Address Suggestions Dropdown */}
+            {showSuggestions && addressSuggestions.length > 0 && (
+              <div className="border-t border-gray-200 max-h-64 overflow-y-auto">
+                {addressSuggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="w-full p-3 text-left hover:bg-gray-50 transition-colors flex items-start gap-2"
+                  >
+                    <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{suggestion.display_name}</p>
+                      {suggestion.address.city && (
+                        <p className="text-xs text-gray-500 mt-0.5">{suggestion.address.city}</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {/* View Toggle */}
-            <div
-              className="flex rounded-lg overflow-hidden"
-              style={{
-                background: "rgba(0, 0, 0, 0.05)",
-              }}
-            >
+            {/* Geolocation Button - Visible on Desktop */}
+            <div className="hidden md:block border-t border-gray-200">
               <button
-                onClick={() => setViewMode("list")}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition-all ${
-                  viewMode === "list"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                    : "text-gray-700 hover:bg-white/50"
-                }`}
-                style={{ minHeight: "48px" }}
+                onClick={handleFindNearestByGeolocation}
+                disabled={loading}
+                className="w-full p-3 flex items-center gap-3 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
               >
-                <List className="w-5 h-5" />
-                <span className="hidden sm:inline">Lista</span>
-              </button>
-              <button
-                onClick={() => setViewMode("map")}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition-all ${
-                  viewMode === "map"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                    : "text-gray-700 hover:bg-white/50"
-                }`}
-                style={{ minHeight: "48px" }}
-              >
-                <Map className="w-5 h-5" />
-                <span className="hidden sm:inline">Mapa</span>
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600 flex-shrink-0" />
+                    <span className="text-sm font-medium text-gray-700">Buscando...</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                      <Navigation className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">Usar mi ubicación</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 shadow-lg">
+              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Content */}
-      <main className="container mx-auto px-3 sm:px-4 md:px-6 py-4 pb-12">
-        {viewMode === "map" ? (
-          <MapView onAedClick={handleMapMarkerClick} />
-        ) : (
-          <>
-            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {aeds.map((aed) => (
-                <AedCard key={aed.id} aed={aed} onClick={() => handleCardClick(aed)} />
-              ))}
-            </div>
+      {/* Geolocation Button - Mobile: Bottom Center */}
+      <div className="md:hidden absolute bottom-24 left-1/2 transform -translate-x-1/2 z-[1000]">
+        <button
+          onClick={handleFindNearestByGeolocation}
+          disabled={loading}
+          className="bg-blue-600 text-white rounded-full shadow-2xl p-4 flex items-center gap-3 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="text-sm font-medium pr-2">Buscando...</span>
+            </>
+          ) : (
+            <>
+              <Navigation className="w-6 h-6" />
+              <span className="text-sm font-medium pr-2">Usar mi ubicación</span>
+            </>
+          )}
+        </button>
+      </div>
 
-            {aeds.length === 0 && (
-              <div
-                className="text-center py-12 sm:py-16 rounded-xl shadow-lg"
-                style={{
-                  background: "rgba(255, 255, 255, 0.95)",
-                  backdropFilter: "blur(20px)",
-                }}
-              >
-                <p className="text-gray-600 text-lg px-4">No se encontraron DEAs</p>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-                <div
-                  className="flex gap-2 sm:gap-3"
-                  style={{
-                    background: "rgba(255, 255, 255, 0.95)",
-                    backdropFilter: "blur(20px)",
-                    padding: "0.5rem",
-                    borderRadius: "0.75rem",
-                  }}
-                >
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-all active:scale-95 font-medium"
-                    style={{ minHeight: "44px" }}
-                  >
-                    Anterior
-                  </button>
-                  <span className="px-4 py-2 flex items-center text-gray-700 font-medium">
-                    Página {page} de {pagination.totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-                    disabled={page === pagination.totalPages}
-                    className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-all active:scale-95 font-medium"
-                    style={{ minHeight: "44px" }}
-                  >
-                    Siguiente
-                  </button>
+      {/* Results Panel - Right Side on Desktop, Bottom Sheet on Mobile */}
+      {showResults && nearbyAeds.length > 0 && (
+        <>
+          {/* Desktop: Right Panel */}
+          <div className="hidden md:block absolute top-4 right-4 bottom-4 w-96 z-[1000]">
+            <div className="bg-white rounded-xl shadow-2xl h-full flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-700">
+                <div className="text-white">
+                  <h3 className="font-bold text-lg">
+                    {nearbyAeds.length} DEA{nearbyAeds.length !== 1 ? "s" : ""} encontrado
+                    {nearbyAeds.length !== 1 ? "s" : ""}
+                  </h3>
+                  <p className="text-sm text-blue-100">Ordenados por distancia</p>
                 </div>
+                <button
+                  onClick={handleClearSearch}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
               </div>
-            )}
-          </>
-        )}
-      </main>
+
+              {/* Results List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {nearbyAeds.map((aed, index) => (
+                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed)} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile: Bottom Sheet */}
+          <div className="md:hidden absolute bottom-0 left-0 right-0 z-[1000] max-h-[50vh]">
+            <div className="bg-white rounded-t-2xl shadow-2xl overflow-hidden">
+              {/* Handle */}
+              <div className="p-2 flex justify-center">
+                <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+              </div>
+
+              {/* Header */}
+              <div className="px-4 pb-3 flex items-center justify-between border-b border-gray-200">
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900">
+                    {nearbyAeds.length} DEA{nearbyAeds.length !== 1 ? "s" : ""}
+                  </h3>
+                  <p className="text-sm text-gray-600">Ordenados por distancia</p>
+                </div>
+                <button
+                  onClick={handleClearSearch}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+
+              {/* Results List */}
+              <div className="overflow-y-auto max-h-[40vh] p-4 space-y-3">
+                {nearbyAeds.map((aed, index) => (
+                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed)} compact />
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Scroll Down Indicator - Hide when showing results */}
+      {!showResults && (
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[999] pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-white drop-shadow-lg">
+            <span className="text-sm font-medium bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+              Más información
+            </span>
+            <ChevronDown className="w-6 h-6 animate-bounce" />
+          </div>
+        </div>
+      )}
 
       {/* Detail Modal */}
       <AedDetailModal aed={selectedAed} isOpen={modalOpen} onClose={handleCloseModal} />
     </div>
+
+      {/* Info Section - After the map */}
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="container mx-auto px-4 py-16 space-y-16">
+          {/* About Section */}
+          <section className="max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
+                <Heart className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">Sobre DeaMap</h2>
+              <p className="text-xl text-gray-600">
+                El mapa colaborativo de desfibriladores más completo de España
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">¿Qué es DeaMap?</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  DeaMap es una plataforma colaborativa que permite localizar desfibriladores (DEAs)
+                  cercanos en caso de emergencia cardíaca. Contamos con cobertura en España y planes
+                  de expansión a nivel europeo.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">¿Cómo funciona?</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  Utiliza la búsqueda por ubicación o dirección para encontrar los DEAs más cercanos
+                  a ti. Cada DEA incluye información detallada sobre su ubicación, horarios de acceso
+                  y datos de contacto.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">¿Por qué es importante?</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  En una emergencia cardíaca, cada segundo cuenta. Tener acceso rápido a un
+                  desfibrilador puede salvar vidas. DeaMap facilita encontrar el equipo más cercano
+                  cuando más se necesita.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Colabora con nosotros</h3>
+                <p className="text-gray-700 leading-relaxed mb-3">
+                  Si conoces la ubicación de un DEA que no está en el mapa, puedes agregarlo fácilmente.
+                </p>
+                <Link
+                  href="/dea/new"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Agregar un DEA
+                </Link>
+              </div>
+            </div>
+          </section>
+
+          {/* Stats Section */}
+          <section className="max-w-4xl mx-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 shadow-2xl text-white">
+              <h2 className="text-3xl font-bold mb-8 text-center">Nuestra Cobertura</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="text-center">
+                  <MapPin className="w-8 h-8 mx-auto mb-3" />
+                  <p className="text-4xl font-bold mb-2">🇪🇸</p>
+                  <p className="text-lg font-semibold">España</p>
+                  <p className="text-sm text-blue-100 mt-1">Cobertura nacional</p>
+                </div>
+                <div className="text-center">
+                  <Heart className="w-8 h-8 mx-auto mb-3" />
+                  <p className="text-4xl font-bold mb-2">24/7</p>
+                  <p className="text-lg font-semibold">Disponible</p>
+                  <p className="text-sm text-blue-100 mt-1">Acceso permanente</p>
+                </div>
+                <div className="text-center">
+                  <Navigation className="w-8 h-8 mx-auto mb-3" />
+                  <p className="text-4xl font-bold mb-2">🇪🇺</p>
+                  <p className="text-lg font-semibold">Europa</p>
+                  <p className="text-sm text-blue-100 mt-1">Próximamente</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Footer */}
+          <footer className="text-center text-gray-600 py-8">
+            <p className="text-sm">
+              © 2024 DeaMap - Salvando vidas juntos
+            </p>
+          </footer>
+        </div>
+      </div>
+    </>
   );
 }
 
 /**
- * AED Card Component
+ * Nearby AED Card Component
  */
-function AedCard({ aed, onClick }: { aed: Aed; onClick: () => void }) {
+function NearbyAedCard({
+  aed,
+  rank,
+  onClick,
+  compact = false,
+}: {
+  aed: NearbyAed;
+  rank: number;
+  onClick: () => void;
+  compact?: boolean;
+}) {
   const displayImage =
     aed.images && aed.images.length > 0
       ? aed.images[0].thumbnail_url || aed.images[0].processed_url || aed.images[0].original_url
       : null;
 
+  const distanceText =
+    aed.distance < 1 ? `${Math.round(aed.distance * 1000)} m` : `${aed.distance.toFixed(1)} km`;
+
+  if (compact) {
+    return (
+      <button
+        onClick={onClick}
+        className="w-full bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all text-left"
+      >
+        <div className="flex items-start gap-3">
+          {/* Rank */}
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
+            style={{
+              background:
+                rank === 1
+                  ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                  : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+            }}
+          >
+            {rank}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-bold text-blue-600 text-sm">{distanceText}</span>
+            </div>
+            <h4 className="font-semibold text-gray-900 text-sm mb-1 truncate">{aed.name}</h4>
+            <p className="text-xs text-gray-600 truncate">
+              {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
+            </p>
+          </div>
+        </div>
+      </button>
+    );
+  }
+
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-xl sm:rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group cursor-pointer text-left"
-      style={{
-        background: "rgba(255, 255, 255, 0.98)",
-        backdropFilter: "blur(20px)",
-        border: "1px solid rgba(255, 255, 255, 0.3)",
-      }}
+      className="w-full bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-all text-left"
     >
-      {/* Image Header or Gradient Header */}
+      {/* Image or Gradient */}
       {displayImage ? (
-        <div className="relative h-48 sm:h-56 overflow-hidden">
-          <img
-            src={displayImage}
-            alt={aed.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-          />
+        <div className="relative h-32">
+          <img src={displayImage} alt={aed.name} className="w-full h-full object-cover" />
           <div
-            className="absolute inset-0"
+            className="absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg"
             style={{
-              background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%)",
-            }}
-          />
-          <div className="absolute bottom-0 left-0 right-0 p-4">
-            <h3 className="text-base sm:text-lg font-bold text-white truncate">{aed.name}</h3>
-            <p className="text-xs sm:text-sm text-white/90 mt-1">{aed.code}</p>
-          </div>
-          <div
-            className="absolute top-3 right-3 p-2 rounded-lg"
-            style={{
-              background: "rgba(255, 255, 255, 0.9)",
-              backdropFilter: "blur(10px)",
+              background:
+                rank === 1
+                  ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                  : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
             }}
           >
-            <Heart className="w-5 h-5 text-red-500" />
+            {rank}
           </div>
-          {aed.images && aed.images.length > 1 && (
-            <div
-              className="absolute top-3 left-3 px-2 py-1 rounded-lg text-white text-xs font-medium flex items-center gap-1"
-              style={{
-                background: "rgba(0, 0, 0, 0.6)",
-                backdropFilter: "blur(10px)",
-              }}
-            >
-              <ImageIcon className="w-3 h-3" />
-              {aed.images.length}
-            </div>
-          )}
         </div>
       ) : (
         <div
-          className="p-4 sm:p-5"
+          className="h-32 relative"
           style={{
             background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
           }}
         >
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base sm:text-lg font-bold text-white truncate">{aed.name}</h3>
-              <p className="text-xs sm:text-sm text-white/80 mt-1">{aed.code}</p>
-            </div>
-            <div
-              className="p-2 rounded-lg ml-2 flex-shrink-0"
-              style={{
-                background: "rgba(255, 255, 255, 0.2)",
-                backdropFilter: "blur(10px)",
-              }}
-            >
-              <Heart className="w-5 h-5 text-white" />
-            </div>
+          <div
+            className="absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg"
+            style={{
+              background:
+                rank === 1
+                  ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                  : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+            }}
+          >
+            {rank}
           </div>
         </div>
       )}
 
       {/* Content */}
-      <div className="p-4 sm:p-5 space-y-3">
-        {/* Type Badge */}
-        <div>
-          <span className="inline-block px-3 py-1.5 bg-blue-100 text-blue-800 text-xs sm:text-sm rounded-full font-medium">
-            {aed.establishment_type}
-          </span>
+      <div className="p-3 space-y-2">
+        {/* Distance */}
+        <div
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-white text-xs font-bold"
+          style={{
+            background:
+              rank === 1
+                ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+          }}
+        >
+          <Navigation className="w-3 h-3" />
+          {distanceText}
         </div>
+
+        {/* Name */}
+        <h4 className="font-semibold text-gray-900 text-sm line-clamp-2">{aed.name}</h4>
 
         {/* Location */}
-        <div className="space-y-2 text-sm text-gray-600">
-          <div className="flex items-start space-x-2">
-            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mt-0.5 flex-shrink-0 text-blue-500" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm sm:text-base text-gray-900 font-medium break-words">
-                {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
-              </p>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                {aed.location.postal_code}
-                {aed.location.district_name && ` - ${aed.location.district_name}`}
-              </p>
-            </div>
-          </div>
-
-          {/* Schedule */}
-          {aed.schedule && (
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 text-purple-500" />
-              <p className="text-sm sm:text-base">
-                {aed.schedule.has_24h_surveillance
-                  ? "24h Vigilancia"
-                  : aed.schedule.weekday_opening && aed.schedule.weekday_closing
-                    ? `${aed.schedule.weekday_opening} - ${aed.schedule.weekday_closing}`
-                    : "Horario no especificado"}
-              </p>
-            </div>
-          )}
-
-          {/* Contact */}
-          {aed.responsible && aed.responsible.phone && (
-            <div className="flex items-center space-x-2">
-              <Phone className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 text-green-500" />
-              <p className="text-sm sm:text-base">{aed.responsible.phone}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Coordinates */}
-        <div className="pt-3 border-t border-gray-200">
-          <p className="text-xs text-gray-400">
-            📍 {aed.latitude.toFixed(6)}, {aed.longitude.toFixed(6)}
+        <div className="flex items-start gap-1 text-xs text-gray-600">
+          <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5 text-red-500" />
+          <p className="line-clamp-2">
+            {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
           </p>
         </div>
+
+        {/* Schedule */}
+        {aed.schedule && (
+          <div className="flex items-center gap-1 text-xs text-gray-600">
+            <Clock className="w-3 h-3 flex-shrink-0 text-green-500" />
+            <p>
+              {aed.schedule.has_24h_surveillance
+                ? "24h"
+                : aed.schedule.weekday_opening && aed.schedule.weekday_closing
+                  ? `${aed.schedule.weekday_opening}-${aed.schedule.weekday_closing}`
+                  : "Horario no especificado"}
+            </p>
+          </div>
+        )}
+
+        {/* Contact */}
+        {aed.responsible && aed.responsible.phone && (
+          <div className="flex items-center gap-1 text-xs text-gray-600">
+            <Phone className="w-3 h-3 flex-shrink-0 text-blue-500" />
+            <p>{aed.responsible.phone}</p>
+          </div>
+        )}
       </div>
     </button>
   );

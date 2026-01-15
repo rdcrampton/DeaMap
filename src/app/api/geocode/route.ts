@@ -40,6 +40,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Query requerida" }, { status: 400 });
     }
 
+    // Detect if user is searching for a specific house number
+    const numberMatch = query.match(/\b(\d+)\b/);
+    const searchedNumber = numberMatch ? numberMatch[1] : null;
+
     const results: NormalizedResult[] = [];
 
     // 1. Try Google Geocoding API if key is available
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest) {
 
         if (googleData.status === "OK" && googleData.results) {
           const googleResults = googleData.results
-            .slice(0, 5)
+            .slice(0, 10)
             .map((result: GoogleGeocodingResult) => normalizeGoogleResult(result));
           results.push(...googleResults);
         }
@@ -69,7 +73,7 @@ export async function GET(request: NextRequest) {
     try {
       const osmUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
         query + ", Madrid, España"
-      )}&addressdetails=1&limit=5&countrycodes=es`;
+      )}&addressdetails=1&limit=10&countrycodes=es`;
 
       const osmResponse = await fetch(osmUrl, {
         headers: {
@@ -78,10 +82,7 @@ export async function GET(request: NextRequest) {
       });
       const osmData = await osmResponse.json();
 
-      const osmResults = osmData.map((result: any) => ({
-        ...result,
-        source: "osm" as const,
-      }));
+      const osmResults = osmData.map((result: any) => normalizeOSMResult(result));
 
       results.push(...osmResults);
     } catch (error) {
@@ -91,8 +92,17 @@ export async function GET(request: NextRequest) {
     // 3. Deduplicate and prioritize results
     const deduplicatedResults = deduplicateResults(results);
 
-    // 4. Sort: Google results first, then prioritize those with house numbers
+    // 4. Sort: Prioritize exact number matches, then Google results, then presence of house numbers
     const sortedResults = deduplicatedResults.sort((a, b) => {
+      // If user searched for a specific number, prioritize exact matches
+      if (searchedNumber) {
+        const aMatchesNumber = a.address.house_number === searchedNumber;
+        const bMatchesNumber = b.address.house_number === searchedNumber;
+
+        if (aMatchesNumber && !bMatchesNumber) return -1;
+        if (!aMatchesNumber && bMatchesNumber) return 1;
+      }
+
       // Google results first
       if (a.source === "google" && b.source !== "google") return -1;
       if (a.source !== "google" && b.source === "google") return 1;
@@ -135,6 +145,26 @@ function normalizeGoogleResult(result: GoogleGeocodingResult): NormalizedResult 
       city: locality,
     },
     source: "google",
+  };
+}
+
+function normalizeOSMResult(result: any): NormalizedResult {
+  // OSM returns address details in result.address
+  const address = result.address || {};
+
+  return {
+    display_name: result.display_name,
+    lat: result.lat,
+    lon: result.lon,
+    address: {
+      road: address.road || address.street || address.pedestrian,
+      house_number: address.house_number,
+      postcode: address.postcode,
+      city: address.city || address.town || address.village || address.municipality,
+      town: address.town,
+      municipality: address.municipality,
+    },
+    source: "osm",
   };
 }
 
