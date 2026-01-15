@@ -55,11 +55,13 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const handleFindNearestByGeolocation = async () => {
     setLoading(true);
     setError(null);
     setNearbyAeds([]);
+    setShowSearchResults(true);
 
     try {
       // Get user's location
@@ -133,6 +135,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setNearbyAeds([]);
+    setShowSearchResults(true);
 
     try {
       // Geocode the address
@@ -192,6 +195,15 @@ export default function Home() {
   const handleCloseModal = () => {
     setModalOpen(false);
     setTimeout(() => setSelectedAed(null), 200);
+  };
+
+  const handleBackToMap = () => {
+    setShowSearchResults(false);
+    setNearbyAeds([]);
+    setSearchLocation(null);
+    setUserLocation(null);
+    setError(null);
+    setAddress("");
   };
 
   const handleMapMarkerClick = async (aed: { id: string; code: string; name: string }) => {
@@ -327,7 +339,7 @@ export default function Home() {
         </div>
 
         {/* Error Message */}
-        {error && (
+        {error && showSearchResults && (
           <div
             className="max-w-4xl mx-auto mb-8 p-4 rounded-xl border-2"
             style={{
@@ -345,26 +357,37 @@ export default function Home() {
           </div>
         )}
 
-        {/* Results */}
-        {nearbyAeds.length > 0 && (
+        {/* Search Results */}
+        {showSearchResults && nearbyAeds.length > 0 && (
           <div className="max-w-7xl mx-auto space-y-6">
             <div
-              className="p-6 rounded-xl text-center"
+              className="p-6 rounded-xl"
               style={{
                 background: "rgba(255, 255, 255, 0.95)",
                 backdropFilter: "blur(20px)",
               }}
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                {nearbyAeds.length} DEA{nearbyAeds.length !== 1 ? "s" : ""} encontrado
-                {nearbyAeds.length !== 1 ? "s" : ""}
-              </h3>
-              <p className="text-gray-600">
-                Ordenados por distancia - El más cercano primero
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                    {nearbyAeds.length} DEA{nearbyAeds.length !== 1 ? "s" : ""} encontrado
+                    {nearbyAeds.length !== 1 ? "s" : ""}
+                  </h3>
+                  <p className="text-gray-600">
+                    Ordenados por distancia - El más cercano primero
+                  </p>
+                </div>
+                <button
+                  onClick={handleBackToMap}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                >
+                  <MapPin className="w-5 h-5" />
+                  Ver mapa completo
+                </button>
+              </div>
             </div>
 
-            {/* Map View */}
+            {/* Map View with search results */}
             {searchLocation && (
               <div
                 className="rounded-xl overflow-hidden shadow-2xl"
@@ -393,6 +416,46 @@ export default function Home() {
                   onClick={() => handleCardClick(aed)}
                 />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* General Map View - Show when not searching */}
+        {!showSearchResults && (
+          <div className="max-w-7xl mx-auto space-y-6">
+            <div
+              className="p-6 rounded-xl text-center"
+              style={{
+                background: "rgba(255, 255, 255, 0.95)",
+                backdropFilter: "blur(20px)",
+              }}
+            >
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                Mapa de DEAs
+              </h3>
+              <p className="text-gray-600">
+                Explora todos los desfibriladores registrados en España
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                Haz clic en cualquier marcador para ver los detalles del DEA
+              </p>
+            </div>
+
+            {/* Full Map */}
+            <div
+              className="rounded-xl overflow-hidden shadow-2xl"
+              style={{
+                background: "rgba(255, 255, 255, 0.95)",
+                backdropFilter: "blur(20px)",
+              }}
+            >
+              <div className="p-4 bg-gradient-to-r from-red-600 to-red-700">
+                <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  Vista general de DEAs disponibles
+                </h4>
+              </div>
+              <MapView onAedClick={handleMapMarkerClick} />
             </div>
           </div>
         )}
