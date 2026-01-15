@@ -13,7 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 import AedDetailModal from "@/components/AedDetailModal";
@@ -57,6 +57,88 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false);
   const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  // Debounce for address search
+  const searchAddressSuggestions = async (query: string) => {
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data: GeocodingResult[] = await response.json();
+        setAddressSuggestions(data.slice(0, 5)); // Limit to 5 suggestions
+        setShowSuggestions(true);
+      }
+    } catch (err) {
+      console.error("Error fetching suggestions:", err);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  // Debounce effect for address search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (address.length >= 3) {
+        searchAddressSuggestions(address);
+      } else {
+        setAddressSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [address]);
+
+  const handleSuggestionClick = async (suggestion: GeocodingResult) => {
+    setAddress(suggestion.display_name);
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+
+    // Immediately search for DEAs at this location
+    const lat = parseFloat(suggestion.lat);
+    const lng = parseFloat(suggestion.lon);
+
+    setLoading(true);
+    setError(null);
+    setNearbyAeds([]);
+    setShowResults(true);
+    setSearchLocation({ lat, lng });
+
+    try {
+      const nearbyResponse = await fetch(
+        `/api/aeds/nearby?lat=${lat}&lng=${lng}&limit=10&radius=10`
+      );
+
+      if (!nearbyResponse.ok) {
+        throw new Error("Error al buscar DEAs cercanos");
+      }
+
+      const nearbyData = await nearbyResponse.json();
+
+      if (nearbyData.success && nearbyData.data) {
+        setNearbyAeds(nearbyData.data);
+        if (nearbyData.data.length === 0) {
+          setError("No se encontraron DEAs cerca de esta dirección en un radio de 10 km.");
+        }
+      } else {
+        throw new Error(nearbyData.message || "Error al buscar DEAs");
+      }
+    } catch (err) {
+      console.error("Error searching nearby:", err);
+      setError(err instanceof Error ? err.message : "Error al buscar DEAs");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFindNearestByGeolocation = async () => {
     setLoading(true);
@@ -223,11 +305,10 @@ export default function Home() {
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden">
-      {/* Fullscreen Map */}
-      <div className="absolute inset-0">
+    <>
+      {/* Fullscreen Map Section */}
+      <div className="relative w-full h-[calc(100vh-56px)]">
         <MapView onAedClick={handleMapMarkerClick} searchLocation={searchLocation} />
-      </div>
 
       {/* Search Controls Overlay - Desktop: Top Left, Mobile: Top */}
       <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
@@ -241,19 +322,52 @@ export default function Home() {
                 placeholder="Buscar dirección..."
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
+                onFocus={() => {
+                  if (addressSuggestions.length > 0) setShowSuggestions(true);
+                }}
                 disabled={loading}
                 className="flex-1 outline-none text-gray-900 placeholder-gray-400 text-sm disabled:opacity-50"
+                autoComplete="off"
               />
-              {address && (
+              {loadingSuggestions && (
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+              )}
+              {address && !loadingSuggestions && (
                 <button
                   type="button"
-                  onClick={() => setAddress("")}
+                  onClick={() => {
+                    setAddress("");
+                    setShowSuggestions(false);
+                    setAddressSuggestions([]);
+                  }}
                   className="p-1 hover:bg-gray-100 rounded-full transition-colors"
                 >
                   <X className="w-4 h-4 text-gray-400" />
                 </button>
               )}
             </form>
+
+            {/* Address Suggestions Dropdown */}
+            {showSuggestions && addressSuggestions.length > 0 && (
+              <div className="border-t border-gray-200 max-h-64 overflow-y-auto">
+                {addressSuggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="w-full p-3 text-left hover:bg-gray-50 transition-colors flex items-start gap-2"
+                  >
+                    <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{suggestion.display_name}</p>
+                      {suggestion.address.city && (
+                        <p className="text-xs text-gray-500 mt-0.5">{suggestion.address.city}</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Geolocation Button - Visible on Desktop */}
             <div className="hidden md:block border-t border-gray-200">
@@ -377,21 +491,24 @@ export default function Home() {
         </>
       )}
 
-      {/* Scroll Down Indicator */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[999] pointer-events-none">
-        <div className="flex flex-col items-center gap-2 text-white drop-shadow-lg">
-          <span className="text-sm font-medium bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
-            Más información
-          </span>
-          <ChevronDown className="w-6 h-6 animate-bounce" />
+      {/* Scroll Down Indicator - Hide when showing results */}
+      {!showResults && (
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[999] pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-white drop-shadow-lg">
+            <span className="text-sm font-medium bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+              Más información
+            </span>
+            <ChevronDown className="w-6 h-6 animate-bounce" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Detail Modal */}
       <AedDetailModal aed={selectedAed} isOpen={modalOpen} onClose={handleCloseModal} />
+    </div>
 
-      {/* Info Section - Below the fold */}
-      <div className="absolute top-[100vh] left-0 right-0 bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Info Section - After the map */}
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="container mx-auto px-4 py-16 space-y-16">
           {/* About Section */}
           <section className="max-w-4xl mx-auto">
@@ -484,7 +601,7 @@ export default function Home() {
           </footer>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

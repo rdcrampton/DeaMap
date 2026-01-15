@@ -176,7 +176,7 @@ export default function MapView({ onAedClick, searchLocation }: MapViewProps) {
   const [targetBounds, setTargetBounds] = useState<L.LatLngBounds | null>(null);
 
   // Fetch AEDs within bounds with clustering
-  const { aeds, clusters, loading, error, stats, strategy } = useAedsByBounds(bounds, zoom);
+  const { aeds, clusters, loading, error } = useAedsByBounds(bounds, zoom);
 
   useEffect(() => {
     // Ensure Leaflet styles are loaded
@@ -358,8 +358,8 @@ export default function MapView({ onAedClick, searchLocation }: MapViewProps) {
         </div>
       )}
 
-      {/* Info indicator */}
-      {!loading && !error && (aeds.length > 0 || clusters.length > 0) && (
+      {/* Info indicator - Disabled for public users */}
+      {/* {!loading && !error && (aeds.length > 0 || clusters.length > 0) && (
         <div className="absolute bottom-4 left-4 z-[1000] bg-white rounded-lg shadow-lg px-4 py-2 flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-blue-600" />
@@ -380,7 +380,7 @@ export default function MapView({ onAedClick, searchLocation }: MapViewProps) {
           )}
           <span className="text-xs text-gray-500">Estrategia: {strategy}</span>
         </div>
-      )}
+      )} */}
 
       {/* No results indicator */}
       {!loading && !error && aeds.length === 0 && clusters.length === 0 && bounds && (
