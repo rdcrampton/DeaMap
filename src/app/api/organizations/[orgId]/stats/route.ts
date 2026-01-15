@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import { verifyAuth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { orgId: string } }
 ) {
   try {
-    const auth = await verifyAuth(request);
+    const user = await requireAuth(request);
 
-    if (!auth.user) {
+    if (!user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
@@ -20,11 +20,11 @@ export async function GET(
     const membership = await prisma.organization_member.findFirst({
       where: {
         organization_id: orgId,
-        user_id: auth.user.id,
+        user_id: user.id,
       },
     });
 
-    if (!membership && auth.user.role !== "ADMIN") {
+    if (!membership && user.role !== "ADMIN") {
       return NextResponse.json(
         { error: "No tienes acceso a esta organización" },
         { status: 403 }
