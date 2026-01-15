@@ -53,7 +53,6 @@ export default function Home() {
   const [nearbyAeds, setNearbyAeds] = useState<NearbyAed[]>([]);
   const [selectedAed, setSelectedAed] = useState<Aed | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
@@ -69,7 +68,9 @@ export default function Home() {
         throw new Error("La geolocalización no está disponible en tu navegador");
       }
 
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      const position = await new Promise<{
+        coords: { latitude: number; longitude: number };
+      }>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
           timeout: 10000,
@@ -78,7 +79,6 @@ export default function Home() {
       });
 
       const { latitude, longitude } = position.coords;
-      setUserLocation({ lat: latitude, lng: longitude });
       setSearchLocation({ lat: latitude, lng: longitude });
 
       // Fetch nearby AEDs
@@ -104,12 +104,14 @@ export default function Home() {
       }
     } catch (err) {
       console.error("Error finding nearest AEDs:", err);
-      if (err instanceof GeolocationPositionError) {
-        if (err.code === err.PERMISSION_DENIED) {
+      // Check if it's a GeolocationPositionError by checking for code property
+      if (typeof err === "object" && err !== null && "code" in err) {
+        const geoError = err as { code: number; PERMISSION_DENIED: number; POSITION_UNAVAILABLE: number };
+        if (geoError.code === 1) { // PERMISSION_DENIED
           setError(
             "Necesitas permitir el acceso a tu ubicación para encontrar DEAs cercanos. Por favor, activa la ubicación en tu navegador."
           );
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
+        } else if (geoError.code === 2) { // POSITION_UNAVAILABLE
           setError("No se pudo determinar tu ubicación. Intenta buscar por dirección.");
         } else {
           setError("Tiempo de espera agotado. Intenta buscar por dirección.");
@@ -201,7 +203,6 @@ export default function Home() {
     setShowSearchResults(false);
     setNearbyAeds([]);
     setSearchLocation(null);
-    setUserLocation(null);
     setError(null);
     setAddress("");
   };

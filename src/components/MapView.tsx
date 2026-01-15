@@ -246,7 +246,7 @@ export default function MapView({ onAedClick, searchLocation }: MapViewProps) {
         <MapController targetBounds={targetBounds} />
 
         {/* Search location controller */}
-        <SearchLocationController location={searchLocation} />
+        <SearchLocationController location={searchLocation ?? null} />
 
         {/* Search location marker */}
         {searchLocation && (
