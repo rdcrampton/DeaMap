@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import { useState } from "react";
 
 import { useOrganization } from "@/contexts/OrganizationContext";

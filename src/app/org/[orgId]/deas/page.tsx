@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, MapPin, Filter, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Search, MapPin, CheckCircle, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, use } from "react";
 

@@ -5,7 +5,6 @@ import {
   ClipboardCheck,
   Users,
   CheckCircle2,
-  AlertCircle,
   Clock,
   TrendingUp,
   ArrowRight,

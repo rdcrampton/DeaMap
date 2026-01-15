@@ -17,10 +17,10 @@ export async function GET(
     const { orgId } = await params;
 
     // Verificar que el usuario pertenece a la organización
-    const membership = await prisma.organization_member.findFirst({
+    const membership = await prisma.organizationMember.findFirst({
       where: {
         organization_id: orgId,
-        user_id: user.id,
+        user_id: user.userId,
       },
     });
 
@@ -32,7 +32,7 @@ export async function GET(
     }
 
     // Obtener DEAs asignados a la organización
-    const assignments = await prisma.aed_organization_assignment.findMany({
+    const assignments = await prisma.aedOrganizationAssignment.findMany({
       where: {
         organization_id: orgId,
         status: "ACTIVE",
@@ -42,30 +42,49 @@ export async function GET(
           select: {
             id: true,
             name: true,
-            address: true,
-            city: true,
-            is_active: true,
+            status: true,
             last_verified_at: true,
             establishment_type: true,
+            location: {
+              select: {
+                street_type: true,
+                street_name: true,
+                street_number: true,
+                postal_code: true,
+                city_name: true,
+                district_name: true,
+              },
+            },
           },
         },
       },
       orderBy: {
-        created_at: "desc",
+        assigned_at: "desc",
       },
     });
 
     // Mapear a formato más simple
-    const deas = assignments.map((assignment) => ({
-      id: assignment.aed.id,
-      name: assignment.aed.name,
-      address: assignment.aed.address,
-      city: assignment.aed.city,
-      is_active: assignment.aed.is_active,
-      last_verified_at: assignment.aed.last_verified_at,
-      establishment_type: assignment.aed.establishment_type,
-      assignment_type: assignment.assignment_type,
-    }));
+    const deas = assignments.map((assignment) => {
+      const loc = assignment.aed.location;
+      const addressParts = [
+        loc?.street_type,
+        loc?.street_name,
+        loc?.street_number,
+      ].filter(Boolean);
+
+      return {
+        id: assignment.aed.id,
+        name: assignment.aed.name,
+        address: addressParts.join(" ") || null,
+        city: loc?.city_name || null,
+        district: loc?.district_name || null,
+        postal_code: loc?.postal_code || null,
+        status: assignment.aed.status,
+        last_verified_at: assignment.aed.last_verified_at,
+        establishment_type: assignment.aed.establishment_type,
+        assignment_type: assignment.assignment_type,
+      };
+    });
 
     return NextResponse.json({
       deas,

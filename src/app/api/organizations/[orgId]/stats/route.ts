@@ -17,10 +17,10 @@ export async function GET(
     const { orgId } = await params;
 
     // Verificar que el usuario pertenece a la organización
-    const membership = await prisma.organization_member.findFirst({
+    const membership = await prisma.organizationMember.findFirst({
       where: {
         organization_id: orgId,
-        user_id: user.id,
+        user_id: user.userId,
       },
     });
 
@@ -41,7 +41,7 @@ export async function GET(
       deasByStatus,
     ] = await Promise.all([
       // Total de DEAs asignados a la organización
-      prisma.aed_organization_assignment.count({
+      prisma.aedOrganizationAssignment.count({
         where: {
           organization_id: orgId,
           status: "ACTIVE",
@@ -49,7 +49,7 @@ export async function GET(
       }),
 
       // DEAs verificados
-      prisma.aed_organization_assignment.count({
+      prisma.aedOrganizationAssignment.count({
         where: {
           organization_id: orgId,
           status: "ACTIVE",
@@ -63,7 +63,7 @@ export async function GET(
       }),
 
       // Verificaciones pendientes
-      prisma.aed_organization_assignment.count({
+      prisma.aedOrganizationAssignment.count({
         where: {
           organization_id: orgId,
           status: "ACTIVE",
@@ -82,14 +82,14 @@ export async function GET(
       }),
 
       // Número de miembros
-      prisma.organization_member.count({
+      prisma.organizationMember.count({
         where: {
           organization_id: orgId,
         },
       }),
 
       // Verificaciones realizadas este mes
-      prisma.aed_verification.count({
+      prisma.aedOrganizationVerification.count({
         where: {
           organization_id: orgId,
           verified_at: {
@@ -100,9 +100,9 @@ export async function GET(
 
       // DEAs por estado
       prisma.aed.groupBy({
-        by: ["is_active"],
+        by: ["status"],
         where: {
-          organization_assignments: {
+          assignments: {
             some: {
               organization_id: orgId,
               status: "ACTIVE",
@@ -121,14 +121,17 @@ export async function GET(
     };
 
     deasByStatus.forEach((item) => {
-      if (item.is_active) {
-        deasByStatusMap.active = item._count;
-      } else {
-        deasByStatusMap.inactive = item._count;
+      if (item.status === "PUBLISHED") {
+        deasByStatusMap.active += item._count;
+      } else if (item.status === "INACTIVE" || item.status === "REJECTED") {
+        deasByStatusMap.inactive += item._count;
+      } else if (item.status === "DRAFT" || item.status === "PENDING_REVIEW") {
+        deasByStatusMap.pending += item._count;
       }
     });
 
-    deasByStatusMap.pending = pendingVerifications;
+    // Add verifications pending to the pending count
+    deasByStatusMap.pending += pendingVerifications;
 
     return NextResponse.json({
       total_deas: totalDeas,

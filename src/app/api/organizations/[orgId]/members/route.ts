@@ -17,10 +17,10 @@ export async function GET(
     const { orgId } = await params;
 
     // Verificar que el usuario pertenece a la organización y tiene permisos para ver miembros
-    const membership = await prisma.organization_member.findFirst({
+    const membership = await prisma.organizationMember.findFirst({
       where: {
         organization_id: orgId,
-        user_id: user.id,
+        user_id: user.userId,
       },
     });
 
@@ -36,7 +36,7 @@ export async function GET(
     }
 
     // Obtener miembros de la organización
-    const members = await prisma.organization_member.findMany({
+    const members = await prisma.organizationMember.findMany({
       where: {
         organization_id: orgId,
       },

@@ -17,10 +17,10 @@ export async function GET(
     const { orgId } = await params;
 
     // Verificar que el usuario pertenece a la organización
-    const membership = await prisma.organization_member.findFirst({
+    const membership = await prisma.organizationMember.findFirst({
       where: {
         organization_id: orgId,
-        user_id: user.id,
+        user_id: user.userId,
       },
     });
 
