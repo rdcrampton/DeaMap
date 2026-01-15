@@ -138,6 +138,11 @@ export default function Home() {
     searchNearbyAeds(location.lat, location.lng);
   };
 
+  // Handle address change from reverse geocoding
+  const handleAddressChange = (newAddress: string) => {
+    setAddress(newAddress);
+  };
+
   const handleSuggestionClick = async (suggestion: GeocodingResult) => {
     setAddress(suggestion.display_name);
     setShowSuggestions(false);
@@ -286,6 +291,7 @@ export default function Home() {
           onAedClick={handleMapMarkerClick}
           searchLocation={searchLocation}
           onSearchLocationChange={handleSearchLocationChange}
+          onAddressChange={handleAddressChange}
         />
 
       {/* Search Controls Overlay - Desktop: Top Left, Mobile: Top */}

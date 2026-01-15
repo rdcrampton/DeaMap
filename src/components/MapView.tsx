@@ -25,6 +25,7 @@ interface MapViewProps {
   onAedClick?: (aed: { id: string; code: string; name: string }) => void;
   searchLocation?: { lat: number; lng: number } | null;
   onSearchLocationChange?: (location: { lat: number; lng: number }) => void;
+  onAddressChange?: (address: string) => void;
 }
 
 // Custom marker icon for DEAs
@@ -171,7 +172,12 @@ function SearchLocationController({ location }: { location: { lat: number; lng: 
   return null;
 }
 
-export default function MapView({ onAedClick, searchLocation, onSearchLocationChange }: MapViewProps) {
+export default function MapView({
+  onAedClick,
+  searchLocation,
+  onSearchLocationChange,
+  onAddressChange,
+}: MapViewProps) {
   const [bounds, setBounds] = useState<BoundingBox | null>(null);
   const [zoom, setZoom] = useState(12);
   const [targetBounds, setTargetBounds] = useState<L.LatLngBounds | null>(null);
@@ -236,8 +242,10 @@ export default function MapView({ onAedClick, searchLocation, onSearchLocationCh
         style={{ zIndex: 0 }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
+          maxZoom={20}
         />
 
         {/* Map event handler */}
@@ -257,13 +265,36 @@ export default function MapView({ onAedClick, searchLocation, onSearchLocationCh
             zIndexOffset={1000}
             draggable={true}
             eventHandlers={{
-              dragend: (e) => {
+              dragend: async (e) => {
                 const marker = e.target;
                 const position = marker.getLatLng();
+
+                // Update location
                 onSearchLocationChange?.({
                   lat: position.lat,
                   lng: position.lng,
                 });
+
+                // Reverse geocode to get address
+                if (onAddressChange) {
+                  try {
+                    const response = await fetch(
+                      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}&addressdetails=1`,
+                      {
+                        headers: {
+                          "User-Agent": "DEA-Madrid-WebApp/1.0",
+                        },
+                      }
+                    );
+
+                    if (response.ok) {
+                      const data = await response.json();
+                      onAddressChange(data.display_name || "");
+                    }
+                  } catch (error) {
+                    console.error("Error reverse geocoding:", error);
+                  }
+                }
               },
             }}
           >
@@ -397,14 +428,14 @@ export default function MapView({ onAedClick, searchLocation, onSearchLocationCh
         </div>
       )} */}
 
-      {/* No results indicator */}
-      {!loading && !error && aeds.length === 0 && clusters.length === 0 && bounds && (
+      {/* No results indicator - Disabled for public users */}
+      {/* {!loading && !error && aeds.length === 0 && clusters.length === 0 && bounds && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] bg-white rounded-lg shadow-lg px-6 py-4 text-center">
           <MapPin className="w-8 h-8 text-gray-400 mx-auto mb-2" />
           <p className="text-sm font-medium text-gray-700">No hay DEAs en esta área</p>
           <p className="text-xs text-gray-500 mt-1">Mueve o reduce el zoom del mapa</p>
         </div>
-      )}
+      )} */}
     </div>
   );
 }
