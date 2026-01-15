@@ -24,6 +24,8 @@ export default function Navigation() {
   const pathname = usePathname();
   const { user, logout, loading } = useAuth();
 
+  const isHomePage = pathname === "/";
+
   const isActive = (path: string) => {
     if (path === "/") {
       return pathname === path;
@@ -57,12 +59,18 @@ export default function Navigation() {
   const navLinks = allNavLinks.filter((link) => link.visible);
 
   return (
-    <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
+    <nav
+      className={`sticky top-0 z-[1001] transition-all duration-300 ${
+        isHomePage
+          ? "bg-white/80 backdrop-blur-md shadow-sm"
+          : "bg-white shadow-sm border-b"
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-14">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
-            <div className="relative h-10 w-10 sm:h-12 sm:w-12 transition-all duration-300 group-hover:scale-110">
+            <div className="relative h-8 w-8 sm:h-10 sm:w-10 transition-all duration-300 group-hover:scale-110">
               <Image
                 src="/favicon.svg"
                 alt="DeaMap Logo"
@@ -71,13 +79,13 @@ export default function Navigation() {
                 priority
               />
             </div>
-            <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <span className="text-base sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               deamap.es
             </span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex md:items-center md:space-x-2">
+          <div className="hidden md:flex md:items-center md:space-x-1">
             {navLinks.map((link) => {
               const Icon = link.icon;
               const active = isActive(link.href);
@@ -85,10 +93,10 @@ export default function Navigation() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-all duration-200 ${
                     active
                       ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -101,14 +109,14 @@ export default function Navigation() {
             {!loading && (
               <>
                 {user ? (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600 flex items-center space-x-1">
-                      <User className="w-4 h-4" />
-                      <span>{user.name}</span>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-xs text-gray-600 flex items-center space-x-1 px-2">
+                      <User className="w-3.5 h-3.5" />
+                      <span className="max-w-[100px] truncate">{user.name}</span>
                     </span>
                     <button
                       onClick={handleLogout}
-                      className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200"
+                      className="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-medium text-sm text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 transition-all duration-200"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Salir</span>
@@ -118,14 +126,14 @@ export default function Navigation() {
                   <>
                     <Link
                       href="/login"
-                      className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200"
+                      className="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-medium text-sm text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 transition-all duration-200"
                     >
                       <LogIn className="w-4 h-4" />
                       <span>Entrar</span>
                     </Link>
                     <Link
                       href="/register"
-                      className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                      className="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-medium text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
                     >
                       <UserPlus className="w-4 h-4" />
                       <span>Registrarse</span>
@@ -139,16 +147,16 @@ export default function Navigation() {
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100/80 transition-colors"
             aria-label="Toggle menu"
           >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t">
+          <div className="md:hidden py-4 border-t border-gray-200/50">
             <div className="flex flex-col space-y-2">
               {navLinks.map((link) => {
                 const Icon = link.icon;
@@ -161,7 +169,7 @@ export default function Navigation() {
                     className={`flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
                       active
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
-                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                        : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900"
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -175,7 +183,7 @@ export default function Navigation() {
                 <>
                   {user ? (
                     <>
-                      <div className="px-4 py-3 bg-gray-50 rounded-lg">
+                      <div className="px-4 py-3 bg-gray-50/80 rounded-lg">
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
                           <User className="w-5 h-5" />
                           <span>{user.name}</span>
@@ -184,7 +192,7 @@ export default function Navigation() {
                       </div>
                       <button
                         onClick={handleLogout}
-                        className="flex items-center space-x-3 px-4 py-3 rounded-lg font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200"
+                        className="flex items-center space-x-3 px-4 py-3 rounded-lg font-medium text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 transition-all duration-200"
                       >
                         <LogOut className="w-5 h-5" />
                         <span>Cerrar Sesión</span>
@@ -195,7 +203,7 @@ export default function Navigation() {
                       <Link
                         href="/login"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center space-x-3 px-4 py-3 rounded-lg font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200"
+                        className="flex items-center space-x-3 px-4 py-3 rounded-lg font-medium text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 transition-all duration-200"
                       >
                         <LogIn className="w-5 h-5" />
                         <span>Iniciar Sesión</span>

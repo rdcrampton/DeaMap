@@ -9,6 +9,8 @@ import {
   Phone,
   Search,
   Clock,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
@@ -21,7 +23,7 @@ import type { Aed } from "@/types/aed";
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[400px] rounded-xl bg-white/95 flex items-center justify-center">
+    <div className="w-full h-full flex items-center justify-center bg-gray-100">
       <div className="text-center">
         <MapPin className="w-12 h-12 animate-pulse mx-auto text-blue-600 mb-4" />
         <p className="text-gray-700 font-medium">Cargando mapa...</p>
@@ -54,13 +56,13 @@ export default function Home() {
   const [selectedAed, setSelectedAed] = useState<Aed | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showResults, setShowResults] = useState(false);
 
   const handleFindNearestByGeolocation = async () => {
     setLoading(true);
     setError(null);
     setNearbyAeds([]);
-    setShowSearchResults(true);
+    setShowResults(true);
 
     try {
       // Get user's location
@@ -95,9 +97,7 @@ export default function Home() {
       if (data.success && data.data) {
         setNearbyAeds(data.data);
         if (data.data.length === 0) {
-          setError(
-            "No se encontraron DEAs en un radio de 10 km. Intenta ampliar la búsqueda o buscar por dirección."
-          );
+          setError("No se encontraron DEAs en un radio de 10 km.");
         }
       } else {
         throw new Error(data.message || "Error al buscar DEAs");
@@ -106,20 +106,22 @@ export default function Home() {
       console.error("Error finding nearest AEDs:", err);
       // Check if it's a GeolocationPositionError by checking for code property
       if (typeof err === "object" && err !== null && "code" in err) {
-        const geoError = err as { code: number; PERMISSION_DENIED: number; POSITION_UNAVAILABLE: number };
-        if (geoError.code === 1) { // PERMISSION_DENIED
-          setError(
-            "Necesitas permitir el acceso a tu ubicación para encontrar DEAs cercanos. Por favor, activa la ubicación en tu navegador."
-          );
-        } else if (geoError.code === 2) { // POSITION_UNAVAILABLE
-          setError("No se pudo determinar tu ubicación. Intenta buscar por dirección.");
+        const geoError = err as {
+          code: number;
+          PERMISSION_DENIED: number;
+          POSITION_UNAVAILABLE: number;
+        };
+        if (geoError.code === 1) {
+          // PERMISSION_DENIED
+          setError("Necesitas permitir el acceso a tu ubicación.");
+        } else if (geoError.code === 2) {
+          // POSITION_UNAVAILABLE
+          setError("No se pudo determinar tu ubicación.");
         } else {
-          setError("Tiempo de espera agotado. Intenta buscar por dirección.");
+          setError("Tiempo de espera agotado.");
         }
       } else {
-        setError(
-          err instanceof Error ? err.message : "Error al buscar DEAs. Intenta buscar por dirección."
-        );
+        setError(err instanceof Error ? err.message : "Error al buscar DEAs.");
       }
     } finally {
       setLoading(false);
@@ -137,7 +139,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setNearbyAeds([]);
-    setShowSearchResults(true);
+    setShowResults(true);
 
     try {
       // Geocode the address
@@ -150,7 +152,7 @@ export default function Home() {
       const geocodeData: GeocodingResult[] = await geocodeResponse.json();
 
       if (!geocodeData || geocodeData.length === 0) {
-        throw new Error("No se encontró la dirección. Intenta con otra dirección más específica.");
+        throw new Error("No se encontró la dirección. Intenta con otra más específica.");
       }
 
       // Use the first result
@@ -174,9 +176,7 @@ export default function Home() {
       if (nearbyData.success && nearbyData.data) {
         setNearbyAeds(nearbyData.data);
         if (nearbyData.data.length === 0) {
-          setError(
-            "No se encontraron DEAs cerca de esta dirección en un radio de 10 km. Intenta con otra dirección."
-          );
+          setError("No se encontraron DEAs cerca de esta dirección en un radio de 10 km.");
         }
       } else {
         throw new Error(nearbyData.message || "Error al buscar DEAs");
@@ -199,8 +199,8 @@ export default function Home() {
     setTimeout(() => setSelectedAed(null), 200);
   };
 
-  const handleBackToMap = () => {
-    setShowSearchResults(false);
+  const handleClearSearch = () => {
+    setShowResults(false);
     setNearbyAeds([]);
     setSearchLocation(null);
     setError(null);
@@ -223,272 +223,267 @@ export default function Home() {
   };
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        background: "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)",
-        backgroundAttachment: "fixed",
-      }}
-    >
-      {/* Emergency Header */}
-      <header className="text-center text-white px-4 sm:px-6 pt-8 pb-6">
-        <div className="flex flex-col items-center justify-center gap-4 mb-4">
-          <div
-            className="p-4 rounded-full"
-            style={{
-              background: "rgba(255, 255, 255, 0.2)",
-              backdropFilter: "blur(20px)",
-              border: "2px solid rgba(255, 255, 255, 0.3)",
-            }}
-          >
-            <Heart className="w-12 h-12 text-white animate-pulse" />
-          </div>
-          <div className="text-center">
-            <h1 className="font-black text-4xl sm:text-5xl md:text-6xl mb-2 text-white">
-              Encuentra un DEA
-            </h1>
-            <p className="text-xl sm:text-2xl opacity-90 mb-2">
-              Desfibriladores cerca de ti
-            </p>
-            <div className="flex items-center justify-center gap-2 text-sm sm:text-base opacity-75">
-              <MapPin className="w-4 h-4" />
-              <span>Cobertura: España y Europa</span>
-            </div>
-          </div>
-        </div>
-        <div
-          className="max-w-2xl mx-auto mt-6 p-4 rounded-lg"
-          style={{
-            background: "rgba(255, 255, 255, 0.15)",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          <p className="text-sm sm:text-base leading-relaxed">
-            <strong>En una emergencia cardíaca,</strong> cada segundo cuenta. Encuentra el
-            desfibrilador más cercano a tu ubicación o busca por dirección.
-          </p>
-        </div>
-      </header>
+    <div className="relative w-full h-screen overflow-hidden">
+      {/* Fullscreen Map */}
+      <div className="absolute inset-0">
+        <MapView onAedClick={handleMapMarkerClick} searchLocation={searchLocation} />
+      </div>
 
-      {/* Search Section */}
-      <main className="container mx-auto px-4 sm:px-6 py-6">
-        <div
-          className="rounded-2xl shadow-2xl p-6 sm:p-8 max-w-4xl mx-auto mb-8"
-          style={{
-            background: "rgba(255, 255, 255, 0.98)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 text-center">
-            ¿Cómo quieres buscar?
-          </h2>
-
-          {/* Geolocation Button */}
-          <div className="mb-6">
-            <button
-              onClick={handleFindNearestByGeolocation}
-              disabled={loading}
-              className="w-full py-5 px-6 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  <span>Buscando...</span>
-                </>
-              ) : (
-                <>
-                  <Navigation className="w-6 h-6" />
-                  <span>Usar mi ubicación actual</span>
-                </>
-              )}
-            </button>
-            <p className="text-sm text-gray-600 mt-2 text-center">
-              Encuentra los DEAs más cercanos a ti ahora mismo
-            </p>
-          </div>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500 font-medium">O busca por dirección</span>
-            </div>
-          </div>
-
-          {/* Address Search */}
-          <form onSubmit={handleSearchByAddress} className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
+      {/* Search Controls Overlay - Desktop: Top Left, Mobile: Top */}
+      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
+        <div className="max-w-md pointer-events-auto">
+          {/* Search Box */}
+          <div className="bg-white rounded-xl shadow-2xl overflow-hidden">
+            <form onSubmit={handleSearchByAddress} className="flex items-center gap-2 p-3">
+              <Search className="w-5 h-5 text-gray-400 flex-shrink-0" />
               <input
                 type="text"
-                placeholder="Escribe una dirección (ej: Calle Gran Vía 1, Madrid)"
+                placeholder="Buscar dirección..."
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 disabled={loading}
-                className="w-full pl-14 pr-4 py-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 outline-none text-gray-900 placeholder-gray-400 text-sm disabled:opacity-50"
               />
-            </div>
-            <button
-              type="submit"
-              disabled={loading || !address.trim()}
-              className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Buscar DEAs cerca de esta dirección
-            </button>
-          </form>
-        </div>
+              {address && (
+                <button
+                  type="button"
+                  onClick={() => setAddress("")}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              )}
+            </form>
 
-        {/* Error Message */}
-        {error && showSearchResults && (
-          <div
-            className="max-w-4xl mx-auto mb-8 p-4 rounded-xl border-2"
-            style={{
-              background: "rgba(254, 226, 226, 0.98)",
-              borderColor: "#f87171",
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-900">Información importante</p>
-                <p className="text-red-800 text-sm mt-1">{error}</p>
-              </div>
+            {/* Geolocation Button - Visible on Desktop */}
+            <div className="hidden md:block border-t border-gray-200">
+              <button
+                onClick={handleFindNearestByGeolocation}
+                disabled={loading}
+                className="w-full p-3 flex items-center gap-3 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600 flex-shrink-0" />
+                    <span className="text-sm font-medium text-gray-700">Buscando...</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                      <Navigation className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">Usar mi ubicación</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
-        )}
 
-        {/* Search Results */}
-        {showSearchResults && nearbyAeds.length > 0 && (
-          <div className="max-w-7xl mx-auto space-y-6">
-            <div
-              className="p-6 rounded-xl"
-              style={{
-                background: "rgba(255, 255, 255, 0.95)",
-                backdropFilter: "blur(20px)",
-              }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+          {/* Error Message */}
+          {error && (
+            <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 shadow-lg">
+              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Geolocation Button - Mobile: Bottom Center */}
+      <div className="md:hidden absolute bottom-24 left-1/2 transform -translate-x-1/2 z-[1000]">
+        <button
+          onClick={handleFindNearestByGeolocation}
+          disabled={loading}
+          className="bg-blue-600 text-white rounded-full shadow-2xl p-4 flex items-center gap-3 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="text-sm font-medium pr-2">Buscando...</span>
+            </>
+          ) : (
+            <>
+              <Navigation className="w-6 h-6" />
+              <span className="text-sm font-medium pr-2">Usar mi ubicación</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Results Panel - Right Side on Desktop, Bottom Sheet on Mobile */}
+      {showResults && nearbyAeds.length > 0 && (
+        <>
+          {/* Desktop: Right Panel */}
+          <div className="hidden md:block absolute top-4 right-4 bottom-4 w-96 z-[1000]">
+            <div className="bg-white rounded-xl shadow-2xl h-full flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-700">
+                <div className="text-white">
+                  <h3 className="font-bold text-lg">
                     {nearbyAeds.length} DEA{nearbyAeds.length !== 1 ? "s" : ""} encontrado
                     {nearbyAeds.length !== 1 ? "s" : ""}
                   </h3>
-                  <p className="text-gray-600">
-                    Ordenados por distancia - El más cercano primero
-                  </p>
+                  <p className="text-sm text-blue-100">Ordenados por distancia</p>
                 </div>
                 <button
-                  onClick={handleBackToMap}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                  onClick={handleClearSearch}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                 >
-                  <MapPin className="w-5 h-5" />
-                  Ver mapa completo
+                  <X className="w-5 h-5 text-white" />
                 </button>
               </div>
-            </div>
 
-            {/* Map View with search results */}
-            {searchLocation && (
-              <div
-                className="rounded-xl overflow-hidden shadow-2xl"
-                style={{
-                  background: "rgba(255, 255, 255, 0.95)",
-                  backdropFilter: "blur(20px)",
-                }}
-              >
-                <div className="p-4 bg-gradient-to-r from-blue-600 to-blue-700">
-                  <h4 className="text-white font-bold text-lg flex items-center gap-2">
-                    <MapPin className="w-5 h-5" />
-                    Mapa de DEAs cercanos
-                  </h4>
+              {/* Results List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {nearbyAeds.map((aed, index) => (
+                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed)} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile: Bottom Sheet */}
+          <div className="md:hidden absolute bottom-0 left-0 right-0 z-[1000] max-h-[50vh]">
+            <div className="bg-white rounded-t-2xl shadow-2xl overflow-hidden">
+              {/* Handle */}
+              <div className="p-2 flex justify-center">
+                <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+              </div>
+
+              {/* Header */}
+              <div className="px-4 pb-3 flex items-center justify-between border-b border-gray-200">
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900">
+                    {nearbyAeds.length} DEA{nearbyAeds.length !== 1 ? "s" : ""}
+                  </h3>
+                  <p className="text-sm text-gray-600">Ordenados por distancia</p>
                 </div>
-                <MapView onAedClick={handleMapMarkerClick} searchLocation={searchLocation} />
+                <button
+                  onClick={handleClearSearch}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
               </div>
-            )}
 
-            {/* Results Grid */}
-            <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {nearbyAeds.map((aed, index) => (
-                <NearbyAedCard
-                  key={aed.id}
-                  aed={aed}
-                  rank={index + 1}
-                  onClick={() => handleCardClick(aed)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* General Map View - Show when not searching */}
-        {!showSearchResults && (
-          <div className="max-w-7xl mx-auto space-y-6">
-            <div
-              className="p-6 rounded-xl text-center"
-              style={{
-                background: "rgba(255, 255, 255, 0.95)",
-                backdropFilter: "blur(20px)",
-              }}
-            >
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                Mapa de DEAs
-              </h3>
-              <p className="text-gray-600">
-                Explora todos los desfibriladores registrados en España
-              </p>
-              <p className="text-sm text-gray-500 mt-2">
-                Haz clic en cualquier marcador para ver los detalles del DEA
-              </p>
-            </div>
-
-            {/* Full Map */}
-            <div
-              className="rounded-xl overflow-hidden shadow-2xl"
-              style={{
-                background: "rgba(255, 255, 255, 0.95)",
-                backdropFilter: "blur(20px)",
-              }}
-            >
-              <div className="p-4 bg-gradient-to-r from-red-600 to-red-700">
-                <h4 className="text-white font-bold text-lg flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Vista general de DEAs disponibles
-                </h4>
+              {/* Results List */}
+              <div className="overflow-y-auto max-h-[40vh] p-4 space-y-3">
+                {nearbyAeds.map((aed, index) => (
+                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed)} compact />
+                ))}
               </div>
-              <MapView onAedClick={handleMapMarkerClick} />
             </div>
           </div>
-        )}
+        </>
+      )}
 
-        {/* Info Section */}
-        <div
-          className="max-w-4xl mx-auto mt-12 p-6 sm:p-8 rounded-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Sobre DeaMap</h3>
-          <div className="space-y-3 text-gray-700">
-            <p>
-              DeaMap es un mapa colaborativo de desfibriladores (DEAs) que te ayuda a encontrar el
-              equipo más cercano en caso de emergencia cardíaca.
-            </p>
-            <p className="text-sm text-gray-600">
-              Actualmente contamos con cobertura en España, con planes de expansión a nivel europeo.
-              Si conoces la ubicación de un DEA que no está en el mapa, puedes{" "}
-              <Link href="/dea/new" className="text-blue-600 hover:underline font-medium">
-                agregarlo aquí
-              </Link>
-              .
-            </p>
-          </div>
+      {/* Scroll Down Indicator */}
+      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[999] pointer-events-none">
+        <div className="flex flex-col items-center gap-2 text-white drop-shadow-lg">
+          <span className="text-sm font-medium bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+            Más información
+          </span>
+          <ChevronDown className="w-6 h-6 animate-bounce" />
         </div>
-      </main>
+      </div>
 
       {/* Detail Modal */}
       <AedDetailModal aed={selectedAed} isOpen={modalOpen} onClose={handleCloseModal} />
+
+      {/* Info Section - Below the fold */}
+      <div className="absolute top-[100vh] left-0 right-0 bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="container mx-auto px-4 py-16 space-y-16">
+          {/* About Section */}
+          <section className="max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
+                <Heart className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">Sobre DeaMap</h2>
+              <p className="text-xl text-gray-600">
+                El mapa colaborativo de desfibriladores más completo de España
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">¿Qué es DeaMap?</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  DeaMap es una plataforma colaborativa que permite localizar desfibriladores (DEAs)
+                  cercanos en caso de emergencia cardíaca. Contamos con cobertura en España y planes
+                  de expansión a nivel europeo.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">¿Cómo funciona?</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  Utiliza la búsqueda por ubicación o dirección para encontrar los DEAs más cercanos
+                  a ti. Cada DEA incluye información detallada sobre su ubicación, horarios de acceso
+                  y datos de contacto.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">¿Por qué es importante?</h3>
+                <p className="text-gray-700 leading-relaxed">
+                  En una emergencia cardíaca, cada segundo cuenta. Tener acceso rápido a un
+                  desfibrilador puede salvar vidas. DeaMap facilita encontrar el equipo más cercano
+                  cuando más se necesita.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Colabora con nosotros</h3>
+                <p className="text-gray-700 leading-relaxed mb-3">
+                  Si conoces la ubicación de un DEA que no está en el mapa, puedes agregarlo fácilmente.
+                </p>
+                <Link
+                  href="/dea/new"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Agregar un DEA
+                </Link>
+              </div>
+            </div>
+          </section>
+
+          {/* Stats Section */}
+          <section className="max-w-4xl mx-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 shadow-2xl text-white">
+              <h2 className="text-3xl font-bold mb-8 text-center">Nuestra Cobertura</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="text-center">
+                  <MapPin className="w-8 h-8 mx-auto mb-3" />
+                  <p className="text-4xl font-bold mb-2">🇪🇸</p>
+                  <p className="text-lg font-semibold">España</p>
+                  <p className="text-sm text-blue-100 mt-1">Cobertura nacional</p>
+                </div>
+                <div className="text-center">
+                  <Heart className="w-8 h-8 mx-auto mb-3" />
+                  <p className="text-4xl font-bold mb-2">24/7</p>
+                  <p className="text-lg font-semibold">Disponible</p>
+                  <p className="text-sm text-blue-100 mt-1">Acceso permanente</p>
+                </div>
+                <div className="text-center">
+                  <Navigation className="w-8 h-8 mx-auto mb-3" />
+                  <p className="text-4xl font-bold mb-2">🇪🇺</p>
+                  <p className="text-lg font-semibold">Europa</p>
+                  <p className="text-sm text-blue-100 mt-1">Próximamente</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Footer */}
+          <footer className="text-center text-gray-600 py-8">
+            <p className="text-sm">
+              © 2024 DeaMap - Salvando vidas juntos
+            </p>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 }
@@ -500,10 +495,12 @@ function NearbyAedCard({
   aed,
   rank,
   onClick,
+  compact = false,
 }: {
   aed: NearbyAed;
   rank: number;
   onClick: () => void;
+  compact?: boolean;
 }) {
   const displayImage =
     aed.images && aed.images.length > 0
@@ -511,110 +508,121 @@ function NearbyAedCard({
       : null;
 
   const distanceText =
-    aed.distance < 1
-      ? `${Math.round(aed.distance * 1000)} m`
-      : `${aed.distance.toFixed(1)} km`;
+    aed.distance < 1 ? `${Math.round(aed.distance * 1000)} m` : `${aed.distance.toFixed(1)} km`;
+
+  if (compact) {
+    return (
+      <button
+        onClick={onClick}
+        className="w-full bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all text-left"
+      >
+        <div className="flex items-start gap-3">
+          {/* Rank */}
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
+            style={{
+              background:
+                rank === 1
+                  ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                  : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+            }}
+          >
+            {rank}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-bold text-blue-600 text-sm">{distanceText}</span>
+            </div>
+            <h4 className="font-semibold text-gray-900 text-sm mb-1 truncate">{aed.name}</h4>
+            <p className="text-xs text-gray-600 truncate">
+              {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
+            </p>
+          </div>
+        </div>
+      </button>
+    );
+  }
 
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group cursor-pointer text-left relative"
-      style={{
-        background: "rgba(255, 255, 255, 0.98)",
-        backdropFilter: "blur(20px)",
-        border: rank === 1 ? "3px solid #DC2626" : "1px solid rgba(255, 255, 255, 0.3)",
-      }}
+      className="w-full bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-all text-left"
     >
-      {/* Rank Badge */}
-      <div
-        className="absolute top-3 left-3 z-10 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-lg"
-        style={{
-          background:
-            rank === 1
-              ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
-              : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
-        }}
-      >
-        {rank}
-      </div>
-
-      {/* Image or Gradient Header */}
+      {/* Image or Gradient */}
       {displayImage ? (
-        <div className="relative h-48 overflow-hidden">
-          <img
-            src={displayImage}
-            alt={aed.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-          />
+        <div className="relative h-32">
+          <img src={displayImage} alt={aed.name} className="w-full h-full object-cover" />
           <div
-            className="absolute inset-0"
+            className="absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg"
             style={{
-              background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)",
+              background:
+                rank === 1
+                  ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                  : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
             }}
-          />
+          >
+            {rank}
+          </div>
         </div>
       ) : (
         <div
-          className="h-48"
+          className="h-32 relative"
           style={{
             background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
           }}
-        />
+        >
+          <div
+            className="absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-lg"
+            style={{
+              background:
+                rank === 1
+                  ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                  : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+            }}
+          >
+            {rank}
+          </div>
+        </div>
       )}
 
       {/* Content */}
-      <div className="p-5 space-y-3">
-        {/* Distance Badge */}
+      <div className="p-3 space-y-2">
+        {/* Distance */}
         <div
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-full font-bold text-lg"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-white text-xs font-bold"
           style={{
             background:
               rank === 1
                 ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
                 : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
-            color: "white",
           }}
         >
-          <Navigation className="w-5 h-5" />
-          <span>{distanceText}</span>
+          <Navigation className="w-3 h-3" />
+          {distanceText}
         </div>
 
-        {/* Name and Code */}
-        <div>
-          <h3 className="text-lg font-bold text-gray-900 mb-1">{aed.name}</h3>
-          <p className="text-sm text-gray-500">{aed.code}</p>
-        </div>
-
-        {/* Type */}
-        <div>
-          <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full font-medium">
-            {aed.establishment_type}
-          </span>
-        </div>
+        {/* Name */}
+        <h4 className="font-semibold text-gray-900 text-sm line-clamp-2">{aed.name}</h4>
 
         {/* Location */}
-        <div className="flex items-start gap-2 text-sm text-gray-600">
-          <MapPin className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium text-gray-900">
-              {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
-            </p>
-            <p className="text-gray-500 text-xs mt-1">
-              {aed.location.postal_code}
-              {aed.location.district_name && ` - ${aed.location.district_name}`}
-            </p>
-          </div>
+        <div className="flex items-start gap-1 text-xs text-gray-600">
+          <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5 text-red-500" />
+          <p className="line-clamp-2">
+            {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
+          </p>
         </div>
 
         {/* Schedule */}
         {aed.schedule && (
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="w-5 h-5 text-green-500 flex-shrink-0" />
-            <p className="text-gray-700">
+          <div className="flex items-center gap-1 text-xs text-gray-600">
+            <Clock className="w-3 h-3 flex-shrink-0 text-green-500" />
+            <p>
               {aed.schedule.has_24h_surveillance
-                ? "Disponible 24h"
+                ? "24h"
                 : aed.schedule.weekday_opening && aed.schedule.weekday_closing
-                  ? `${aed.schedule.weekday_opening} - ${aed.schedule.weekday_closing}`
+                  ? `${aed.schedule.weekday_opening}-${aed.schedule.weekday_closing}`
                   : "Horario no especificado"}
             </p>
           </div>
@@ -622,19 +630,11 @@ function NearbyAedCard({
 
         {/* Contact */}
         {aed.responsible && aed.responsible.phone && (
-          <div className="flex items-center gap-2 text-sm">
-            <Phone className="w-5 h-5 text-blue-500 flex-shrink-0" />
-            <p className="text-gray-700">{aed.responsible.phone}</p>
+          <div className="flex items-center gap-1 text-xs text-gray-600">
+            <Phone className="w-3 h-3 flex-shrink-0 text-blue-500" />
+            <p>{aed.responsible.phone}</p>
           </div>
         )}
-
-        {/* View Details Button */}
-        <div className="pt-3 border-t border-gray-200">
-          <div className="flex items-center justify-center gap-2 text-blue-600 font-medium">
-            <span>Ver detalles y cómo llegar</span>
-            <MapPin className="w-5 h-5" />
-          </div>
-        </div>
       </div>
     </button>
   );
