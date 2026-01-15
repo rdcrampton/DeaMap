@@ -2,7 +2,7 @@
 
 import { Search, MapPin, Filter, CheckCircle, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 
 interface AedItem {
   id: string;
@@ -15,16 +15,18 @@ interface AedItem {
   assignment_type: string;
 }
 
-export default function OrgDeasPage({ params }: { params: { orgId: string } }) {
+export default function OrgDeasPage({ params }: { params: Promise<{ orgId: string }> }) {
   const [deas, setDeas] = useState<AedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
+  const resolvedParams = use(params);
+  const orgId = resolvedParams.orgId;
 
   useEffect(() => {
     const fetchDeas = async () => {
       try {
-        const response = await fetch(`/api/organizations/${params.orgId}/deas`);
+        const response = await fetch(`/api/organizations/${orgId}/deas`);
         if (response.ok) {
           const data = await response.json();
           setDeas(data.deas || []);
@@ -37,7 +39,7 @@ export default function OrgDeasPage({ params }: { params: { orgId: string } }) {
     };
 
     fetchDeas();
-  }, [params.orgId]);
+  }, [orgId]);
 
   // Filtrar DEAs
   const filteredDeas = deas.filter((dea) => {

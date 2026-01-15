@@ -11,7 +11,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 
 import { useOrganization } from "@/contexts/OrganizationContext";
 
@@ -28,15 +28,17 @@ interface OrgStats {
   };
 }
 
-export default function OrgDashboard({ params }: { params: { orgId: string } }) {
+export default function OrgDashboard({ params }: { params: Promise<{ orgId: string }> }) {
   const { selectedOrganization, canManageMembers } = useOrganization();
   const [stats, setStats] = useState<OrgStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const resolvedParams = use(params);
+  const orgId = resolvedParams.orgId;
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch(`/api/organizations/${params.orgId}/stats`);
+        const response = await fetch(`/api/organizations/${orgId}/stats`);
         if (response.ok) {
           const data = await response.json();
           setStats(data);
@@ -49,7 +51,7 @@ export default function OrgDashboard({ params }: { params: { orgId: string } }) 
     };
 
     fetchStats();
-  }, [params.orgId]);
+  }, [orgId]);
 
   if (loading) {
     return (
@@ -155,7 +157,7 @@ export default function OrgDashboard({ params }: { params: { orgId: string } }) 
         {/* Verify DEAs */}
         {stats && stats.pending_verifications > 0 && (
           <Link
-            href={`/org/${params.orgId}/verify`}
+            href={`/org/${orgId}/verify`}
             className="block bg-white rounded-xl p-4 border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all active:scale-98"
           >
             <div className="flex items-center justify-between">
@@ -177,7 +179,7 @@ export default function OrgDashboard({ params }: { params: { orgId: string } }) 
 
         {/* View all DEAs */}
         <Link
-          href={`/org/${params.orgId}/deas`}
+          href={`/org/${orgId}/deas`}
           className="block bg-white rounded-xl p-4 border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all active:scale-98"
         >
           <div className="flex items-center justify-between">
@@ -199,7 +201,7 @@ export default function OrgDashboard({ params }: { params: { orgId: string } }) 
         {/* Manage team */}
         {canManageMembers && (
           <Link
-            href={`/org/${params.orgId}/members`}
+            href={`/org/${orgId}/members`}
             className="block bg-white rounded-xl p-4 border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all active:scale-98"
           >
             <div className="flex items-center justify-between">

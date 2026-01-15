@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState, use } from "react";
 
 import OrgBottomNavigation from "@/components/OrgBottomNavigation";
 import OrgSelector from "@/components/OrgSelector";
@@ -13,12 +13,14 @@ export default function OrgLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { orgId: string };
+  params: Promise<{ orgId: string }>;
 }) {
   const { user, loading } = useAuth();
   const { selectedOrganization, organizations, setSelectedOrganization } =
     useOrganization();
   const router = useRouter();
+  const resolvedParams = use(params);
+  const orgId = resolvedParams.orgId;
 
   // Verificar que el usuario tenga acceso a la organización
   useEffect(() => {
@@ -29,7 +31,7 @@ export default function OrgLayout({
       return;
     }
 
-    const org = organizations.find((o) => o.id === params.orgId);
+    const org = organizations.find((o) => o.id === orgId);
 
     if (!org) {
       // El usuario no tiene acceso a esta organización
@@ -38,10 +40,10 @@ export default function OrgLayout({
     }
 
     // Si la organización seleccionada no coincide con la de la URL, actualizarla
-    if (selectedOrganization?.id !== params.orgId) {
+    if (selectedOrganization?.id !== orgId) {
       setSelectedOrganization(org);
     }
-  }, [user, loading, organizations, params.orgId, router, selectedOrganization]);
+  }, [user, loading, organizations, orgId, router, selectedOrganization]);
 
   if (loading) {
     return (

@@ -12,7 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 
 import { useOrganization } from "@/contexts/OrganizationContext";
 
@@ -33,25 +33,27 @@ interface Member {
   joined_at: Date;
 }
 
-export default function OrgMembersPage({ params }: { params: { orgId: string } }) {
+export default function OrgMembersPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { canManageMembers } = useOrganization();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const resolvedParams = use(params);
+  const orgId = resolvedParams.orgId;
 
   useEffect(() => {
     // Verificar permisos
     if (!canManageMembers) {
-      router.push(`/org/${params.orgId}`);
+      router.push(`/org/${orgId}`);
       return;
     }
 
     fetchMembers();
-  }, [params.orgId, canManageMembers]);
+  }, [orgId, canManageMembers]);
 
   const fetchMembers = async () => {
     try {
-      const response = await fetch(`/api/organizations/${params.orgId}/members`);
+      const response = await fetch(`/api/organizations/${orgId}/members`);
       if (response.ok) {
         const data = await response.json();
         setMembers(data.members || []);

@@ -11,7 +11,7 @@ import {
   Tag,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 
 import { useOrganization } from "@/contexts/OrganizationContext";
 
@@ -34,25 +34,27 @@ interface OrganizationDetails {
   created_at: Date;
 }
 
-export default function OrgSettingsPage({ params }: { params: { orgId: string } }) {
+export default function OrgSettingsPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { canManageMembers, isOrgOwner } = useOrganization();
   const [org, setOrg] = useState<OrganizationDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const resolvedParams = use(params);
+  const orgId = resolvedParams.orgId;
 
   useEffect(() => {
     // Solo admins y owners pueden ver configuración
     if (!canManageMembers && !isOrgOwner) {
-      router.push(`/org/${params.orgId}`);
+      router.push(`/org/${orgId}`);
       return;
     }
 
     fetchOrganizationDetails();
-  }, [params.orgId, canManageMembers, isOrgOwner]);
+  }, [orgId, canManageMembers, isOrgOwner]);
 
   const fetchOrganizationDetails = async () => {
     try {
-      const response = await fetch(`/api/organizations/${params.orgId}`);
+      const response = await fetch(`/api/organizations/${orgId}`);
       if (response.ok) {
         const data = await response.json();
         setOrg(data);

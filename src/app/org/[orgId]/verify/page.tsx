@@ -2,7 +2,7 @@
 
 import { ClipboardCheck, MapPin, AlertCircle, Image as ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 
 interface AedForVerification {
   id: string;
@@ -27,17 +27,19 @@ interface AedForVerification {
   status: string;
 }
 
-export default function OrgVerifyPage({ params }: { params: { orgId: string } }) {
+export default function OrgVerifyPage({ params }: { params: Promise<{ orgId: string }> }) {
   const [aeds, setAeds] = useState<AedForVerification[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
   const router = useRouter();
+  const resolvedParams = use(params);
+  const orgId = resolvedParams.orgId;
 
   useEffect(() => {
     fetchAeds(1);
-  }, [params.orgId]);
+  }, [orgId]);
 
   const fetchAeds = async (page: number) => {
     try {
@@ -47,7 +49,7 @@ export default function OrgVerifyPage({ params }: { params: { orgId: string } })
       const url = new URL("/api/verify", window.location.origin);
       url.searchParams.set("page", page.toString());
       url.searchParams.set("limit", "12");
-      url.searchParams.set("organization_id", params.orgId);
+      url.searchParams.set("organization_id", orgId);
 
       const response = await fetch(url.toString());
 
