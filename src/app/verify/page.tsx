@@ -1,9 +1,11 @@
 "use client";
 
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import NoOrganizationMessage from "@/components/verification/NoOrganizationMessage";
+import OrganizationSelector from "@/components/verification/OrganizationSelector";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface AedForVerification {
@@ -38,15 +40,28 @@ interface PaginationInfo {
   hasPreviousPage: boolean;
 }
 
+interface UserOrganization {
+  id: string;
+  name: string;
+  type: string;
+  role: string;
+  can_verify: boolean;
+}
+
 interface ApiResponse {
   data: AedForVerification[];
   pagination: PaginationInfo;
+  userOrganizations: UserOrganization[];
+  isAdmin: boolean;
 }
 
 export default function VerifyPage() {
   const { user, loading: authLoading } = useAuth();
   const [aeds, setAeds] = useState<AedForVerification[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+  const [userOrganizations, setUserOrganizations] = useState<UserOrganization[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,20 +73,29 @@ export default function VerifyPage() {
       return;
     }
 
-    if (!authLoading && user && !user.is_verified) {
-      router.push("/");
-      return;
-    }
-
     if (user) {
       fetchAeds();
     }
   }, [authLoading, user, router]);
 
-  const fetchAeds = async (page: number = 1) => {
+  // Refetch when organization changes
+  useEffect(() => {
+    if (user && !loading) {
+      fetchAeds(1, selectedOrgId);
+    }
+  }, [selectedOrgId]);
+
+  const fetchAeds = async (page: number = 1, orgId: string | null = selectedOrgId) => {
     try {
-      setLoading(true);
-      const response = await fetch(`/api/verify?page=${page}&limit=12`);
+      setLoading(page === 1);
+      const url = new URL("/api/verify", window.location.origin);
+      url.searchParams.set("page", page.toString());
+      url.searchParams.set("limit", "12");
+      if (orgId) {
+        url.searchParams.set("organization_id", orgId);
+      }
+
+      const response = await fetch(url.toString());
 
       if (!response.ok) {
         throw new Error("Error al cargar DEAs");
@@ -80,6 +104,8 @@ export default function VerifyPage() {
       const data: ApiResponse = await response.json();
       setAeds(data.data);
       setPagination(data.pagination);
+      setUserOrganizations(data.userOrganizations || []);
+      setIsAdmin(data.isAdmin || false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -93,7 +119,14 @@ export default function VerifyPage() {
     try {
       setLoadingMore(true);
       const nextPage = pagination.currentPage + 1;
-      const response = await fetch(`/api/verify?page=${nextPage}&limit=12`);
+      const url = new URL("/api/verify", window.location.origin);
+      url.searchParams.set("page", nextPage.toString());
+      url.searchParams.set("limit", "12");
+      if (selectedOrgId) {
+        url.searchParams.set("organization_id", selectedOrgId);
+      }
+
+      const response = await fetch(url.toString());
 
       if (!response.ok) {
         throw new Error("Error al cargar más DEAs");
@@ -107,6 +140,11 @@ export default function VerifyPage() {
     } finally {
       setLoadingMore(false);
     }
+  };
+
+  const handleOrganizationChange = (orgId: string | null) => {
+    setSelectedOrgId(orgId);
+    setAeds([]); // Clear current list
   };
 
   const startVerification = (aedId: string) => {
@@ -128,6 +166,11 @@ export default function VerifyPage() {
     return null;
   }
 
+  // Show message if user has no organizations and is not admin
+  if (!isAdmin && userOrganizations.length === 0 && !loading) {
+    return <NoOrganizationMessage />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -147,6 +190,32 @@ export default function VerifyPage() {
               Ver Posibles Duplicados
             </button>
           </div>
+
+          {/* Admin badge */}
+          {isAdmin && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <Shield className="w-5 h-5 text-purple-600" />
+                <div>
+                  <div className="text-sm text-purple-600 font-medium">Modo Administrador</div>
+                  <div className="text-sm text-purple-700">
+                    Visualizando todos los DEAs del sistema
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Organization selector (only for non-admin users) */}
+          {!isAdmin && userOrganizations.length > 0 && (
+            <div className="mb-6">
+              <OrganizationSelector
+                organizations={userOrganizations}
+                selectedOrgId={selectedOrgId}
+                onChange={handleOrganizationChange}
+              />
+            </div>
+          )}
 
           {pagination && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">

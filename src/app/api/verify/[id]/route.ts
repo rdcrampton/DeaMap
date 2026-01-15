@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
+import { canUserVerifyAed } from "@/lib/organization-permissions";
 import { prisma } from "@/lib/db";
 import { VerificationStep } from "@/types/verification";
 
@@ -12,6 +13,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const { id } = await params;
+
+    // Check permissions: Admin can verify all, others need organization assignment
+    if (user.role !== "ADMIN") {
+      const hasPermission = await canUserVerifyAed(user.userId, id);
+      if (!hasPermission) {
+        return NextResponse.json(
+          { error: "No tienes permisos para verificar este DEA" },
+          { status: 403 }
+        );
+      }
+    }
 
     // Get the AED with all necessary data
     const aed = await prisma.aed.findUnique({

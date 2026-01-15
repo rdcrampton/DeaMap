@@ -314,3 +314,153 @@ export async function getEffectivePublicationMode(aedId: string) {
 
   return "NONE";
 }
+
+/**
+ * Get AEDs that a user can verify based on their role and organization memberships
+ *
+ * Rules:
+ * - ADMIN: can verify all AEDs
+ * - Users with organizations: can verify AEDs assigned to their organizations (with can_verify permission)
+ * - Users without organizations: cannot verify any AEDs
+ */
+export async function getVerifiableAedsForUser(
+  userId: string,
+  userRole: string,
+  filters?: {
+    status?: string[];
+    organization_id?: string;
+    page?: number;
+    limit?: number;
+  }
+) {
+  const page = filters?.page || 1;
+  const limit = filters?.limit || 12;
+  const skip = (page - 1) * limit;
+
+  // Default status filter: DRAFT and PENDING_REVIEW
+  const statusFilter = filters?.status || ["DRAFT", "PENDING_REVIEW"];
+
+  // ADMIN: can see all AEDs
+  if (userRole === "ADMIN") {
+    const [aeds, totalCount] = await Promise.all([
+      prisma.aed.findMany({
+        where: {
+          status: {
+            in: statusFilter as any,
+          },
+          requires_attention: false,
+        },
+        include: {
+          location: true,
+          images: {
+            where: {
+              is_verified: false,
+            },
+            orderBy: {
+              order: "asc",
+            },
+            take: 3,
+          },
+        },
+        orderBy: {
+          created_at: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.aed.count({
+        where: {
+          status: {
+            in: statusFilter as any,
+          },
+          requires_attention: false,
+        },
+      }),
+    ]);
+
+    return { aeds, totalCount, userOrganizations: [] };
+  }
+
+  // Non-admin: get user's organizations with can_verify permission
+  const userOrganizations = await prisma.organizationMember.findMany({
+    where: {
+      user_id: userId,
+      can_verify: true,
+    },
+    include: {
+      organization: true,
+    },
+  });
+
+  // No organizations = no access
+  if (userOrganizations.length === 0) {
+    return { aeds: [], totalCount: 0, userOrganizations: [] };
+  }
+
+  // Get organization IDs to filter by
+  const orgIds = filters?.organization_id
+    ? [filters.organization_id]
+    : userOrganizations.map((om) => om.organization_id);
+
+  // Get AED IDs that are assigned to these organizations
+  const assignments = await prisma.aedOrganizationAssignment.findMany({
+    where: {
+      organization_id: { in: orgIds },
+      status: "ACTIVE",
+      assignment_type: {
+        in: ["CIVIL_PROTECTION", "VERIFICATION"],
+      },
+    },
+    select: {
+      aed_id: true,
+    },
+  });
+
+  const aedIds = assignments.map((a) => a.aed_id);
+
+  // No assigned AEDs = no results
+  if (aedIds.length === 0) {
+    return { aeds: [], totalCount: 0, userOrganizations };
+  }
+
+  // Get AEDs with filters
+  const [aeds, totalCount] = await Promise.all([
+    prisma.aed.findMany({
+      where: {
+        id: { in: aedIds },
+        status: {
+          in: statusFilter as any,
+        },
+        requires_attention: false,
+      },
+      include: {
+        location: true,
+        images: {
+          where: {
+            is_verified: false,
+          },
+          orderBy: {
+            order: "asc",
+          },
+          take: 3,
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+      skip,
+      take: limit,
+    }),
+    prisma.aed.count({
+      where: {
+        id: { in: aedIds },
+        status: {
+          in: statusFilter as any,
+        },
+        requires_attention: false,
+      },
+    }),
+  ]);
+
+  return { aeds, totalCount, userOrganizations };
+}
