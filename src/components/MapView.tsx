@@ -23,9 +23,10 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 interface MapViewProps {
   onAedClick?: (aed: { id: string; code: string; name: string }) => void;
+  searchLocation?: { lat: number; lng: number } | null;
 }
 
-// Custom marker icon
+// Custom marker icon for DEAs
 const createCustomIcon = () => {
   return L.divIcon({
     className: "custom-marker",
@@ -64,6 +65,73 @@ const createCustomIcon = () => {
   });
 };
 
+// Search location marker icon - Large red pulsing marker
+const createSearchLocationIcon = () => {
+  return L.divIcon({
+    className: "search-location-marker",
+    html: `
+      <div style="position: relative; width: 48px; height: 48px;">
+        <!-- Pulsing circle animation -->
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 48px;
+          height: 48px;
+          background: rgba(220, 38, 38, 0.3);
+          border-radius: 50%;
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        "></div>
+        <!-- Main marker -->
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
+          width: 40px;
+          height: 40px;
+          border-radius: 50% 50% 50% 0;
+          transform: translate(-50%, -50%) rotate(-45deg);
+          border: 4px solid white;
+          box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="white"
+            style="transform: rotate(45deg);"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="3" fill="#DC2626" />
+          </svg>
+        </div>
+      </div>
+      <style>
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: translate(-50%, -50%) scale(1.5);
+          }
+        }
+      </style>
+    `,
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
+    popupAnchor: [0, -24],
+  });
+};
+
 /**
  * Component helper to fit map bounds when cluster is clicked
  */
@@ -84,7 +152,25 @@ function MapController({ targetBounds }: { targetBounds: L.LatLngBounds | null }
   return null;
 }
 
-export default function MapView({ onAedClick }: MapViewProps) {
+/**
+ * Component to center map on search location
+ */
+function SearchLocationController({ location }: { location: { lat: number; lng: number } | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (location) {
+      map.setView([location.lat, location.lng], 14, {
+        animate: true,
+        duration: 1,
+      });
+    }
+  }, [location, map]);
+
+  return null;
+}
+
+export default function MapView({ onAedClick, searchLocation }: MapViewProps) {
   const [bounds, setBounds] = useState<BoundingBox | null>(null);
   const [zoom, setZoom] = useState(12);
   const [targetBounds, setTargetBounds] = useState<L.LatLngBounds | null>(null);
@@ -158,6 +244,31 @@ export default function MapView({ onAedClick }: MapViewProps) {
 
         {/* Map controller for zoom animations */}
         <MapController targetBounds={targetBounds} />
+
+        {/* Search location controller */}
+        <SearchLocationController location={searchLocation} />
+
+        {/* Search location marker */}
+        {searchLocation && (
+          <Marker
+            position={[searchLocation.lat, searchLocation.lng]}
+            icon={createSearchLocationIcon()}
+            zIndexOffset={1000}
+          >
+            <Popup>
+              <div className="min-w-[200px]">
+                <h3 className="font-bold text-red-600 mb-2">📍 Tu ubicación</h3>
+                <p className="text-sm text-gray-600">
+                  Buscando DEAs cercanos desde aquí
+                </p>
+                <div className="mt-2 text-xs text-gray-500">
+                  <p>Lat: {searchLocation.lat.toFixed(6)}</p>
+                  <p>Lng: {searchLocation.lng.toFixed(6)}</p>
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        )}
 
         {/* Render server-side clusters */}
         {clusters.map((cluster) => (

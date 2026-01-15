@@ -402,7 +402,7 @@ export default function Home() {
                     Mapa de DEAs cercanos
                   </h4>
                 </div>
-                <MapView onAedClick={handleMapMarkerClick} />
+                <MapView onAedClick={handleMapMarkerClick} searchLocation={searchLocation} />
               </div>
             )}
 
