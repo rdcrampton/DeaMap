@@ -5,6 +5,7 @@ import { Toaster } from "react-hot-toast";
 
 import Navigation from "@/components/Navigation";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { OrganizationProvider } from "@/contexts/OrganizationContext";
 
 import "./globals.css";
 
@@ -28,32 +29,34 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-sans antialiased">
         <AuthProvider>
-          <Navigation />
-          {children}
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: "#363636",
-                color: "#fff",
-              },
-              success: {
-                duration: 3000,
-                iconTheme: {
-                  primary: "#247F52",
-                  secondary: "#fff",
-                },
-              },
-              error: {
+          <OrganizationProvider>
+            <Navigation />
+            {children}
+            <Toaster
+              position="top-right"
+              toastOptions={{
                 duration: 4000,
-                iconTheme: {
-                  primary: "#ef4444",
-                  secondary: "#fff",
+                style: {
+                  background: "#363636",
+                  color: "#fff",
                 },
-              },
-            }}
-          />
+                success: {
+                  duration: 3000,
+                  iconTheme: {
+                    primary: "#247F52",
+                    secondary: "#fff",
+                  },
+                },
+                error: {
+                  duration: 4000,
+                  iconTheme: {
+                    primary: "#ef4444",
+                    secondary: "#fff",
+                  },
+                },
+              }}
+            />
+          </OrganizationProvider>
         </AuthProvider>
         <SpeedInsights />
         <Analytics />

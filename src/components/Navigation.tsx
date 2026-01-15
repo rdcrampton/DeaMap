@@ -11,6 +11,7 @@ import {
   PlusCircle,
   ClipboardCheck,
   Settings,
+  Building2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -18,11 +19,13 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 export default function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout, loading } = useAuth();
+  const { hasOrganizations, selectedOrganization } = useOrganization();
 
   const isHomePage = pathname === "/";
 
@@ -42,6 +45,12 @@ export default function Navigation() {
   const allNavLinks = [
     { href: "/", label: "DEAs", icon: Home, visible: true },
     { href: "/dea/new-simple", label: "Agregar DEA", icon: PlusCircle, visible: true },
+    {
+      href: selectedOrganization ? `/org/${selectedOrganization.id}` : "/org",
+      label: "Mi Organización",
+      icon: Building2,
+      visible: hasOrganizations,
+    },
     {
       href: "/verify",
       label: "Verificar",
