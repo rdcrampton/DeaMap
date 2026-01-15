@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { getVerifiableAedsForUser } from "@/lib/organization-permissions";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,45 +14,19 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "12");
-    const skip = (page - 1) * limit;
+    const organizationId = searchParams.get("organization_id") || undefined;
 
-    // Get AEDs that are pending verification (DRAFT or PENDING_REVIEW status)
-    // Exclude items that require attention (they have their own review page)
-    const [aeds, totalCount] = await Promise.all([
-      prisma.aed.findMany({
-        where: {
-          status: {
-            in: ["DRAFT", "PENDING_REVIEW"],
-          },
-          requires_attention: false,
-        },
-        include: {
-          location: true,
-          images: {
-            where: {
-              is_verified: false,
-            },
-            orderBy: {
-              order: "asc",
-            },
-            take: 3,
-          },
-        },
-        orderBy: {
-          created_at: "desc",
-        },
-        skip,
-        take: limit,
-      }),
-      prisma.aed.count({
-        where: {
-          status: {
-            in: ["DRAFT", "PENDING_REVIEW"],
-          },
-          requires_attention: false,
-        },
-      }),
-    ]);
+    // Get AEDs based on user's role and organization memberships
+    const { aeds, totalCount, userOrganizations } = await getVerifiableAedsForUser(
+      user.userId,
+      user.role,
+      {
+        page,
+        limit,
+        organization_id: organizationId,
+        status: ["DRAFT", "PENDING_REVIEW"],
+      }
+    );
 
     const totalPages = Math.ceil(totalCount / limit);
 
@@ -66,6 +40,14 @@ export async function GET(request: NextRequest) {
         hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
+      userOrganizations: userOrganizations.map((om) => ({
+        id: om.organization.id,
+        name: om.organization.name,
+        type: om.organization.type,
+        role: om.role,
+        can_verify: om.can_verify,
+      })),
+      isAdmin: user.role === "ADMIN",
     });
   } catch (error) {
     console.error("Error fetching AEDs for verification:", error);

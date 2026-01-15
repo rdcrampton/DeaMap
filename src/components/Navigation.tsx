@@ -36,27 +36,25 @@ export default function Navigation() {
     setMobileMenuOpen(false);
   };
 
-  // Navigation links - public and authenticated
-  const publicNavLinks = [
-    { href: "/", label: "DEAs", icon: Home },
-    { href: "/dea/new-simple", label: "Agregar DEA", icon: PlusCircle },
+  // Navigation links with permission-based visibility
+  const allNavLinks = [
+    { href: "/", label: "DEAs", icon: Home, visible: true },
+    { href: "/dea/new-simple", label: "Agregar DEA", icon: PlusCircle, visible: true },
+    {
+      href: "/verify",
+      label: "Verificar",
+      icon: ClipboardCheck,
+      visible: user?.permissions?.canVerify || false,
+    },
+    {
+      href: "/admin",
+      label: "Admin",
+      icon: Settings,
+      visible: user?.permissions?.canAccessAdmin || false,
+    },
   ];
 
-  const authNavLinks = [
-    { href: "/verify", label: "Verificar", icon: ClipboardCheck },
-  ];
-
-  const adminNavLinks = [
-    { href: "/admin", label: "Admin", icon: Settings },
-  ];
-
-  let navLinks = publicNavLinks;
-  if (user && user.is_verified) {
-    navLinks = [...publicNavLinks, ...authNavLinks];
-    if (user.role === "ADMIN") {
-      navLinks = [...navLinks, ...adminNavLinks];
-    }
-  }
+  const navLinks = allNavLinks.filter((link) => link.visible);
 
   return (
     <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
