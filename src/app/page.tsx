@@ -1,30 +1,27 @@
 "use client";
 
 import {
-  Clock,
+  AlertCircle,
   Heart,
-  Image as ImageIcon,
-  List,
-  Map,
+  Loader2,
   MapPin,
   Navigation,
   Phone,
-  Plus,
   Search,
+  Clock,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useState } from "react";
+import Link from "next/link";
 
 import AedDetailModal from "@/components/AedDetailModal";
-import { useAeds } from "@/hooks/useAeds";
 import type { Aed } from "@/types/aed";
 
 // Dynamic import to avoid SSR issues with Leaflet
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[600px] rounded-xl bg-white/95 flex items-center justify-center">
+    <div className="w-full h-[400px] rounded-xl bg-white/95 flex items-center justify-center">
       <div className="text-center">
         <MapPin className="w-12 h-12 animate-pulse mx-auto text-blue-600 mb-4" />
         <p className="text-gray-700 font-medium">Cargando mapa...</p>
@@ -33,26 +30,171 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   ),
 });
 
+interface NearbyAed extends Aed {
+  distance: number;
+}
+
+interface GeocodingResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address: {
+    road?: string;
+    house_number?: string;
+    postcode?: string;
+    city?: string;
+  };
+}
+
 export default function Home() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const [address, setAddress] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [nearbyAeds, setNearbyAeds] = useState<NearbyAed[]>([]);
   const [selectedAed, setSelectedAed] = useState<Aed | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "map">("map");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  const { aeds, loading, error, pagination, refetch } = useAeds({
-    page,
-    limit: 50,
-    search,
-  });
+  const handleFindNearestByGeolocation = async () => {
+    setLoading(true);
+    setError(null);
+    setNearbyAeds([]);
 
-  const handleCardClick = (aed: Aed) => {
+    try {
+      // Get user's location
+      if (!navigator.geolocation) {
+        throw new Error("La geolocalización no está disponible en tu navegador");
+      }
+
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      setUserLocation({ lat: latitude, lng: longitude });
+      setSearchLocation({ lat: latitude, lng: longitude });
+
+      // Fetch nearby AEDs
+      const response = await fetch(
+        `/api/aeds/nearby?lat=${latitude}&lng=${longitude}&limit=10&radius=10`
+      );
+
+      if (!response.ok) {
+        throw new Error("Error al buscar DEAs cercanos");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setNearbyAeds(data.data);
+        if (data.data.length === 0) {
+          setError(
+            "No se encontraron DEAs en un radio de 10 km. Intenta ampliar la búsqueda o buscar por dirección."
+          );
+        }
+      } else {
+        throw new Error(data.message || "Error al buscar DEAs");
+      }
+    } catch (err) {
+      console.error("Error finding nearest AEDs:", err);
+      if (err instanceof GeolocationPositionError) {
+        if (err.code === err.PERMISSION_DENIED) {
+          setError(
+            "Necesitas permitir el acceso a tu ubicación para encontrar DEAs cercanos. Por favor, activa la ubicación en tu navegador."
+          );
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setError("No se pudo determinar tu ubicación. Intenta buscar por dirección.");
+        } else {
+          setError("Tiempo de espera agotado. Intenta buscar por dirección.");
+        }
+      } else {
+        setError(
+          err instanceof Error ? err.message : "Error al buscar DEAs. Intenta buscar por dirección."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearchByAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!address.trim()) {
+      setError("Por favor, introduce una dirección");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNearbyAeds([]);
+
+    try {
+      // Geocode the address
+      const geocodeResponse = await fetch(`/api/geocode?q=${encodeURIComponent(address)}`);
+
+      if (!geocodeResponse.ok) {
+        throw new Error("Error al buscar la dirección");
+      }
+
+      const geocodeData: GeocodingResult[] = await geocodeResponse.json();
+
+      if (!geocodeData || geocodeData.length === 0) {
+        throw new Error("No se encontró la dirección. Intenta con otra dirección más específica.");
+      }
+
+      // Use the first result
+      const location = geocodeData[0];
+      const lat = parseFloat(location.lat);
+      const lng = parseFloat(location.lon);
+
+      setSearchLocation({ lat, lng });
+
+      // Fetch nearby AEDs
+      const nearbyResponse = await fetch(
+        `/api/aeds/nearby?lat=${lat}&lng=${lng}&limit=10&radius=10`
+      );
+
+      if (!nearbyResponse.ok) {
+        throw new Error("Error al buscar DEAs cercanos");
+      }
+
+      const nearbyData = await nearbyResponse.json();
+
+      if (nearbyData.success && nearbyData.data) {
+        setNearbyAeds(nearbyData.data);
+        if (nearbyData.data.length === 0) {
+          setError(
+            "No se encontraron DEAs cerca de esta dirección en un radio de 10 km. Intenta con otra dirección."
+          );
+        }
+      } else {
+        throw new Error(nearbyData.message || "Error al buscar DEAs");
+      }
+    } catch (err) {
+      console.error("Error searching by address:", err);
+      setError(err instanceof Error ? err.message : "Error al buscar por dirección");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCardClick = (aed: NearbyAed) => {
     setSelectedAed(aed);
     setModalOpen(true);
   };
 
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setTimeout(() => setSelectedAed(null), 200);
+  };
+
   const handleMapMarkerClick = async (aed: { id: string; code: string; name: string }) => {
-    // Fetch full AED data by ID when clicking from map
     try {
       const response = await fetch(`/api/aeds/${aed.id}`);
       if (response.ok) {
@@ -67,240 +209,218 @@ export default function Home() {
     }
   };
 
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setTimeout(() => setSelectedAed(null), 200);
-  };
-
-  if (loading && aeds.length === 0) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{
-          background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
-        }}
-      >
-        <div
-          className="text-center p-8 rounded-2xl shadow-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <MapPin className="w-12 h-12 animate-pulse mx-auto text-blue-600 mb-4" />
-          <p className="text-gray-700 font-medium">Cargando DEAs...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{
-          background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
-        }}
-      >
-        <div
-          className="text-center p-8 rounded-2xl shadow-xl"
-          style={{
-            background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <p className="text-red-600 mb-4 font-medium">{error}</p>
-          <button
-            onClick={refetch}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
-            style={{ minHeight: "44px" }}
-          >
-            Reintentar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className="min-h-screen"
       style={{
-        background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
+        background: "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)",
         backgroundAttachment: "fixed",
       }}
     >
-      {/* Hero Header */}
-      <header className="text-center text-white px-4 sm:px-6 pt-6 pb-4 sm:pt-8 sm:pb-6">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-4">
+      {/* Emergency Header */}
+      <header className="text-center text-white px-4 sm:px-6 pt-8 pb-6">
+        <div className="flex flex-col items-center justify-center gap-4 mb-4">
           <div
-            className="p-3 sm:p-4 rounded-full flex-shrink-0"
+            className="p-4 rounded-full"
             style={{
               background: "rgba(255, 255, 255, 0.2)",
               backdropFilter: "blur(20px)",
               border: "2px solid rgba(255, 255, 255, 0.3)",
             }}
           >
-            <MapPin className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-pulse" />
+            <Heart className="w-12 h-12 text-white animate-pulse" />
           </div>
-          <div className="text-center sm:text-left">
-            <h1
-              className="font-black text-3xl sm:text-4xl md:text-5xl mb-1"
-              style={{
-                background: "linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                color: "transparent",
-                lineHeight: "1.1",
-              }}
-            >
-              deamap.es
+          <div className="text-center">
+            <h1 className="font-black text-4xl sm:text-5xl md:text-6xl mb-2 text-white">
+              Encuentra un DEA
             </h1>
-            <div className="flex items-center justify-center sm:justify-start gap-2 opacity-90 text-sm sm:text-base">
-              <Heart className="w-4 h-4 text-red-300" />
-              <span>Mapa de Desfibriladores</span>
-              <Navigation className="w-4 h-4" />
+            <p className="text-xl sm:text-2xl opacity-90 mb-2">
+              Desfibriladores cerca de ti
+            </p>
+            <div className="flex items-center justify-center gap-2 text-sm sm:text-base opacity-75">
+              <MapPin className="w-4 h-4" />
+              <span>Cobertura: España y Europa</span>
             </div>
           </div>
         </div>
-        <p className="opacity-90 text-sm sm:text-base max-w-2xl mx-auto px-2">
-          {pagination.total} DEAs disponibles en Madrid
-        </p>
+        <div
+          className="max-w-2xl mx-auto mt-6 p-4 rounded-lg"
+          style={{
+            background: "rgba(255, 255, 255, 0.15)",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          <p className="text-sm sm:text-base leading-relaxed">
+            <strong>En una emergencia cardíaca,</strong> cada segundo cuenta. Encuentra el
+            desfibrilador más cercano a tu ubicación o busca por dirección.
+          </p>
+        </div>
       </header>
 
-      {/* Search Bar and View Toggle */}
-      <div className="container mx-auto px-3 sm:px-4 md:px-6 py-4">
+      {/* Search Section */}
+      <main className="container mx-auto px-4 sm:px-6 py-6">
         <div
-          className="rounded-xl shadow-lg p-4 sm:p-5"
+          className="rounded-2xl shadow-2xl p-6 sm:p-8 max-w-4xl mx-auto mb-8"
           style={{
-            background: "rgba(255, 255, 255, 0.95)",
+            background: "rgba(255, 255, 255, 0.98)",
             backdropFilter: "blur(20px)",
           }}
         >
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre o código..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                style={{ minHeight: "48px" }}
-              />
-            </div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 text-center">
+            ¿Cómo quieres buscar?
+          </h2>
 
-            {/* Add DEA Button */}
-            <Link href="/dea/new">
-              <button
-                className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 whitespace-nowrap"
-                style={{ minHeight: "48px" }}
-              >
-                <Plus className="w-5 h-5" />
-                <span>Agregar DEA</span>
-              </button>
-            </Link>
-
-            {/* View Toggle */}
-            <div
-              className="flex rounded-lg overflow-hidden"
-              style={{
-                background: "rgba(0, 0, 0, 0.05)",
-              }}
+          {/* Geolocation Button */}
+          <div className="mb-6">
+            <button
+              onClick={handleFindNearestByGeolocation}
+              disabled={loading}
+              className="w-full py-5 px-6 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
             >
-              <button
-                onClick={() => setViewMode("list")}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition-all ${
-                  viewMode === "list"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                    : "text-gray-700 hover:bg-white/50"
-                }`}
-                style={{ minHeight: "48px" }}
-              >
-                <List className="w-5 h-5" />
-                <span className="hidden sm:inline">Lista</span>
-              </button>
-              <button
-                onClick={() => setViewMode("map")}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition-all ${
-                  viewMode === "map"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                    : "text-gray-700 hover:bg-white/50"
-                }`}
-                style={{ minHeight: "48px" }}
-              >
-                <Map className="w-5 h-5" />
-                <span className="hidden sm:inline">Mapa</span>
-              </button>
+              {loading ? (
+                <>
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <span>Buscando...</span>
+                </>
+              ) : (
+                <>
+                  <Navigation className="w-6 h-6" />
+                  <span>Usar mi ubicación actual</span>
+                </>
+              )}
+            </button>
+            <p className="text-sm text-gray-600 mt-2 text-center">
+              Encuentra los DEAs más cercanos a ti ahora mismo
+            </p>
+          </div>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500 font-medium">O busca por dirección</span>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Content */}
-      <main className="container mx-auto px-3 sm:px-4 md:px-6 py-4 pb-12">
-        {viewMode === "map" ? (
-          <MapView onAedClick={handleMapMarkerClick} />
-        ) : (
-          <>
-            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {aeds.map((aed) => (
-                <AedCard key={aed.id} aed={aed} onClick={() => handleCardClick(aed)} />
-              ))}
+          {/* Address Search */}
+          <form onSubmit={handleSearchByAddress} className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Escribe una dirección (ej: Calle Gran Vía 1, Madrid)"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                disabled={loading}
+                className="w-full pl-14 pr-4 py-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !address.trim()}
+              className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Buscar DEAs cerca de esta dirección
+            </button>
+          </form>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div
+            className="max-w-4xl mx-auto mb-8 p-4 rounded-xl border-2"
+            style={{
+              background: "rgba(254, 226, 226, 0.98)",
+              borderColor: "#f87171",
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-red-900">Información importante</p>
+                <p className="text-red-800 text-sm mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Results */}
+        {nearbyAeds.length > 0 && (
+          <div className="max-w-7xl mx-auto space-y-6">
+            <div
+              className="p-6 rounded-xl text-center"
+              style={{
+                background: "rgba(255, 255, 255, 0.95)",
+                backdropFilter: "blur(20px)",
+              }}
+            >
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                {nearbyAeds.length} DEA{nearbyAeds.length !== 1 ? "s" : ""} encontrado
+                {nearbyAeds.length !== 1 ? "s" : ""}
+              </h3>
+              <p className="text-gray-600">
+                Ordenados por distancia - El más cercano primero
+              </p>
             </div>
 
-            {aeds.length === 0 && (
+            {/* Map View */}
+            {searchLocation && (
               <div
-                className="text-center py-12 sm:py-16 rounded-xl shadow-lg"
+                className="rounded-xl overflow-hidden shadow-2xl"
                 style={{
                   background: "rgba(255, 255, 255, 0.95)",
                   backdropFilter: "blur(20px)",
                 }}
               >
-                <p className="text-gray-600 text-lg px-4">No se encontraron DEAs</p>
+                <div className="p-4 bg-gradient-to-r from-blue-600 to-blue-700">
+                  <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                    <MapPin className="w-5 h-5" />
+                    Mapa de DEAs cercanos
+                  </h4>
+                </div>
+                <MapView onAedClick={handleMapMarkerClick} />
               </div>
             )}
 
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-                <div
-                  className="flex gap-2 sm:gap-3"
-                  style={{
-                    background: "rgba(255, 255, 255, 0.95)",
-                    backdropFilter: "blur(20px)",
-                    padding: "0.5rem",
-                    borderRadius: "0.75rem",
-                  }}
-                >
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-all active:scale-95 font-medium"
-                    style={{ minHeight: "44px" }}
-                  >
-                    Anterior
-                  </button>
-                  <span className="px-4 py-2 flex items-center text-gray-700 font-medium">
-                    Página {page} de {pagination.totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-                    disabled={page === pagination.totalPages}
-                    className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-all active:scale-95 font-medium"
-                    style={{ minHeight: "44px" }}
-                  >
-                    Siguiente
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+            {/* Results Grid */}
+            <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              {nearbyAeds.map((aed, index) => (
+                <NearbyAedCard
+                  key={aed.id}
+                  aed={aed}
+                  rank={index + 1}
+                  onClick={() => handleCardClick(aed)}
+                />
+              ))}
+            </div>
+          </div>
         )}
+
+        {/* Info Section */}
+        <div
+          className="max-w-4xl mx-auto mt-12 p-6 sm:p-8 rounded-xl"
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Sobre DeaMap</h3>
+          <div className="space-y-3 text-gray-700">
+            <p>
+              DeaMap es un mapa colaborativo de desfibriladores (DEAs) que te ayuda a encontrar el
+              equipo más cercano en caso de emergencia cardíaca.
+            </p>
+            <p className="text-sm text-gray-600">
+              Actualmente contamos con cobertura en España, con planes de expansión a nivel europeo.
+              Si conoces la ubicación de un DEA que no está en el mapa, puedes{" "}
+              <Link href="/dea/new" className="text-blue-600 hover:underline font-medium">
+                agregarlo aquí
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
       </main>
 
       {/* Detail Modal */}
@@ -310,27 +430,53 @@ export default function Home() {
 }
 
 /**
- * AED Card Component
+ * Nearby AED Card Component
  */
-function AedCard({ aed, onClick }: { aed: Aed; onClick: () => void }) {
+function NearbyAedCard({
+  aed,
+  rank,
+  onClick,
+}: {
+  aed: NearbyAed;
+  rank: number;
+  onClick: () => void;
+}) {
   const displayImage =
     aed.images && aed.images.length > 0
       ? aed.images[0].thumbnail_url || aed.images[0].processed_url || aed.images[0].original_url
       : null;
 
+  const distanceText =
+    aed.distance < 1
+      ? `${Math.round(aed.distance * 1000)} m`
+      : `${aed.distance.toFixed(1)} km`;
+
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-xl sm:rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group cursor-pointer text-left"
+      className="w-full rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group cursor-pointer text-left relative"
       style={{
         background: "rgba(255, 255, 255, 0.98)",
         backdropFilter: "blur(20px)",
-        border: "1px solid rgba(255, 255, 255, 0.3)",
+        border: rank === 1 ? "3px solid #DC2626" : "1px solid rgba(255, 255, 255, 0.3)",
       }}
     >
-      {/* Image Header or Gradient Header */}
+      {/* Rank Badge */}
+      <div
+        className="absolute top-3 left-3 z-10 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-lg"
+        style={{
+          background:
+            rank === 1
+              ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+              : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+        }}
+      >
+        {rank}
+      </div>
+
+      {/* Image or Gradient Header */}
       {displayImage ? (
-        <div className="relative h-48 sm:h-56 overflow-hidden">
+        <div className="relative h-48 overflow-hidden">
           <img
             src={displayImage}
             alt={aed.name}
@@ -339,112 +485,91 @@ function AedCard({ aed, onClick }: { aed: Aed; onClick: () => void }) {
           <div
             className="absolute inset-0"
             style={{
-              background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%)",
+              background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)",
             }}
           />
-          <div className="absolute bottom-0 left-0 right-0 p-4">
-            <h3 className="text-base sm:text-lg font-bold text-white truncate">{aed.name}</h3>
-            <p className="text-xs sm:text-sm text-white/90 mt-1">{aed.code}</p>
-          </div>
-          <div
-            className="absolute top-3 right-3 p-2 rounded-lg"
-            style={{
-              background: "rgba(255, 255, 255, 0.9)",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <Heart className="w-5 h-5 text-red-500" />
-          </div>
-          {aed.images && aed.images.length > 1 && (
-            <div
-              className="absolute top-3 left-3 px-2 py-1 rounded-lg text-white text-xs font-medium flex items-center gap-1"
-              style={{
-                background: "rgba(0, 0, 0, 0.6)",
-                backdropFilter: "blur(10px)",
-              }}
-            >
-              <ImageIcon className="w-3 h-3" />
-              {aed.images.length}
-            </div>
-          )}
         </div>
       ) : (
         <div
-          className="p-4 sm:p-5"
+          className="h-48"
           style={{
             background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
           }}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base sm:text-lg font-bold text-white truncate">{aed.name}</h3>
-              <p className="text-xs sm:text-sm text-white/80 mt-1">{aed.code}</p>
-            </div>
-            <div
-              className="p-2 rounded-lg ml-2 flex-shrink-0"
-              style={{
-                background: "rgba(255, 255, 255, 0.2)",
-                backdropFilter: "blur(10px)",
-              }}
-            >
-              <Heart className="w-5 h-5 text-white" />
-            </div>
-          </div>
-        </div>
+        />
       )}
 
       {/* Content */}
-      <div className="p-4 sm:p-5 space-y-3">
-        {/* Type Badge */}
+      <div className="p-5 space-y-3">
+        {/* Distance Badge */}
+        <div
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-full font-bold text-lg"
+          style={{
+            background:
+              rank === 1
+                ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+                : "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+            color: "white",
+          }}
+        >
+          <Navigation className="w-5 h-5" />
+          <span>{distanceText}</span>
+        </div>
+
+        {/* Name and Code */}
         <div>
-          <span className="inline-block px-3 py-1.5 bg-blue-100 text-blue-800 text-xs sm:text-sm rounded-full font-medium">
+          <h3 className="text-lg font-bold text-gray-900 mb-1">{aed.name}</h3>
+          <p className="text-sm text-gray-500">{aed.code}</p>
+        </div>
+
+        {/* Type */}
+        <div>
+          <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full font-medium">
             {aed.establishment_type}
           </span>
         </div>
 
         {/* Location */}
-        <div className="space-y-2 text-sm text-gray-600">
-          <div className="flex items-start space-x-2">
-            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mt-0.5 flex-shrink-0 text-blue-500" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm sm:text-base text-gray-900 font-medium break-words">
-                {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
-              </p>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                {aed.location.postal_code}
-                {aed.location.district_name && ` - ${aed.location.district_name}`}
-              </p>
-            </div>
+        <div className="flex items-start gap-2 text-sm text-gray-600">
+          <MapPin className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-gray-900">
+              {aed.location.street_type} {aed.location.street_name} {aed.location.street_number}
+            </p>
+            <p className="text-gray-500 text-xs mt-1">
+              {aed.location.postal_code}
+              {aed.location.district_name && ` - ${aed.location.district_name}`}
+            </p>
           </div>
-
-          {/* Schedule */}
-          {aed.schedule && (
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 text-purple-500" />
-              <p className="text-sm sm:text-base">
-                {aed.schedule.has_24h_surveillance
-                  ? "24h Vigilancia"
-                  : aed.schedule.weekday_opening && aed.schedule.weekday_closing
-                    ? `${aed.schedule.weekday_opening} - ${aed.schedule.weekday_closing}`
-                    : "Horario no especificado"}
-              </p>
-            </div>
-          )}
-
-          {/* Contact */}
-          {aed.responsible && aed.responsible.phone && (
-            <div className="flex items-center space-x-2">
-              <Phone className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 text-green-500" />
-              <p className="text-sm sm:text-base">{aed.responsible.phone}</p>
-            </div>
-          )}
         </div>
 
-        {/* Coordinates */}
+        {/* Schedule */}
+        {aed.schedule && (
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="w-5 h-5 text-green-500 flex-shrink-0" />
+            <p className="text-gray-700">
+              {aed.schedule.has_24h_surveillance
+                ? "Disponible 24h"
+                : aed.schedule.weekday_opening && aed.schedule.weekday_closing
+                  ? `${aed.schedule.weekday_opening} - ${aed.schedule.weekday_closing}`
+                  : "Horario no especificado"}
+            </p>
+          </div>
+        )}
+
+        {/* Contact */}
+        {aed.responsible && aed.responsible.phone && (
+          <div className="flex items-center gap-2 text-sm">
+            <Phone className="w-5 h-5 text-blue-500 flex-shrink-0" />
+            <p className="text-gray-700">{aed.responsible.phone}</p>
+          </div>
+        )}
+
+        {/* View Details Button */}
         <div className="pt-3 border-t border-gray-200">
-          <p className="text-xs text-gray-400">
-            📍 {aed.latitude.toFixed(6)}, {aed.longitude.toFixed(6)}
-          </p>
+          <div className="flex items-center justify-center gap-2 text-blue-600 font-medium">
+            <span>Ver detalles y cómo llegar</span>
+            <MapPin className="w-5 h-5" />
+          </div>
         </div>
       </div>
     </button>
