@@ -162,7 +162,7 @@ function SearchLocationController({ location }: { location: { lat: number; lng: 
 
   useEffect(() => {
     if (location) {
-      map.setView([location.lat, location.lng], 14, {
+      map.setView([location.lat, location.lng], 17, {
         animate: true,
         duration: 1,
       });
@@ -241,11 +241,20 @@ export default function MapView({
         className="w-full h-full"
         style={{ zIndex: 0 }}
       >
+        {/* Base map layer */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={20}
+        />
+
+        {/* Labels overlay for street names and house numbers */}
+        <TileLayer
+          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png"
           subdomains="abcd"
           maxZoom={20}
+          pane="overlayPane"
         />
 
         {/* Map event handler */}
