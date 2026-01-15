@@ -233,7 +233,7 @@ export default function MapView({
   }, []);
 
   return (
-    <div className="relative w-full h-[600px] rounded-xl overflow-hidden shadow-xl">
+    <div className="relative w-full h-full rounded-xl overflow-hidden shadow-xl">
       <MapContainer
         center={[40.4168, -3.7038]} // Madrid center
         zoom={12}
