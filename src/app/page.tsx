@@ -98,20 +98,12 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [address]);
 
-  const handleSuggestionClick = async (suggestion: GeocodingResult) => {
-    setAddress(suggestion.display_name);
-    setShowSuggestions(false);
-    setAddressSuggestions([]);
-
-    // Immediately search for DEAs at this location
-    const lat = parseFloat(suggestion.lat);
-    const lng = parseFloat(suggestion.lon);
-
+  // Centralized function to search nearby AEDs
+  const searchNearbyAeds = async (lat: number, lng: number) => {
     setLoading(true);
     setError(null);
     setNearbyAeds([]);
     setShowResults(true);
-    setSearchLocation({ lat, lng });
 
     try {
       const nearbyResponse = await fetch(
@@ -127,7 +119,7 @@ export default function Home() {
       if (nearbyData.success && nearbyData.data) {
         setNearbyAeds(nearbyData.data);
         if (nearbyData.data.length === 0) {
-          setError("No se encontraron DEAs cerca de esta dirección en un radio de 10 km.");
+          setError("No se encontraron DEAs cerca de esta ubicación en un radio de 10 km.");
         }
       } else {
         throw new Error(nearbyData.message || "Error al buscar DEAs");
@@ -138,6 +130,24 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle when user drags the search location marker
+  const handleSearchLocationChange = (location: { lat: number; lng: number }) => {
+    setSearchLocation(location);
+    searchNearbyAeds(location.lat, location.lng);
+  };
+
+  const handleSuggestionClick = async (suggestion: GeocodingResult) => {
+    setAddress(suggestion.display_name);
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+
+    // Immediately search for DEAs at this location
+    const lat = parseFloat(suggestion.lat);
+    const lng = parseFloat(suggestion.lon);
+    setSearchLocation({ lat, lng });
+    await searchNearbyAeds(lat, lng);
   };
 
   const handleFindNearestByGeolocation = async () => {
@@ -165,25 +175,8 @@ export default function Home() {
       const { latitude, longitude } = position.coords;
       setSearchLocation({ lat: latitude, lng: longitude });
 
-      // Fetch nearby AEDs
-      const response = await fetch(
-        `/api/aeds/nearby?lat=${latitude}&lng=${longitude}&limit=10&radius=10`
-      );
-
-      if (!response.ok) {
-        throw new Error("Error al buscar DEAs cercanos");
-      }
-
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        setNearbyAeds(data.data);
-        if (data.data.length === 0) {
-          setError("No se encontraron DEAs en un radio de 10 km.");
-        }
-      } else {
-        throw new Error(data.message || "Error al buscar DEAs");
-      }
+      // Use centralized search function
+      await searchNearbyAeds(latitude, longitude);
     } catch (err) {
       console.error("Error finding nearest AEDs:", err);
       // Check if it's a GeolocationPositionError by checking for code property
@@ -205,7 +198,6 @@ export default function Home() {
       } else {
         setError(err instanceof Error ? err.message : "Error al buscar DEAs.");
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -244,29 +236,11 @@ export default function Home() {
 
       setSearchLocation({ lat, lng });
 
-      // Fetch nearby AEDs
-      const nearbyResponse = await fetch(
-        `/api/aeds/nearby?lat=${lat}&lng=${lng}&limit=10&radius=10`
-      );
-
-      if (!nearbyResponse.ok) {
-        throw new Error("Error al buscar DEAs cercanos");
-      }
-
-      const nearbyData = await nearbyResponse.json();
-
-      if (nearbyData.success && nearbyData.data) {
-        setNearbyAeds(nearbyData.data);
-        if (nearbyData.data.length === 0) {
-          setError("No se encontraron DEAs cerca de esta dirección en un radio de 10 km.");
-        }
-      } else {
-        throw new Error(nearbyData.message || "Error al buscar DEAs");
-      }
+      // Use centralized search function
+      await searchNearbyAeds(lat, lng);
     } catch (err) {
       console.error("Error searching by address:", err);
       setError(err instanceof Error ? err.message : "Error al buscar por dirección");
-    } finally {
       setLoading(false);
     }
   };
@@ -308,7 +282,11 @@ export default function Home() {
     <>
       {/* Fullscreen Map Section */}
       <div className="relative w-full h-[calc(100vh-56px)]">
-        <MapView onAedClick={handleMapMarkerClick} searchLocation={searchLocation} />
+        <MapView
+          onAedClick={handleMapMarkerClick}
+          searchLocation={searchLocation}
+          onSearchLocationChange={handleSearchLocationChange}
+        />
 
       {/* Search Controls Overlay - Desktop: Top Left, Mobile: Top */}
       <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">

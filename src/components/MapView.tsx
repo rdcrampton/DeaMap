@@ -24,6 +24,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 interface MapViewProps {
   onAedClick?: (aed: { id: string; code: string; name: string }) => void;
   searchLocation?: { lat: number; lng: number } | null;
+  onSearchLocationChange?: (location: { lat: number; lng: number }) => void;
 }
 
 // Custom marker icon for DEAs
@@ -170,7 +171,7 @@ function SearchLocationController({ location }: { location: { lat: number; lng: 
   return null;
 }
 
-export default function MapView({ onAedClick, searchLocation }: MapViewProps) {
+export default function MapView({ onAedClick, searchLocation, onSearchLocationChange }: MapViewProps) {
   const [bounds, setBounds] = useState<BoundingBox | null>(null);
   const [zoom, setZoom] = useState(12);
   const [targetBounds, setTargetBounds] = useState<L.LatLngBounds | null>(null);
@@ -248,18 +249,32 @@ export default function MapView({ onAedClick, searchLocation }: MapViewProps) {
         {/* Search location controller */}
         <SearchLocationController location={searchLocation ?? null} />
 
-        {/* Search location marker */}
+        {/* Search location marker - Draggable */}
         {searchLocation && (
           <Marker
             position={[searchLocation.lat, searchLocation.lng]}
             icon={createSearchLocationIcon()}
             zIndexOffset={1000}
+            draggable={true}
+            eventHandlers={{
+              dragend: (e) => {
+                const marker = e.target;
+                const position = marker.getLatLng();
+                onSearchLocationChange?.({
+                  lat: position.lat,
+                  lng: position.lng,
+                });
+              },
+            }}
           >
             <Popup>
               <div className="min-w-[200px]">
                 <h3 className="font-bold text-red-600 mb-2">📍 Tu ubicación</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 mb-2">
                   Buscando DEAs cercanos desde aquí
+                </p>
+                <p className="text-xs text-gray-500 italic mb-2">
+                  💡 Arrastra este marcador para ajustar la búsqueda
                 </p>
                 <div className="mt-2 text-xs text-gray-500">
                   <p>Lat: {searchLocation.lat.toFixed(6)}</p>
