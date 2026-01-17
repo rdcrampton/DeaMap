@@ -11,6 +11,8 @@ import {
   Clock,
   X,
   ChevronDown,
+  ExternalLink,
+  PlusCircle,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
@@ -509,10 +511,22 @@ export default function Home() {
             <div className="grid md:grid-cols-2 gap-8">
               <div className="bg-white rounded-xl p-6 shadow-lg">
                 <h3 className="text-xl font-bold text-gray-900 mb-3">¿Qué es DeaMap?</h3>
-                <p className="text-gray-700 leading-relaxed">
+                <p className="text-gray-700 leading-relaxed mb-3">
                   DeaMap es una plataforma colaborativa que permite localizar desfibriladores (DEAs)
                   cercanos en caso de emergencia cardíaca. Contamos con cobertura en España y planes
                   de expansión a nivel europeo.
+                </p>
+                <p className="text-sm text-gray-600">
+                  Proyecto desarrollado por{" "}
+                  <a
+                    href="https://www.globalemergency.online/proyectos/deamap"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-700 font-semibold underline decoration-1 underline-offset-2"
+                  >
+                    Global Emergency
+                  </a>
+                  , organización dedicada a mejorar la respuesta ante emergencias.
                 </p>
               </div>
 
@@ -578,10 +592,63 @@ export default function Home() {
           </section>
 
           {/* Footer */}
-          <footer className="text-center text-gray-600 py-8">
-            <p className="text-sm">
-              © 2024 DeaMap - Salvando vidas juntos
-            </p>
+          <footer className="bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-10">
+              <div className="grid md:grid-cols-3 gap-8 mb-8">
+                {/* DeaMap Info */}
+                <div>
+                  <h3 className="font-bold text-lg mb-3 text-white">DeaMap</h3>
+                  <p className="text-gray-300 text-sm leading-relaxed">
+                    Mapa colaborativo de desfibriladores en España
+                  </p>
+                </div>
+
+                {/* Global Emergency Link */}
+                <div>
+                  <h3 className="font-bold text-lg mb-3 text-white">Proyecto de</h3>
+                  <a
+                    href="https://www.globalemergency.online/proyectos/deamap"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors group"
+                  >
+                    <span className="font-semibold">Global Emergency</span>
+                    <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                  <p className="text-gray-400 text-xs mt-2">
+                    Mejorando la respuesta ante emergencias
+                  </p>
+                </div>
+
+                {/* Enlaces rápidos */}
+                <div>
+                  <h3 className="font-bold text-lg mb-3 text-white">Enlaces</h3>
+                  <ul className="space-y-2 text-sm">
+                    <li>
+                      <Link href="/dea/new-simple" className="text-gray-300 hover:text-white transition-colors inline-flex items-center gap-1">
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        Agregar un DEA
+                      </Link>
+                    </li>
+                    <li>
+                      <a
+                        href="https://www.globalemergency.online"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-300 hover:text-white transition-colors inline-flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Global Emergency
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-700 pt-6 text-center text-sm text-gray-400">
+                <p>© 2024 DeaMap - Salvando vidas juntos</p>
+              </div>
+            </div>
           </footer>
         </div>
       </div>

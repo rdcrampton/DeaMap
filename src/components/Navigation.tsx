@@ -88,9 +88,20 @@ export default function Navigation() {
                 priority
               />
             </div>
-            <span className="text-base sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              deamap.es
-            </span>
+            <div className="flex flex-col">
+              <span className="text-base sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                deamap.es
+              </span>
+              <a
+                href="https://www.globalemergency.online/proyectos/deamap"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[9px] sm:text-[10px] text-gray-500 hover:text-gray-700 transition-colors -mt-0.5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                by Global Emergency
+              </a>
+            </div>
           </Link>
 
           {/* Desktop Navigation */}

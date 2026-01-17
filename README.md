@@ -1,6 +1,8 @@
-# DEA Madrid - Desfibriladores Automáticos Externos
+# DeaMap - Mapa Colaborativo de Desfibriladores
 
-Aplicación para gestionar y visualizar la ubicación de desfibriladores (DEAs) en Madrid.
+Aplicación para gestionar y visualizar la ubicación de desfibriladores (DEAs) en España.
+
+**Proyecto desarrollado por [Global Emergency](https://www.globalemergency.online/proyectos/deamap)** - Organización dedicada a mejorar la respuesta ante emergencias.
 
 ## 🚀 Deployment en Vercel
 
