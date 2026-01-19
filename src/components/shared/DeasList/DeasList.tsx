@@ -1,0 +1,222 @@
+/**
+ * Unified DEAs List Component
+ * Mobile-first responsive list with filtering and pagination
+ * Use cases: Public org view, Admin org view, Admin global view
+ */
+
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { MapPin, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { DataListFilters } from "../DataListFilters";
+import { DataListPagination } from "../DataListPagination";
+import { DeaListItem } from "./DeaListItem";
+import type { DeaListItem as DeaItem, DeasListConfig } from "@/types/dea-list.types";
+import type { ApiResponse, PermissionContext } from "@/types/data-list.types";
+
+interface DeasListProps {
+  organizationId?: string;
+  config: DeasListConfig;
+}
+
+export function DeasList({ organizationId, config }: DeasListProps) {
+  const [deas, setDeas] = useState<DeaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [_permissions, _setPermissions] = useState<PermissionContext>(config.permissions);
+
+  // Filter state
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentLimit, setCurrentLimit] = useState(
+    config.pagination?.defaultLimit || 25
+  );
+  const [paginationInfo, setPaginationInfo] = useState<any>(null);
+
+  // Fetch DEAs from unified API
+  const fetchDeas = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Build query params
+      const params = new URLSearchParams();
+
+      if (organizationId) {
+        params.set("organization_id", organizationId);
+      }
+
+      if (config.pagination?.enabled && config.pagination.serverSide) {
+        params.set("page", currentPage.toString());
+        params.set("limit", currentLimit.toString());
+      }
+
+      // Apply filters
+      Object.entries(filterValues).forEach(([key, value]) => {
+        if (value) {
+          params.set(key, value);
+        }
+      });
+
+      const response = await fetch(`/api/deas?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error("Error al cargar los DEAs");
+      }
+
+      const data: ApiResponse<DeaItem> = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Error al cargar los DEAs");
+      }
+
+      setDeas(data.data || []);
+      setPaginationInfo(data.pagination);
+
+      if (data.permissions) {
+        _setPermissions(data.permissions);
+      }
+    } catch (err: any) {
+      setError(err.message || "Error desconocido");
+      setDeas([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [organizationId, filterValues, currentPage, currentLimit, config.pagination]);
+
+  // Fetch on mount and when dependencies change
+  useEffect(() => {
+    fetchDeas();
+  }, [fetchDeas]);
+
+  // Handle filter change
+  const handleFilterChange = (key: string, value: string) => {
+    setFilterValues((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+    // Reset to first page when filters change
+    setCurrentPage(1);
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top on page change
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Handle limit change
+  const handleLimitChange = (limit: number) => {
+    setCurrentLimit(limit);
+    setCurrentPage(1); // Reset to first page
+  };
+
+  // Count active filters
+  const activeFiltersCount = Object.values(filterValues).filter(
+    (value) => value !== "" && value !== "all"
+  ).length;
+
+  // Loading state
+  if (loading && deas.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="px-4 py-6">
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Total count */}
+      <div className="px-4">
+        <p className="text-sm text-gray-600">
+          {paginationInfo?.totalCount || deas.length} desfibriladores
+          {organizationId ? " asignados" : ""}
+        </p>
+      </div>
+
+      {/* Filters Toggle Button */}
+      {config.filters && config.filters.length > 0 && (
+        <div className="px-4">
+          <button
+            onClick={() => setFiltersExpanded(!filtersExpanded)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Filter className="w-4 h-4" />
+            <span>Filtros</span>
+            {activeFiltersCount > 0 && (
+              <span className="px-2 py-0.5 text-xs font-semibold text-white bg-blue-600 rounded-full">
+                {activeFiltersCount}
+              </span>
+            )}
+            {filtersExpanded ? (
+              <ChevronUp className="w-4 h-4 ml-1" />
+            ) : (
+              <ChevronDown className="w-4 h-4 ml-1" />
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Filters (Collapsible) */}
+      {config.filters && config.filters.length > 0 && filtersExpanded && (
+        <div className="px-4">
+          <DataListFilters
+            filters={config.filters}
+            values={filterValues}
+            onChange={handleFilterChange}
+          />
+        </div>
+      )}
+
+      {/* Results count */}
+      {deas.length > 0 && (
+        <p className="px-4 text-sm text-gray-600">{deas.length} resultados</p>
+      )}
+
+      {/* DEAs List */}
+      <div className="space-y-3">
+        {deas.length === 0 ? (
+          <div className="text-center py-12">
+            <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600">
+              {config.emptyMessage || "No se encontraron DEAs"}
+            </p>
+          </div>
+        ) : (
+          deas.map((dea) => (
+            <DeaListItem
+              key={dea.id}
+              dea={dea}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Pagination */}
+      {config.pagination?.enabled && paginationInfo && (
+        <DataListPagination
+          pagination={paginationInfo}
+          onPageChange={handlePageChange}
+          onLimitChange={config.pagination.serverSide ? handleLimitChange : undefined}
+          limitOptions={config.pagination.limitOptions}
+        />
+      )}
+    </div>
+  );
+}
