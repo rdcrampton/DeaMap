@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginForm() {
-  const router = useRouter();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
@@ -23,7 +21,8 @@ export default function LoginForm() {
 
     try {
       await login(formData);
-      router.push("/");
+      // Usar recarga completa para asegurar que el estado se actualice correctamente
+      window.location.href = "/";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al iniciar sesión");
     } finally {

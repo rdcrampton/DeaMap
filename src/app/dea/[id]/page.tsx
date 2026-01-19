@@ -10,6 +10,8 @@ import {
   Phone,
   Navigation,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -23,6 +25,7 @@ export default function DeaDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     const fetchAed = async () => {
@@ -86,27 +89,99 @@ export default function DeaDetailPage() {
 
   const address = `${aed.location.street_type} ${aed.location.street_name}, ${aed.location.street_number || ""}`;
   const is24h = aed.schedule?.has_24h_surveillance || false;
-  const hasImage = aed.images && aed.images.length > 0;
-  const heroImage =
-    hasImage && aed.images ? aed.images[0]?.processed_url || aed.images[0]?.original_url : null;
+  const verifiedImages = aed.images || [];
+  const hasImages = verifiedImages.length > 0;
+  const currentImage = hasImages ? verifiedImages[currentImageIndex] : null;
+  const currentImageUrl = currentImage?.processed_url || currentImage?.original_url || null;
+
+  // Image type labels in Spanish
+  const imageTypeLabels: Record<string, string> = {
+    FRONT: "Vista frontal",
+    LOCATION: "Ubicación",
+    ACCESS: "Acceso",
+    SIGNAGE: "Señalización",
+    CONTEXT: "Contexto",
+    PLATE: "Placa",
+  };
+
+  // Navigate to next image
+  const handleNextImage = () => {
+    if (hasImages) {
+      setCurrentImageIndex((prev) => (prev + 1) % verifiedImages.length);
+    }
+  };
+
+  // Navigate to previous image
+  const handlePrevImage = () => {
+    if (hasImages) {
+      setCurrentImageIndex((prev) => (prev - 1 + verifiedImages.length) % verifiedImages.length);
+    }
+  };
+
+  // Handle keyboard navigation in lightbox
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowRight") handleNextImage();
+    if (e.key === "ArrowLeft") handlePrevImage();
+    if (e.key === "Escape") setShowLightbox(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white pb-24">
       {/* Header */}
       <header className="relative">
-        {/* Hero Image */}
+        {/* Hero Image Gallery */}
         <div className="relative w-full aspect-square max-h-80 md:max-h-96 bg-gradient-to-b from-gray-800 to-gray-700 flex items-center justify-center">
-          {heroImage ? (
+          {currentImageUrl ? (
             <>
               <img
-                src={heroImage}
-                alt={aed.name}
+                src={currentImageUrl}
+                alt={`${aed.name} - ${currentImage ? imageTypeLabels[currentImage.type] || currentImage.type : ""}`}
                 className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={() => setShowLightbox(true)}
               />
-              <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-2 rounded-lg text-sm pointer-events-none flex items-center gap-2">
+              
+              {/* Image Type Badge */}
+              {currentImage && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-xs font-medium">
+                  {imageTypeLabels[currentImage.type] || currentImage.type}
+                </div>
+              )}
+
+              {/* Navigation Arrows - Only show if multiple images */}
+              {verifiedImages.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePrevImage();
+                    }}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-2 transition-all z-10"
+                    aria-label="Imagen anterior"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNextImage();
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full p-2 transition-all z-10"
+                    aria-label="Imagen siguiente"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+                </>
+              )}
+
+              {/* Image Counter & Zoom Hint */}
+              <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                {verifiedImages.length > 1 && (
+                  <span className="font-medium">
+                    {currentImageIndex + 1} / {verifiedImages.length}
+                  </span>
+                )}
                 <span className="text-xl">🔍</span>
-                <span>Click para ampliar</span>
+                <span className="hidden sm:inline">Click para ampliar</span>
               </div>
             </>
           ) : (
@@ -118,6 +193,32 @@ export default function DeaDetailPage() {
           {/* Overlay gradient */}
           <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent pointer-events-none" />
         </div>
+
+        {/* Thumbnails Gallery - Only show if multiple images */}
+        {verifiedImages.length > 1 && (
+          <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+              {verifiedImages.map((image, index) => (
+                <button
+                  key={image.id}
+                  onClick={() => setCurrentImageIndex(index)}
+                  className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                    index === currentImageIndex
+                      ? "border-teal-500 ring-2 ring-teal-500/50"
+                      : "border-gray-600 hover:border-gray-400"
+                  }`}
+                  aria-label={`Ver ${imageTypeLabels[image.type] || image.type}`}
+                >
+                  <img
+                    src={image.processed_url || image.original_url}
+                    alt={imageTypeLabels[image.type] || image.type}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Back button */}
         <button
@@ -134,25 +235,75 @@ export default function DeaDetailPage() {
         </div>
       </header>
 
-      {/* Lightbox Modal */}
-      {showLightbox && heroImage && (
+      {/* Enhanced Lightbox Modal with Navigation */}
+      {showLightbox && currentImageUrl && (
         <div
           className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4"
           onClick={() => setShowLightbox(false)}
+          onKeyDown={handleKeyDown}
+          tabIndex={0}
         >
+          {/* Close Button */}
           <button
             onClick={() => setShowLightbox(false)}
-            className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white rounded-full p-3 transition-all"
+            className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white rounded-full p-3 transition-all z-10"
             aria-label="Cerrar lightbox"
           >
             <X className="w-6 h-6" />
           </button>
+
+          {/* Image Counter */}
+          {verifiedImages.length > 1 && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-3 rounded-lg z-10">
+              <span className="font-medium">
+                {currentImageIndex + 1} / {verifiedImages.length}
+              </span>
+              <span className="text-sm text-gray-300 ml-2">
+                {currentImage ? imageTypeLabels[currentImage.type] || currentImage.type : ""}
+              </span>
+            </div>
+          )}
+
+          {/* Navigation Arrows */}
+          {verifiedImages.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevImage();
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white rounded-full p-3 transition-all z-10"
+                aria-label="Imagen anterior"
+              >
+                <ChevronLeft className="w-8 h-8" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextImage();
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white rounded-full p-3 transition-all z-10"
+                aria-label="Imagen siguiente"
+              >
+                <ChevronRight className="w-8 h-8" />
+              </button>
+            </>
+          )}
+
+          {/* Main Image */}
           <img
-            src={heroImage}
-            alt={aed.name}
+            src={currentImageUrl}
+            alt={`${aed.name} - ${currentImage ? imageTypeLabels[currentImage.type] || currentImage.type : ""}`}
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
+
+          {/* Keyboard Hints */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-lg text-sm hidden md:block">
+            <span className="text-gray-300">
+              Usa las flechas ← → para navegar • ESC para cerrar
+            </span>
+          </div>
         </div>
       )}
 

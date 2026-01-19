@@ -602,14 +602,33 @@ export default function VerifyPage({ params }: VerifyPageProps) {
           </div>
         );
 
-      case VerificationStep.REVIEW:
+      case VerificationStep.REVIEW: {
+        // Obtener imágenes validadas y procesadas desde validation.data
+        const validationData = data.validation.data as ImageProcessingState | null;
+        const validatedImages = validationData?.validated_images || [];
+        const processedImages = validationData?.processed_images || [];
+
+        // Agrupar por tipo
+        const frontImages = validatedImages.filter(img => img.type === 'FRONT');
+        const interiorImages = validatedImages.filter(img => img.type !== 'FRONT');
+
+        // Función auxiliar para verificar si una imagen tiene procesamiento
+        const getImageProcessing = (imageId: string) => {
+          const processed = processedImages.find(p => p.image_id === imageId);
+          return {
+            hasCrop: !!processed?.crop_data,
+            hasBlur: !!(processed?.blur_areas && processed.blur_areas.length > 0),
+            hasArrow: !!processed?.arrow_data,
+          };
+        };
+
         return (
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-2xl font-bold mb-4">{stepConfig.title}</h2>
             <p className="text-gray-600 mb-6">{stepConfig.description}</p>
 
             {/* Review summary */}
-            <div className="space-y-4 mb-6">
+            <div className="space-y-6 mb-6">
               <div className="border-b pb-4">
                 <h3 className="font-semibold text-lg mb-2">Información del DEA</h3>
                 <p className="text-sm text-gray-700">
@@ -634,10 +653,103 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               </div>
 
               <div className="border-b pb-4">
-                <h3 className="font-semibold text-lg mb-2">Imágenes</h3>
-                <p className="text-sm text-gray-700">
-                  {data.aed.images.length} imagen(es) procesada(s)
+                <h3 className="font-semibold text-lg mb-2">Imágenes Verificadas</h3>
+                <p className="text-sm text-gray-700 mb-4">
+                  <strong>Total: {validatedImages.length} imagen(es)</strong>
+                  {frontImages.length > 0 && ` • ${frontImages.length} frontal(es)`}
+                  {interiorImages.length > 0 && ` • ${interiorImages.length} interior(es)`}
                 </p>
+
+                {/* Gallery of validated images */}
+                {validatedImages.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Front images */}
+                    {frontImages.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-600 mb-2">Imágenes Frontales</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                          {frontImages.map((img) => {
+                            const processing = getImageProcessing(img.id);
+                            return (
+                              <div key={img.id} className="group relative">
+                                <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                                  <img
+                                    src={img.url}
+                                    alt={`Frontal ${img.order}`}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
+                                    onClick={() => window.open(img.url, '_blank')}
+                                  />
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {processing.hasCrop && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded" title="Recortada">
+                                      ✂️
+                                    </span>
+                                  )}
+                                  {processing.hasBlur && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded" title="Difuminada">
+                                      🔒
+                                    </span>
+                                  )}
+                                  {processing.hasArrow && (
+                                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded" title="Con flecha">
+                                      🎯
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Interior images */}
+                    {interiorImages.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-600 mb-2">Imágenes de Interior</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                          {interiorImages.map((img) => {
+                            const processing = getImageProcessing(img.id);
+                            return (
+                              <div key={img.id} className="group relative">
+                                <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                                  <img
+                                    src={img.url}
+                                    alt={`Interior ${img.order}`}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
+                                    onClick={() => window.open(img.url, '_blank')}
+                                  />
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {processing.hasCrop && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded" title="Recortada">
+                                      ✂️
+                                    </span>
+                                  )}
+                                  {processing.hasBlur && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded" title="Difuminada">
+                                      🔒
+                                    </span>
+                                  )}
+                                  {processing.hasArrow && (
+                                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded" title="Con flecha">
+                                      🎯
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 italic">
+                    No se procesaron imágenes en esta verificación
+                  </div>
+                )}
               </div>
 
               {data.aed.responsible && (
@@ -679,6 +791,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
             </div>
           </div>
         );
+      }
 
       case VerificationStep.COMPLETED:
         return (
