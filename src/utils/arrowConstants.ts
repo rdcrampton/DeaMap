@@ -1,20 +1,19 @@
 /**
- * Arrow configuration constants for consistent arrow rendering
- * across all verification components
+ * Arrow Configuration Constants
+ * Compartido entre frontend (Canvas) y backend (Sharp)
+ * para garantizar consistencia visual
  */
+
 export const ARROW_CONFIG = {
-  /** Length of the arrow head (triangle) in pixels */
-  HEAD_LENGTH: 50,
-
-  /** Width of the arrow body (rectangle) in pixels */
-  BODY_WIDTH: 20,
-
-  /** Standard arrow color */
-  COLOR: '#dc2626',
-
-  /** Arrow stroke color for borders */
-  STROKE_COLOR: '#991b1b',
-
-  /** Arrow stroke width */
-  STROKE_WIDTH: 2,
+  // Dimensiones de la flecha
+  HEAD_LENGTH: 50,      // Longitud de la punta de la flecha
+  BODY_WIDTH: 20,       // Grosor del cuerpo de la flecha
+  
+  // Colores
+  COLOR: '#dc2626',     // Rojo principal (red-600)
+  STROKE_COLOR: '#991b1b', // Rojo oscuro para el contorno (red-800)
+  STROKE_WIDTH: 2,      // Grosor del contorno
+  
+  // Ángulo de la punta (en radianes)
+  HEAD_ANGLE: Math.PI / 6, // 30 grados
 } as const;

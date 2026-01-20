@@ -527,13 +527,14 @@ export default function VerifyPage({ params }: VerifyPageProps) {
 
             <ArrowPlacer
               imageUrl={currentBlurredImageUrl || currentImage.url} // Usar imagen con blur si está disponible
-              onArrowComplete={async (arrowData: ArrowData) => {
-                // Guardar la imagen procesada
+              onArrowComplete={async (arrowData: ArrowData, processedImageUrl?: string) => {
+                // Guardar la imagen procesada con la URL generada
                 const newProcessedImage: ProcessedImageData = {
                   image_id: currentImage.id,
                   crop_data: currentCropData,
                   blur_areas: currentBlurAreas.length > 0 ? currentBlurAreas : undefined,
                   arrow_data: arrowData,
+                  processed_url: processedImageUrl, // Guardar la URL de la imagen procesada
                 };
 
                 const updatedProcessedImages = [...processedImages, newProcessedImage];
@@ -612,13 +613,14 @@ export default function VerifyPage({ params }: VerifyPageProps) {
         const frontImages = validatedImages.filter(img => img.type === 'FRONT');
         const interiorImages = validatedImages.filter(img => img.type !== 'FRONT');
 
-        // Función auxiliar para verificar si una imagen tiene procesamiento
+        // Función auxiliar para obtener info de procesamiento e imagen procesada
         const getImageProcessing = (imageId: string) => {
           const processed = processedImages.find(p => p.image_id === imageId);
           return {
             hasCrop: !!processed?.crop_data,
             hasBlur: !!(processed?.blur_areas && processed.blur_areas.length > 0),
             hasArrow: !!processed?.arrow_data,
+            processedUrl: processed?.processed_url, // URL de la imagen procesada
           };
         };
 
@@ -670,14 +672,16 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                           {frontImages.map((img) => {
                             const processing = getImageProcessing(img.id);
+                            // Usar imagen procesada si existe, si no usar original
+                            const displayUrl = processing.processedUrl || img.url;
                             return (
                               <div key={img.id} className="group relative">
                                 <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                                   <img
-                                    src={img.url}
+                                    src={displayUrl}
                                     alt={`Frontal ${img.order}`}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
-                                    onClick={() => window.open(img.url, '_blank')}
+                                    onClick={() => window.open(displayUrl, '_blank')}
                                   />
                                 </div>
                                 <div className="mt-1 flex flex-wrap gap-1">
@@ -711,14 +715,16 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                           {interiorImages.map((img) => {
                             const processing = getImageProcessing(img.id);
+                            // Usar imagen procesada si existe, si no usar original
+                            const displayUrl = processing.processedUrl || img.url;
                             return (
                               <div key={img.id} className="group relative">
                                 <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                                   <img
-                                    src={img.url}
+                                    src={displayUrl}
                                     alt={`Interior ${img.order}`}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
-                                    onClick={() => window.open(img.url, '_blank')}
+                                    onClick={() => window.open(displayUrl, '_blank')}
                                   />
                                 </div>
                                 <div className="mt-1 flex flex-wrap gap-1">

@@ -100,6 +100,7 @@ export interface ProcessedImageData {
   crop_data?: CropData;
   blur_areas?: BlurArea[];
   arrow_data?: ArrowData;
+  processed_url?: string; // URL temporal (data URL) de la imagen procesada para preview
 }
 
 export interface ImageProcessingState {

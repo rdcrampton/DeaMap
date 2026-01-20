@@ -5,6 +5,7 @@
 
 import sharp from 'sharp';
 import type { BlurArea, CropData, ArrowData } from '@/types/shared';
+import { ARROW_CONFIG } from '@/utils/arrowConstants';
 
 export interface ProcessImageOptions {
   imageBuffer: Buffer;
@@ -108,24 +109,29 @@ export async function processImage(options: ProcessImageOptions): Promise<Buffer
 }
 
 /**
- * Genera SVG de una flecha
+ * Genera SVG de una flecha usando constantes compartidas
  */
 function generateArrowSVG(arrowData: ArrowData, width: number, height: number): string {
-  const { startX, startY, endX, endY, color = '#dc2626', width: _arrowWidth = 40 } = arrowData;
+  const { startX, startY, endX, endY } = arrowData;
+
+  // Usar constantes compartidas para consistencia con frontend
+  const color = ARROW_CONFIG.COLOR;
+  const headLength = ARROW_CONFIG.HEAD_LENGTH;
+  const bodyWidth = ARROW_CONFIG.BODY_WIDTH;
+  const strokeColor = ARROW_CONFIG.STROKE_COLOR;
+  const strokeWidth = ARROW_CONFIG.STROKE_WIDTH;
+  const headAngle = ARROW_CONFIG.HEAD_ANGLE;
 
   // Calcular ángulo y dimensiones
   const dx = endX - startX;
   const dy = endY - startY;
   const angle = Math.atan2(dy, dx);
 
-  const headLength = 50;
-  const bodyWidth = 20;
-
   // Puntos de la punta de la flecha
-  const headX1 = endX - headLength * Math.cos(angle - Math.PI / 6);
-  const headY1 = endY - headLength * Math.sin(angle - Math.PI / 6);
-  const headX2 = endX - headLength * Math.cos(angle + Math.PI / 6);
-  const headY2 = endY - headLength * Math.sin(angle + Math.PI / 6);
+  const headX1 = endX - headLength * Math.cos(angle - headAngle);
+  const headY1 = endY - headLength * Math.sin(angle - headAngle);
+  const headX2 = endX - headLength * Math.cos(angle + headAngle);
+  const headY2 = endY - headLength * Math.sin(angle + headAngle);
 
   // Punto donde termina el cuerpo de la flecha
   const bodyEndX = endX - headLength * Math.cos(angle);
@@ -148,8 +154,8 @@ function generateArrowSVG(arrowData: ArrowData, width: number, height: number): 
       <polygon
         points="${endX},${endY} ${headX1},${headY1} ${headX2},${headY2}"
         fill="${color}"
-        stroke="#991b1b"
-        stroke-width="2"
+        stroke="${strokeColor}"
+        stroke-width="${strokeWidth}"
       />
     </svg>
   `;

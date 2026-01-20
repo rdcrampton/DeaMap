@@ -7,7 +7,7 @@ import { ARROW_CONFIG } from "@/utils/arrowConstants";
 
 interface ArrowPlacerProps {
   imageUrl: string;
-  onArrowComplete: (arrowData: ArrowData) => void;
+  onArrowComplete: (arrowData: ArrowData, processedImageUrl?: string) => void;
   onCancel: () => void;
 }
 
@@ -82,7 +82,7 @@ export default function ArrowPlacer({ imageUrl, onArrowComplete, onCancel }: Arr
     }
   };
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (arrowStart && arrowEnd) {
       const arrowData: ArrowData = {
         id: `arrow_${Date.now()}`,
@@ -93,8 +93,95 @@ export default function ArrowPlacer({ imageUrl, onArrowComplete, onCancel }: Arr
         color: "#dc2626",
         width: 40,
       };
-      onArrowComplete(arrowData);
+
+      // Generar imagen procesada con la flecha dibujada
+      try {
+        const processedImageUrl = await generateProcessedImage(imageUrl, arrowData, imageDimensions);
+        onArrowComplete(arrowData, processedImageUrl);
+      } catch (error) {
+        console.error("Error generating processed image:", error);
+        // Continuar sin la imagen procesada
+        onArrowComplete(arrowData);
+      }
     }
+  };
+
+  const generateProcessedImage = async (
+    imageUrl: string,
+    arrowData: ArrowData,
+    dimensions: { width: number; height: number }
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      // Configurar tamaño del canvas
+      canvas.width = dimensions.width;
+      canvas.height = dimensions.height;
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        // Dibujar imagen base
+        ctx.drawImage(img, 0, 0, dimensions.width, dimensions.height);
+
+        // Dibujar flecha
+        const startX = arrowData.startX;
+        const startY = arrowData.startY;
+        const endX = arrowData.endX;
+        const endY = arrowData.endY;
+
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const angle = Math.atan2(dy, dx);
+
+        const headLength = ARROW_CONFIG.HEAD_LENGTH;
+        const bodyWidth = ARROW_CONFIG.BODY_WIDTH;
+
+        // Dibujar cuerpo de la flecha
+        ctx.strokeStyle = ARROW_CONFIG.COLOR;
+        ctx.lineWidth = bodyWidth;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX - headLength * Math.cos(angle), endY - headLength * Math.sin(angle));
+        ctx.stroke();
+
+        // Dibujar punta de la flecha
+        ctx.fillStyle = ARROW_CONFIG.COLOR;
+        ctx.strokeStyle = ARROW_CONFIG.STROKE_COLOR;
+        ctx.lineWidth = ARROW_CONFIG.STROKE_WIDTH;
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(
+          endX - headLength * Math.cos(angle - Math.PI / 6),
+          endY - headLength * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          endX - headLength * Math.cos(angle + Math.PI / 6),
+          endY - headLength * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Convertir a data URL
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        resolve(dataUrl);
+      };
+
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+
+      img.src = imageUrl;
+    });
   };
 
   const reset = () => {
