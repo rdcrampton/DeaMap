@@ -12,9 +12,10 @@ import type { DeaListItem as DeaItemType } from "@/types/dea-list.types";
 
 interface DeaListItemProps {
   dea: DeaItemType;
+  adminMode?: boolean;
 }
 
-export function DeaListItem({ dea }: DeaListItemProps) {
+export function DeaListItem({ dea, adminMode = false }: DeaListItemProps) {
   const needsVerification = (lastVerified: Date | null) => {
     if (!lastVerified) return true;
     const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
@@ -24,9 +25,11 @@ export function DeaListItem({ dea }: DeaListItemProps) {
   const isActive = dea.assignment_status === "ACTIVE";
   const requiresVerification = needsVerification(dea.last_verified_at);
 
+  const linkHref = adminMode ? `/admin/deas/${dea.id}` : `/dea/${dea.id}`;
+
   return (
     <Link
-      href={`/dea/${dea.id}`}
+      href={linkHref}
       className="
         block bg-white rounded-xl border border-gray-200 
         hover:border-blue-300 hover:shadow-md transition-all active:scale-[0.99]

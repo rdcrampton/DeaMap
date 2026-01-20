@@ -19,6 +19,7 @@ export default function AdminDeasPage() {
         </div>
 
         <DeasList
+          adminMode={true}
           config={{
             filters: [
               {

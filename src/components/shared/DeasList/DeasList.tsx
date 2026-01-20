@@ -17,9 +17,10 @@ import type { ApiResponse, PermissionContext } from "@/types/data-list.types";
 interface DeasListProps {
   organizationId?: string;
   config: DeasListConfig;
+  adminMode?: boolean;
 }
 
-export function DeasList({ organizationId, config }: DeasListProps) {
+export function DeasList({ organizationId, config, adminMode = false }: DeasListProps) {
   const [deas, setDeas] = useState<DeaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -203,6 +204,7 @@ export function DeasList({ organizationId, config }: DeasListProps) {
             <DeaListItem
               key={dea.id}
               dea={dea}
+              adminMode={adminMode}
             />
           ))
         )}
