@@ -167,83 +167,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const createUseCase = new CreateBatchJobUseCase(orchestrator);
 
-    // Wrap execution with timeout handling
-    const executionTimeout = 85000; // 85 seconds
-    let result: Awaited<ReturnType<typeof createUseCase.execute>>;
-
-    try {
-      const executionPromise = createUseCase.execute({
-        type: JobType.AED_EXTERNAL_SYNC,
-        name: `Sync: ${dataSource.name}`,
-        description: `Sincronización automática desde ${dataSource.type}`,
-        config,
-        createdBy: user.userId,
-        dataSourceId: id,
-        startImmediately: true,
-        metadata: {
-          dataSourceName: dataSource.name,
-          dataSourceType: dataSource.type,
-          regionCode: dataSource.region_code,
-        },
-        tags: ["sync", dataSource.region_code, dataSource.type.toLowerCase()],
-      });
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("EXECUTION_TIMEOUT")), executionTimeout)
-      );
-
-      result = (await Promise.race([executionPromise, timeoutPromise])) as Awaited<
-        ReturnType<typeof createUseCase.execute>
-      >;
-    } catch (timeoutError) {
-      // If timeout occurs, try to find and mark the job as interrupted
-      console.error("Sync execution timeout:", timeoutError);
-
-      // Try to find any recently created job for this data source
-      const recentJobs = await repository.findActiveJobs({
-        types: [JobType.AED_EXTERNAL_SYNC],
-      });
-
-      const recentJob = recentJobs.find((j) => {
-        const jobConfig = j.config as ExternalSyncConfig;
-        return jobConfig.dataSourceId === id;
-      });
-
-      if (recentJob) {
-        // Return the job info so client can continue it
-        return NextResponse.json({
-          success: true,
-          data: {
-            jobId: recentJob.id,
-            dataSourceId: id,
-            interrupted: true,
-            stats: {
-              total: recentJob.progress.totalRecords,
-              processed: recentJob.progress.processedRecords,
-              created: recentJob.progress.successfulRecords,
-              skipped: recentJob.progress.skippedRecords,
-              failed: recentJob.progress.failedRecords,
-            },
-            progress: {
-              total: recentJob.progress.totalRecords,
-              processed: recentJob.progress.processedRecords,
-              percentage: recentJob.progress.percentage,
-              hasMore: true,
-              status: recentJob.status,
-            },
-          },
-          message: `Sincronización en progreso: ${recentJob.progress.processedRecords}/${recentJob.progress.totalRecords}. Continúa automáticamente.`,
-        });
-      }
-
-      return NextResponse.json(
-        {
-          error: "La sincronización está tomando más tiempo del esperado",
-          details: "El proceso continúa en segundo plano. Recarga la página para ver el progreso.",
-        },
-        { status: 202 } // Accepted
-      );
-    }
+    // Create job but DON'T start it immediately
+    // Let the cron job pick it up and process it in the background
+    // This avoids Vercel's 30-second timeout limit
+    const result = await createUseCase.execute({
+      type: JobType.AED_EXTERNAL_SYNC,
+      name: `Sync: ${dataSource.name}`,
+      description: `Sincronización automática desde ${dataSource.type}`,
+      config,
+      createdBy: user.userId,
+      dataSourceId: id,
+      startImmediately: false, // Let cron job handle execution
+      metadata: {
+        dataSourceName: dataSource.name,
+        dataSourceType: dataSource.type,
+        regionCode: dataSource.region_code,
+      },
+      tags: ["sync", dataSource.region_code, dataSource.type.toLowerCase()],
+    });
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
@@ -252,6 +193,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const job = result.job!;
     const progress = job.progress;
 
+    // Return immediately - the cron job will process it
     return NextResponse.json({
       success: true,
       data: {
@@ -273,9 +215,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           status: job.status,
         },
       },
-      message: progress.hasMore
-        ? `Sincronización iniciada: ${progress.processedRecords}/${progress.totalRecords} registros (${progress.percentage}%)`
-        : `Sincronización completada: ${progress.successfulRecords} exitosos`,
+      message: `Sincronización programada. El proceso se ejecutará automáticamente en segundo plano.`,
     });
   } catch (error) {
     console.error("Error during sync:", error);

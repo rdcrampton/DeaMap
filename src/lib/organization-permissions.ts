@@ -316,6 +316,15 @@ export async function getEffectivePublicationMode(aedId: string) {
 }
 
 /**
+ * Filter types for verification lists
+ */
+export type VerificationFilterType =
+  | "pending"              // DRAFT, PENDING_REVIEW - no verificados
+  | "published_unverified" // PUBLISHED pero sin verificación manual (last_verified_at is null)
+  | "published_verified"   // PUBLISHED con verificación manual
+  | "all_published";       // Todos los PUBLISHED
+
+/**
  * Get AEDs that a user can verify based on their role and organization memberships
  *
  * Rules:
@@ -331,25 +340,81 @@ export async function getVerifiableAedsForUser(
     organization_id?: string;
     page?: number;
     limit?: number;
+    filter_type?: VerificationFilterType;
+    search?: string;
   }
 ) {
   const page = filters?.page || 1;
   const limit = filters?.limit || 12;
   const skip = (page - 1) * limit;
+  const filterType = filters?.filter_type || "pending";
+  const searchTerm = filters?.search?.trim();
 
-  // Default status filter: DRAFT and PENDING_REVIEW
-  const statusFilter = filters?.status || ["DRAFT", "PENDING_REVIEW"];
+  // Build where clause based on filter_type
+  let statusFilter: string[];
+  let additionalWhere: Record<string, unknown> = {};
+
+  // Build search filter if search term provided
+  const searchWhere = searchTerm
+    ? {
+        OR: [
+          { code: { contains: searchTerm, mode: "insensitive" as const } },
+          { name: { contains: searchTerm, mode: "insensitive" as const } },
+          { external_reference: { contains: searchTerm, mode: "insensitive" as const } },
+          {
+            location: {
+              OR: [
+                { street_name: { contains: searchTerm, mode: "insensitive" as const } },
+                { city_name: { contains: searchTerm, mode: "insensitive" as const } },
+              ],
+            },
+          },
+        ],
+      }
+    : {};
+
+  switch (filterType) {
+    case "published_unverified":
+      // Publicados pero SIN verificación manual
+      statusFilter = ["PUBLISHED"];
+      additionalWhere = {
+        last_verified_at: null,
+      };
+      break;
+    case "published_verified":
+      // Publicados CON verificación manual
+      statusFilter = ["PUBLISHED"];
+      additionalWhere = {
+        last_verified_at: { not: null },
+      };
+      break;
+    case "all_published":
+      // Todos los publicados
+      statusFilter = ["PUBLISHED"];
+      break;
+    case "pending":
+    default:
+      // Pendientes de revisión (comportamiento original)
+      statusFilter = filters?.status || ["DRAFT", "PENDING_REVIEW"];
+      additionalWhere = {
+        requires_attention: false,
+      };
+      break;
+  }
 
   // ADMIN: can see all AEDs
   if (userRole === "ADMIN") {
+    const whereClause = {
+      status: {
+        in: statusFilter as any,
+      },
+      ...additionalWhere,
+      ...searchWhere,
+    };
+
     const [aeds, totalCount] = await Promise.all([
       prisma.aed.findMany({
-        where: {
-          status: {
-            in: statusFilter as any,
-          },
-          requires_attention: false,
-        },
+        where: whereClause,
         include: {
           location: true,
           images: {
@@ -369,12 +434,7 @@ export async function getVerifiableAedsForUser(
         take: limit,
       }),
       prisma.aed.count({
-        where: {
-          status: {
-            in: statusFilter as any,
-          },
-          requires_attention: false,
-        },
+        where: whereClause,
       }),
     ]);
 
@@ -424,15 +484,18 @@ export async function getVerifiableAedsForUser(
   }
 
   // Get AEDs with filters
+  const whereClause = {
+    id: { in: aedIds },
+    status: {
+      in: statusFilter as any,
+    },
+    ...additionalWhere,
+    ...searchWhere,
+  };
+
   const [aeds, totalCount] = await Promise.all([
     prisma.aed.findMany({
-      where: {
-        id: { in: aedIds },
-        status: {
-          in: statusFilter as any,
-        },
-        requires_attention: false,
-      },
+      where: whereClause,
       include: {
         location: true,
         images: {
@@ -452,13 +515,7 @@ export async function getVerifiableAedsForUser(
       take: limit,
     }),
     prisma.aed.count({
-      where: {
-        id: { in: aedIds },
-        status: {
-          in: statusFilter as any,
-        },
-        requires_attention: false,
-      },
+      where: whereClause,
     }),
   ]);
 

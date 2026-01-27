@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(npm run build:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(psql:*)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git diff:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx prettier:*)"
     ],
     "deny": [],
     "ask": []

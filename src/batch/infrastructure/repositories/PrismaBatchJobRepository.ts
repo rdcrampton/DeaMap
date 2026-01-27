@@ -137,7 +137,16 @@ export class PrismaBatchJobRepository implements IBatchJobRepository {
     organizationId?: string;
     createdBy?: string;
   }): Promise<BatchJob[]> {
-    const activeStatuses: BatchJobStatus[] = ["IN_PROGRESS", "WAITING", "RESUMING"];
+    // Include all non-terminal states to prevent duplicate jobs for same data source
+    const activeStatuses: BatchJobStatus[] = [
+      "PENDING",
+      "QUEUED", 
+      "IN_PROGRESS", 
+      "WAITING", 
+      "RESUMING",
+      "PAUSED",
+      "INTERRUPTED"
+    ];
 
     const jobs = await this.prisma.batchJob.findMany({
       where: {

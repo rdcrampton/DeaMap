@@ -458,23 +458,23 @@ export class BatchJobOrchestrator {
     try {
       const chunkResult = await processor.processChunk(context);
 
-      // Update progress
+      // Update progress: first set total processedRecords
       let progress = job.progress
         .withProcessed(job.progress.processedRecords + chunkResult.processedCount)
         .withLastProcessedIndex(chunkResult.nextIndex - 1)
         .advanceChunk()
         .calculateEstimatedRemaining();
 
-      // Update detailed counts and collect errors
+      // Then classify each result (without incrementing processedRecords again)
       for (const result of chunkResult.results) {
         if (result.success) {
           if (result.action === "skipped") {
-            progress = progress.incrementSkipped();
+            progress = progress.incrementSkippedCount();
           } else {
-            progress = progress.incrementSuccess();
+            progress = progress.incrementSuccessCount();
           }
         } else {
-          progress = progress.incrementFailed();
+          progress = progress.incrementFailedCount();
           if (result.error) {
             // Add error to JobResult for user feedback
             const currentResult = job.result.addError({

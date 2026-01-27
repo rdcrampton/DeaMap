@@ -3,6 +3,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 import { Toaster } from "react-hot-toast";
 
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 import Navigation from "@/components/Navigation";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body className="font-sans antialiased">
+        <GoogleAnalytics />
         <AuthProvider>
           <OrganizationProvider>
             <Navigation />

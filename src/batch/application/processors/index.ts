@@ -17,6 +17,10 @@ import { AedExportProcessor } from "./AedExportProcessor";
 import { HttpImageDownloader } from "@/storage/infrastructure/adapters/HttpImageDownloader";
 import { S3ImageStorageAdapter } from "@/storage/infrastructure/adapters/S3ImageStorageAdapter";
 import { DownloadAndUploadImageUseCase } from "@/storage/application/use-cases/DownloadAndUploadImageUseCase";
+import { PrismaDuplicateDetectionAdapter } from "@/import/infrastructure/adapters/PrismaDuplicateDetectionAdapter";
+import { PostgreSqlTextNormalizer } from "@/import/infrastructure/services/PostgreSqlTextNormalizer";
+import { EnrichLocationWithGeocodingUseCase } from "@/location/application/use-cases/EnrichLocationWithGeocodingUseCase";
+import { GoogleGeocodingService } from "@/location/infrastructure/services/GoogleGeocodingService";
 
 /**
  * Initialize and register all processors
@@ -38,11 +42,35 @@ export function initializeProcessors(
   );
 
   // ========================================
+  // Initialize duplicate detection service
+  // ========================================
+  const textNormalizationService = new PostgreSqlTextNormalizer();
+  const duplicateDetectionService = new PrismaDuplicateDetectionAdapter(
+    prisma,
+    textNormalizationService
+  );
+
+  // ========================================
+  // Initialize geocoding enrichment service
+  // Uses Google Maps Geocoding API directly for batch processing
+  // ========================================
+  const geocodingService = new GoogleGeocodingService();
+  const enrichLocationUseCase = new EnrichLocationWithGeocodingUseCase(
+    prisma,
+    geocodingService
+  );
+
+  // ========================================
   // Register processors
   // ========================================
   registry.register(
     JobType.AED_EXTERNAL_SYNC,
-    new ExternalSyncProcessor(prisma, dataSourceRepository)
+    new ExternalSyncProcessor(
+      prisma,
+      dataSourceRepository,
+      duplicateDetectionService,
+      enrichLocationUseCase
+    )
   );
 
   registry.register(

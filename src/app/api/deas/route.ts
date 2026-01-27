@@ -155,6 +155,7 @@ export async function GET(request: NextRequest) {
                 postal_code: true,
                 city_name: true,
                 district_name: true,
+                geocoding_validation: true,
               },
             },
           },
@@ -174,6 +175,9 @@ export async function GET(request: NextRequest) {
         loc?.street_number,
       ].filter(Boolean);
 
+      // Extract coordinate validation data if present
+      const geoValidation = loc?.geocoding_validation as { status?: string; distance_meters?: number } | null;
+
       return {
         id: assignment.aed.id,
         name: assignment.aed.name,
@@ -188,6 +192,8 @@ export async function GET(request: NextRequest) {
         assignment_type: assignment.assignment_type,
         assignment_status: assignment.status,
         assigned_at: assignment.assigned_at,
+        coordinate_validation: geoValidation?.status || null,
+        coordinate_distance: geoValidation?.distance_meters || null,
       };
     });
 

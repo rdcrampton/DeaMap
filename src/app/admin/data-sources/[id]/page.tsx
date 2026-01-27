@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -193,21 +194,25 @@ export default function DataSourceDetailPage() {
     }
   }, [id]);
 
-  // Auto-refresh job status when there's an active job
+  // Initial fetch on mount
   useEffect(() => {
     fetchCurrentJob();
+  }, [fetchCurrentJob]);
 
+  // Auto-refresh job status when there's an active job
+  useEffect(() => {
     const interval = setInterval(() => {
+      // Check if we should poll based on latest currentJob state
       if (
         currentJob &&
-        ["IN_PROGRESS", "RESUMING", "WAITING", "QUEUED"].includes(currentJob.status)
+        ["IN_PROGRESS", "RESUMING", "WAITING", "QUEUED", "PENDING"].includes(currentJob.status)
       ) {
         fetchCurrentJob();
       }
     }, 5000); // Poll every 5 seconds
 
     return () => clearInterval(interval);
-  }, [fetchCurrentJob, currentJob]);
+  }, [currentJob, fetchCurrentJob]);
 
   const forceResetJob = async () => {
     if (!currentJob) return;
@@ -250,25 +255,20 @@ export default function DataSourceDetailPage() {
   const continueCurrentJob = async () => {
     if (!currentJob) return;
 
+    // Note: The cron job will automatically process jobs in WAITING/INTERRUPTED/PAUSED state
+    // This button is now informational - the job will continue automatically in the background
     try {
       setRecovering(true);
 
-      const response = await fetch(`/api/batch/${currentJob.id}/continue`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || "Error al continuar job");
-      }
-
-      // Refresh job status immediately
+      // Simply refresh to show current status
+      // The cron job handles actual execution every minute
       await fetchCurrentJob();
       await fetchDataSource();
+
+      // Show success message
+      alert("El job continuará automáticamente en segundo plano. El cron job lo procesará en el próximo ciclo (cada minuto).");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al continuar job");
+      setError(err instanceof Error ? err.message : "Error al actualizar estado del job");
     } finally {
       setRecovering(false);
     }
@@ -1235,6 +1235,19 @@ export default function DataSourceDetailPage() {
               <h2 className="text-lg font-medium text-gray-900">Sincronización</h2>
             </div>
             <div className="px-6 py-4 space-y-4">
+              {/* Info Banner */}
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                <div className="flex items-start">
+                  <span className="text-blue-600 text-lg mr-2">ℹ️</span>
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">Proceso en Segundo Plano</p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Las sincronizaciones se ejecutan automáticamente en segundo plano mediante un cron job que se ejecuta cada minuto.
+                      Esto evita timeouts y permite procesar grandes volúmenes de datos sin interrupciones.
+                    </p>
+                  </div>
+                </div>
+              </div>
               {/* Connection Test */}
               <div>
                 <button

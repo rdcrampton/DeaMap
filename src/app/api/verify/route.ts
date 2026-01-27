@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/auth";
-import { getVerifiableAedsForUser } from "@/lib/organization-permissions";
+import {
+  getVerifiableAedsForUser,
+  VerificationFilterType,
+} from "@/lib/organization-permissions";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +18,22 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "12");
     const organizationId = searchParams.get("organization_id") || undefined;
+    const filterType = (searchParams.get("filter_type") || "pending") as VerificationFilterType;
+    const search = searchParams.get("search") || undefined;
+
+    // Validate filter_type
+    const validFilterTypes: VerificationFilterType[] = [
+      "pending",
+      "published_unverified",
+      "published_verified",
+      "all_published",
+    ];
+    if (!validFilterTypes.includes(filterType)) {
+      return NextResponse.json(
+        { error: "Tipo de filtro no válido" },
+        { status: 400 }
+      );
+    }
 
     // Get AEDs based on user's role and organization memberships
     const { aeds, totalCount, userOrganizations } = await getVerifiableAedsForUser(
@@ -24,7 +43,8 @@ export async function GET(request: NextRequest) {
         page,
         limit,
         organization_id: organizationId,
-        status: ["DRAFT", "PENDING_REVIEW"],
+        filter_type: filterType,
+        search,
       }
     );
 

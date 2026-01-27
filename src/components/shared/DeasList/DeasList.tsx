@@ -37,6 +37,51 @@ export function DeasList({ organizationId, config, adminMode = false }: DeasList
   );
   const [paginationInfo, setPaginationInfo] = useState<any>(null);
 
+  // Organizations state
+  const [organizations, setOrganizations] = useState<Array<{ value: string; label: string }>>([]);
+  const [organizationsLoading, setOrganizationsLoading] = useState(false);
+
+  // Fetch organizations for filter
+  const fetchOrganizations = useCallback(async () => {
+    // Only fetch if there's an organization_id filter in config
+    const orgFilter = config.filters?.find((f) => f.key === "organization_id");
+    if (!orgFilter || organizationsLoading || organizations.length > 0) {
+      return;
+    }
+
+    try {
+      setOrganizationsLoading(true);
+      const response = await fetch("/api/organizations");
+
+      if (!response.ok) {
+        console.error("Error loading organizations");
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const orgOptions = [
+          { value: "", label: "Todas las organizaciones" },
+          ...data.data.map((org: any) => ({
+            value: org.id,
+            label: org.name,
+          })),
+        ];
+        setOrganizations(orgOptions);
+
+        // Update config filter options
+        if (orgFilter && orgFilter.type === "select") {
+          orgFilter.options = orgOptions;
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching organizations:", err);
+    } finally {
+      setOrganizationsLoading(false);
+    }
+  }, [config.filters, organizations.length, organizationsLoading]);
+
   // Fetch DEAs from unified API
   const fetchDeas = useCallback(async () => {
     try {
@@ -87,6 +132,11 @@ export function DeasList({ organizationId, config, adminMode = false }: DeasList
       setLoading(false);
     }
   }, [organizationId, filterValues, currentPage, currentLimit, config.pagination]);
+
+  // Fetch organizations on mount
+  useEffect(() => {
+    fetchOrganizations();
+  }, [fetchOrganizations]);
 
   // Fetch on mount and when dependencies change
   useEffect(() => {

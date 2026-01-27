@@ -225,12 +225,25 @@ model ExternalDataSource {
   last_sync_at           DateTime?
   next_scheduled_sync_at DateTime?
 
+  // Sync statistics
+  total_records_sync    Int      @default(0)
+  records_created       Int      @default(0)
+  records_updated       Int      @default(0)
+  records_skipped       Int      @default(0)
+  records_deactivated   Int      @default(0)
+  last_sync_duration_ms Int?
+  last_sync_error       String?
+
   // Behavior
   auto_deactivate_missing Boolean  @default(false)
   auto_update_fields      String[] @default([])
 
   // Publication settings
   default_publication_mode PublicationMode @default(LOCATION_ONLY)
+
+  // 🆕 Default values for new AEDs created from sync
+  default_status             AedStatus @default(PUBLISHED)
+  default_requires_attention Boolean   @default(true)
 
   // Scope
   source_origin SourceOrigin
@@ -297,6 +310,9 @@ model AedLocation {
   floor               String? // Floor/level for filtering
   location_details    String? // Specific location details (combines additional_info + specific_location)
   access_instructions String? // How to access the AED
+
+  // Geocoding enrichment validation (automatic coordinate validation)
+  geocoding_validation Json? // Validation result from geocoding enrichment: {status, distance_meters, original_coords, geocoded_coords, reason, validated_at}
 
   aed                Aed?
   address_validation AedAddressValidation?

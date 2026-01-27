@@ -42,7 +42,19 @@ export default function AdminDeasPage() {
                 ],
               },
               {
-                key: "organizationId",
+                key: "coordinate_validation",
+                type: "select",
+                label: "Validación Coordenadas",
+                options: [
+                  { value: "all", label: "Todas" },
+                  { value: "INVALID", label: "⚠️ Inválidas (revisar)" },
+                  { value: "NEEDS_VALIDATION", label: "🔍 Necesitan validación" },
+                  { value: "VALID", label: "✅ Válidas" },
+                  { value: "NO_COMPARISON", label: "❓ Sin comparar" },
+                ],
+              },
+              {
+                key: "organization_id",
                 type: "select",
                 label: "Organización",
                 options: [], // Se cargará dinámicamente

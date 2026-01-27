@@ -31,6 +31,8 @@ interface AddressData {
   district_name?: string;
   neighborhood_code?: string;
   neighborhood_name?: string;
+  autonomous_community?: string;
+  country?: string;
 
   // Acceso y ubicación (v2 - simplified)
   floor?: string;
@@ -55,6 +57,8 @@ interface SearchResult {
     town?: string;
     village?: string;
     municipality?: string;
+    autonomous_community?: string;
+    country?: string;
   };
   type?: string;
   source?: "google" | "osm";
@@ -102,12 +106,14 @@ export default function AddressValidation({
     latitude: currentAddress?.latitude,
     longitude: currentAddress?.longitude,
     coordinates_precision: currentAddress?.coordinates_precision,
-    city_name: currentAddress?.city_name || "Madrid",
+    city_name: currentAddress?.city_name || "",
     city_code: currentAddress?.city_code,
     district_code: currentAddress?.district_code,
     district_name: currentAddress?.district_name,
     neighborhood_code: currentAddress?.neighborhood_code,
     neighborhood_name: currentAddress?.neighborhood_name,
+    autonomous_community: currentAddress?.autonomous_community || "",
+    country: currentAddress?.country || "España",
     floor: currentAddress?.floor,
     location_details: currentAddress?.location_details || currentAddress?.specific_location || "",
     access_instructions: currentAddress?.access_instructions || currentAddress?.access_description || "",
@@ -151,7 +157,24 @@ export default function AddressValidation({
           searchText = `Calle ${searchText}`;
         }
 
-        const response = await fetch(`/api/geocode?q=${encodeURIComponent(searchText)}`);
+        // Build URL with geographic context from current DEA data
+        const params = new URLSearchParams({ q: searchText });
+
+        // Add city context if available (don't force Madrid)
+        if (currentAddress?.city_name) {
+          params.append("city", currentAddress.city_name);
+        }
+
+        // Add postal code context if available
+        if (currentAddress?.postal_code) {
+          params.append("postalCode", currentAddress.postal_code);
+        }
+
+        // Add country context - default to España only if no country specified
+        // For now we assume Spain, but this could be extended
+        params.append("country", "España");
+
+        const response = await fetch(`/api/geocode?${params.toString()}`);
 
         if (!response.ok) {
           throw new Error("Error fetching geocoding results");
@@ -366,7 +389,7 @@ export default function AddressValidation({
       result.address.town ||
       result.address.village ||
       result.address.municipality ||
-      "Madrid";
+      "";
 
     return {
       street_type: street_type || undefined,
@@ -374,6 +397,8 @@ export default function AddressValidation({
       street_number: result.address.house_number || undefined,
       postal_code: result.address.postcode || undefined,
       city_name: city_name || undefined,
+      autonomous_community: result.address.autonomous_community || undefined,
+      country: result.address.country || undefined,
       latitude: parseFloat(result.lat),
       longitude: parseFloat(result.lon),
     };
@@ -702,12 +727,14 @@ export default function AddressValidation({
             {renderFieldComparison("Nombre de Vía", "street_name")}
             {renderFieldComparison("Número", "street_number")}
             {renderFieldComparison("Información Adicional", "additional_info")}
-            {renderFieldComparison("Código Postal", "postal_code")}
 
             <h5 className="text-xs font-semibold text-blue-800 mt-4 mb-2">🌍 Geografía</h5>
+            {renderFieldComparison("Código Postal", "postal_code")}
             {renderFieldComparison("Ciudad", "city_name")}
             {renderFieldComparison("Distrito", "district_name")}
             {renderFieldComparison("Barrio", "neighborhood_name")}
+            {renderFieldComparison("Comunidad Autónoma", "autonomous_community")}
+            {renderFieldComparison("País", "country")}
 
             <h5 className="text-xs font-semibold text-blue-800 mt-4 mb-2">
               🏢 Ubicación Detallada
@@ -872,33 +899,17 @@ export default function AddressValidation({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
-                  <input
-                    type="text"
-                    value={addressForm.street_number}
-                    onChange={(e) =>
-                      setAddressForm((prev) => ({ ...prev, street_number: e.target.value }))
-                    }
-                    placeholder="Ej: 28"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Código Postal
-                  </label>
-                  <input
-                    type="text"
-                    value={addressForm.postal_code}
-                    onChange={(e) =>
-                      setAddressForm((prev) => ({ ...prev, postal_code: e.target.value }))
-                    }
-                    placeholder="Ej: 28013"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                <input
+                  type="text"
+                  value={addressForm.street_number}
+                  onChange={(e) =>
+                    setAddressForm((prev) => ({ ...prev, street_number: e.target.value }))
+                  }
+                  placeholder="Ej: 28"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -913,6 +924,66 @@ export default function AddressValidation({
                   placeholder="Ej: Portal B, Escalera 2..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                 />
+              </div>
+
+              <h5 className="text-xs font-semibold text-gray-700 mb-2 mt-4">
+                🌍 Geografía
+              </h5>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Código Postal
+                  </label>
+                  <input
+                    type="text"
+                    value={addressForm.postal_code || ""}
+                    onChange={(e) =>
+                      setAddressForm((prev) => ({ ...prev, postal_code: e.target.value }))
+                    }
+                    placeholder="Ej: 28013"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
+                  <input
+                    type="text"
+                    value={addressForm.city_name || ""}
+                    onChange={(e) =>
+                      setAddressForm((prev) => ({ ...prev, city_name: e.target.value }))
+                    }
+                    placeholder="Ej: Madrid, Barcelona..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Comunidad Autónoma
+                  </label>
+                  <input
+                    type="text"
+                    value={addressForm.autonomous_community || ""}
+                    onChange={(e) =>
+                      setAddressForm((prev) => ({ ...prev, autonomous_community: e.target.value }))
+                    }
+                    placeholder="Ej: Comunidad de Madrid, Cataluña..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
+                  <input
+                    type="text"
+                    value={addressForm.country || "España"}
+                    onChange={(e) =>
+                      setAddressForm((prev) => ({ ...prev, country: e.target.value }))
+                    }
+                    placeholder="Ej: España"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                </div>
               </div>
 
               <h5 className="text-xs font-semibold text-gray-700 mb-2 mt-4">
@@ -978,7 +1049,7 @@ export default function AddressValidation({
                         street_type: currentAddress.street_type || "",
                         street_name: currentAddress.street_name || "",
                         street_number: currentAddress.street_number || "",
-                        city_name: currentAddress.city_name || "Madrid",
+                        city_name: currentAddress.city_name || "",
                       });
                     }
                   }}
@@ -997,11 +1068,25 @@ export default function AddressValidation({
                 {addressForm.street_name}
                 {addressForm.street_number && <span> {addressForm.street_number}</span>}
               </p>
-              {addressForm.postal_code && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Código Postal: {addressForm.postal_code}
-                </p>
-              )}
+              {/* Geografía */}
+              <div className="text-sm text-gray-600 mt-2 space-y-1">
+                {(addressForm.postal_code || addressForm.city_name) && (
+                  <p>
+                    {addressForm.postal_code && <span>{addressForm.postal_code}</span>}
+                    {addressForm.postal_code && addressForm.city_name && <span> - </span>}
+                    {addressForm.city_name && <span>{addressForm.city_name}</span>}
+                  </p>
+                )}
+                {(addressForm.autonomous_community || addressForm.country) && (
+                  <p>
+                    {addressForm.autonomous_community && (
+                      <span>{addressForm.autonomous_community}</span>
+                    )}
+                    {addressForm.autonomous_community && addressForm.country && <span>, </span>}
+                    {addressForm.country && <span>{addressForm.country}</span>}
+                  </p>
+                )}
+              </div>
               {hasCoordinates ? (
                 <p className="text-xs text-gray-500 mt-2 font-mono">
                   📍 {addressForm.latitude!.toFixed(6)}, {addressForm.longitude!.toFixed(6)}

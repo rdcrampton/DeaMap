@@ -161,6 +161,39 @@ export class ImportRecord {
     return new ImportRecord(sourceType, id, normalized, normalized, hash, rowIndex);
   }
 
+  /**
+   * Crea un ImportRecord desde un registro de caché S3 que ya contiene datos normalizados
+   * El formato esperado es: { externalId, name, ..., _rawData, _contentHash, _rowIndex }
+   */
+  static fromCachedRecord(
+    cachedRecord: Record<string, unknown>,
+    sourceType: DataSourceType = "CKAN_API"
+  ): ImportRecord {
+    // Extract metadata fields
+    const rawData = (cachedRecord._rawData as Record<string, unknown>) || cachedRecord;
+    const contentHash = (cachedRecord._contentHash as string) || this.computeHash(cachedRecord);
+    const rowIndex = (cachedRecord._rowIndex as number) || 0;
+    const externalId = cachedRecord.externalId as string | null;
+
+    // Build normalized data from the cached record (excluding metadata fields)
+    const normalized: NormalizedRecordData = {};
+    for (const [key, value] of Object.entries(cachedRecord)) {
+      // Skip metadata fields
+      if (key.startsWith("_")) continue;
+      // Include string, null, and number values (convert numbers to strings)
+      if (value === null) {
+        normalized[key] = null;
+      } else if (typeof value === "string") {
+        normalized[key] = value;
+      } else if (typeof value === "number") {
+        // Convert numbers to strings (for latitude, longitude, etc.)
+        normalized[key] = value.toString();
+      }
+    }
+
+    return new ImportRecord(sourceType, externalId, rawData, normalized, contentHash, rowIndex);
+  }
+
   // ============================================
   // GETTERS NORMALIZADOS
   // ============================================
@@ -382,6 +415,19 @@ export class ImportRecord {
     return this.normalizedData.observations ?? null;
   }
 
+  // Detalles de ubicación (combinación de additionalInfo y specificLocation)
+  get locationDetails(): string | null {
+    const parts: string[] = [];
+    if (this.additionalInfo) parts.push(this.additionalInfo);
+    if (this.specificLocation) parts.push(this.specificLocation);
+    return parts.length > 0 ? parts.join(". ").trim() : null;
+  }
+
+  // Instrucciones de acceso (alias de accessDescription para consistencia)
+  get accessInstructions(): string | null {
+    return this.accessDescription;
+  }
+
   // ============================================
   // MÉTODOS DE UTILIDAD
   // ============================================
@@ -559,10 +605,20 @@ export class ImportRecord {
   ): NormalizedRecordData {
     const result: NormalizedRecordData = {};
 
+    // Campos que deben tratarse como números (pueden venir con formato español: coma como separador decimal)
+    const numericFields = ["latitude", "longitude", "utmX", "utmY"];
+
     for (const [apiField, systemField] of Object.entries(mappings)) {
       const value = record[apiField];
       if (value !== undefined && value !== null) {
-        result[systemField] = String(value).trim() || null;
+        let processedValue = String(value).trim();
+
+        // Convertir formato español (coma) a formato estándar (punto) para campos numéricos
+        if (numericFields.includes(systemField) && processedValue) {
+          processedValue = processedValue.replace(",", ".");
+        }
+
+        result[systemField] = processedValue || null;
       }
     }
 

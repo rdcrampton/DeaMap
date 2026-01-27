@@ -199,64 +199,67 @@ export class PrismaDuplicateDetectionAdapter implements IDuplicateDetectionServi
 
     try {
       const results = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          a.id,
-          a.name,
-          a.status,
-          a.latitude,
-          a.longitude,
-          a.provisional_number,
-          a.establishment_type,
-          a.created_at,
-          l.street_type,
-          l.street_name,
-          l.street_number,
-          l.postal_code,
-          l.floor,
-          l.location_details,
-          l.access_instructions,
-          -- SCORING CALCULADO EN DB
-          (
-            -- SUMAR puntos positivos
-            (CASE WHEN similarity(a.normalized_name, ${normalizedName}) >= 0.9 
-               THEN 30 ELSE 0 END) +
-            (CASE WHEN l.normalized_address = ${normalizedAddress}
-               THEN 25 ELSE 0 END) +
-            (CASE WHEN ST_Distance(a.geom::geography, ST_MakePoint(${longitude}, ${latitude})::geography) < 5
-               THEN 20 ELSE 0 END) +
-            (CASE WHEN a.provisional_number = ${provisionalNumber || null} 
-                   AND a.provisional_number IS NOT NULL 
-                   AND a.provisional_number > 0
-               THEN 15 ELSE 0 END) +
-            (CASE WHEN normalize_text(a.establishment_type) = normalize_text(${establishmentType || ""})
-                   AND a.establishment_type IS NOT NULL
-               THEN 10 ELSE 0 END) +
-            (CASE WHEN l.postal_code = ${postalCode || ""}
-               THEN 5 ELSE 0 END) -
-            -- RESTAR puntos por diferencias (DISCRIMINANTES CRÍTICOS)
-            (CASE WHEN l.normalized_floor != '' 
-                   AND ${normalizedFloor} != '' 
-                   AND l.normalized_floor != ${normalizedFloor}
-               THEN 20 ELSE 0 END) -
-            (CASE WHEN l.normalized_location_details != '' 
-                   AND ${normalizedLocationDetails} != '' 
-                   AND l.normalized_location_details != ${normalizedLocationDetails}
-               THEN 20 ELSE 0 END) -
-            (CASE WHEN l.normalized_access_instructions != '' 
-                   AND ${normalizedAccessInstructions} != '' 
-                   AND l.normalized_access_instructions != ${normalizedAccessInstructions}
-               THEN 15 ELSE 0 END)
-          ) AS score
-        FROM aeds a
-        LEFT JOIN aed_locations l ON a.location_id = l.id
-        WHERE 
-          a.geom IS NOT NULL
-          AND ST_DWithin(
-            a.geom,
-            ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), ${srid}),
-            ${radiusDegrees}
-          )
-        HAVING score >= ${DuplicateDetectionConfig.thresholds.possible}
+        WITH scored_candidates AS (
+          SELECT
+            a.id,
+            a.name,
+            a.status,
+            a.latitude,
+            a.longitude,
+            a.provisional_number,
+            a.establishment_type,
+            a.created_at,
+            l.street_type,
+            l.street_name,
+            l.street_number,
+            l.postal_code,
+            l.floor,
+            l.location_details,
+            l.access_instructions,
+            -- SCORING CALCULADO EN DB
+            (
+              -- SUMAR puntos positivos
+              (CASE WHEN similarity(a.normalized_name, ${normalizedName}) >= 0.9
+                 THEN 30 ELSE 0 END) +
+              (CASE WHEN l.normalized_address = ${normalizedAddress}
+                 THEN 25 ELSE 0 END) +
+              (CASE WHEN ST_Distance(a.geom::geography, ST_MakePoint(${longitude}, ${latitude})::geography) < 5
+                 THEN 20 ELSE 0 END) +
+              (CASE WHEN a.provisional_number = ${provisionalNumber || null}
+                     AND a.provisional_number IS NOT NULL
+                     AND a.provisional_number > 0
+                 THEN 15 ELSE 0 END) +
+              (CASE WHEN normalize_text(a.establishment_type) = normalize_text(${establishmentType || ""})
+                     AND a.establishment_type IS NOT NULL
+                 THEN 10 ELSE 0 END) +
+              (CASE WHEN l.postal_code = ${postalCode || ""}
+                 THEN 5 ELSE 0 END) -
+              -- RESTAR puntos por diferencias (DISCRIMINANTES CRÍTICOS)
+              (CASE WHEN l.normalized_floor != ''
+                     AND ${normalizedFloor} != ''
+                     AND l.normalized_floor != ${normalizedFloor}
+                 THEN 20 ELSE 0 END) -
+              (CASE WHEN l.normalized_location_details != ''
+                     AND ${normalizedLocationDetails} != ''
+                     AND l.normalized_location_details != ${normalizedLocationDetails}
+                 THEN 20 ELSE 0 END) -
+              (CASE WHEN l.normalized_access_instructions != ''
+                     AND ${normalizedAccessInstructions} != ''
+                     AND l.normalized_access_instructions != ${normalizedAccessInstructions}
+                 THEN 15 ELSE 0 END)
+            ) AS score
+          FROM aeds a
+          LEFT JOIN aed_locations l ON a.location_id = l.id
+          WHERE
+            a.geom IS NOT NULL
+            AND ST_DWithin(
+              a.geom,
+              ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), ${srid}),
+              ${radiusDegrees}
+            )
+        )
+        SELECT * FROM scored_candidates
+        WHERE score >= ${DuplicateDetectionConfig.thresholds.possible}
         ORDER BY score DESC
         LIMIT 20
       `;
@@ -284,55 +287,58 @@ export class PrismaDuplicateDetectionAdapter implements IDuplicateDetectionServi
   ): Promise<any[]> {
     try {
       const results = await this.prisma.$queryRaw<any[]>`
-        SELECT 
-          a.id,
-          a.name,
-          a.status,
-          a.latitude,
-          a.longitude,
-          a.provisional_number,
-          a.establishment_type,
-          a.created_at,
-          l.street_type,
-          l.street_name,
-          l.street_number,
-          l.postal_code,
-          l.floor,
-          l.location_details,
-          l.access_instructions,
-          -- SCORING CALCULADO EN DB
-          (
-            (CASE WHEN similarity(a.normalized_name, ${normalizedName}) >= 0.9 
-               THEN 30 ELSE 0 END) +
-            (CASE WHEN l.normalized_address = ${normalizedAddress}
-               THEN 25 ELSE 0 END) +
-            (CASE WHEN a.provisional_number = ${provisionalNumber || null}
-                   AND a.provisional_number IS NOT NULL 
-                   AND a.provisional_number > 0
-               THEN 15 ELSE 0 END) +
-            (CASE WHEN normalize_text(a.establishment_type) = normalize_text(${establishmentType || ""})
-                   AND a.establishment_type IS NOT NULL
-               THEN 10 ELSE 0 END) +
-            (CASE WHEN l.postal_code = ${postalCode}
-               THEN 5 ELSE 0 END) -
-            (CASE WHEN l.normalized_floor != '' 
-                   AND ${normalizedFloor} != '' 
-                   AND l.normalized_floor != ${normalizedFloor}
-               THEN 20 ELSE 0 END) -
-            (CASE WHEN l.normalized_location_details != '' 
-                   AND ${normalizedLocationDetails} != '' 
-                   AND l.normalized_location_details != ${normalizedLocationDetails}
-               THEN 20 ELSE 0 END) -
-            (CASE WHEN l.normalized_access_instructions != '' 
-                   AND ${normalizedAccessInstructions} != '' 
-                   AND l.normalized_access_instructions != ${normalizedAccessInstructions}
-               THEN 15 ELSE 0 END)
-          ) AS score
-        FROM aeds a
-        LEFT JOIN aed_locations l ON a.location_id = l.id
-        WHERE 
-          l.postal_code = ${postalCode}
-        HAVING score >= ${DuplicateDetectionConfig.thresholds.possible}
+        WITH scored_candidates AS (
+          SELECT
+            a.id,
+            a.name,
+            a.status,
+            a.latitude,
+            a.longitude,
+            a.provisional_number,
+            a.establishment_type,
+            a.created_at,
+            l.street_type,
+            l.street_name,
+            l.street_number,
+            l.postal_code,
+            l.floor,
+            l.location_details,
+            l.access_instructions,
+            -- SCORING CALCULADO EN DB
+            (
+              (CASE WHEN similarity(a.normalized_name, ${normalizedName}) >= 0.9
+                 THEN 30 ELSE 0 END) +
+              (CASE WHEN l.normalized_address = ${normalizedAddress}
+                 THEN 25 ELSE 0 END) +
+              (CASE WHEN a.provisional_number = ${provisionalNumber || null}
+                     AND a.provisional_number IS NOT NULL
+                     AND a.provisional_number > 0
+                 THEN 15 ELSE 0 END) +
+              (CASE WHEN normalize_text(a.establishment_type) = normalize_text(${establishmentType || ""})
+                     AND a.establishment_type IS NOT NULL
+                 THEN 10 ELSE 0 END) +
+              (CASE WHEN l.postal_code = ${postalCode}
+                 THEN 5 ELSE 0 END) -
+              (CASE WHEN l.normalized_floor != ''
+                     AND ${normalizedFloor} != ''
+                     AND l.normalized_floor != ${normalizedFloor}
+                 THEN 20 ELSE 0 END) -
+              (CASE WHEN l.normalized_location_details != ''
+                     AND ${normalizedLocationDetails} != ''
+                     AND l.normalized_location_details != ${normalizedLocationDetails}
+                 THEN 20 ELSE 0 END) -
+              (CASE WHEN l.normalized_access_instructions != ''
+                     AND ${normalizedAccessInstructions} != ''
+                     AND l.normalized_access_instructions != ${normalizedAccessInstructions}
+                 THEN 15 ELSE 0 END)
+            ) AS score
+          FROM aeds a
+          LEFT JOIN aed_locations l ON a.location_id = l.id
+          WHERE
+            l.postal_code = ${postalCode}
+        )
+        SELECT * FROM scored_candidates
+        WHERE score >= ${DuplicateDetectionConfig.thresholds.possible}
         ORDER BY score DESC
         LIMIT 20
       `;

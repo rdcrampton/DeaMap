@@ -1,13 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 export default function NewSimpleDeaPage() {
   const router = useRouter();
+  const { trackFormStart, trackFormFieldFocus, trackFormSubmit, trackButtonClick, trackModalOpen } =
+    useAnalytics();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [formStarted, setFormStarted] = useState(false);
 
   // Form state - ultra simple
   const [formData, setFormData] = useState({
@@ -19,9 +24,24 @@ export default function NewSimpleDeaPage() {
     observations: "",
   });
 
+  // Track form start when user first interacts
+  useEffect(() => {
+    if (
+      !formStarted &&
+      (formData.name || formData.street || formData.number || formData.city || formData.observations)
+    ) {
+      trackFormStart("add_dea_simple");
+      setFormStarted(true);
+    }
+  }, [formData, formStarted, trackFormStart]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFieldFocus = (fieldName: string) => {
+    trackFormFieldFocus("add_dea_simple", fieldName);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,10 +82,14 @@ export default function NewSimpleDeaPage() {
         throw new Error(data.message || "Error al crear el DEA");
       }
 
+      trackFormSubmit("add_dea_simple", true);
+      trackModalOpen("dea_success");
       // Mostrar modal de éxito
       setShowSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      const errorMessage = err instanceof Error ? err.message : "Error desconocido";
+      trackFormSubmit("add_dea_simple", false, errorMessage);
+      setError(errorMessage);
       console.error("Error submitting form:", err);
     } finally {
       setLoading(false);
@@ -73,6 +97,7 @@ export default function NewSimpleDeaPage() {
   };
 
   const handleSuccessClose = () => {
+    trackButtonClick("back_to_map", "dea_success_modal");
     setShowSuccess(false);
     router.push("/");
   };
@@ -109,6 +134,7 @@ export default function NewSimpleDeaPage() {
             name="name"
             value={formData.name}
             onChange={handleChange}
+            onFocus={() => handleFieldFocus("name")}
             required
             placeholder="Ej: DEA Colegio San José"
             style={{
@@ -142,6 +168,7 @@ export default function NewSimpleDeaPage() {
               name="street"
               value={formData.street}
               onChange={handleChange}
+              onFocus={() => handleFieldFocus("street")}
               placeholder="Ej: Calle Mayor"
               style={{
                 width: "100%",
@@ -162,6 +189,7 @@ export default function NewSimpleDeaPage() {
               name="number"
               value={formData.number}
               onChange={handleChange}
+              onFocus={() => handleFieldFocus("number")}
               placeholder="Ej: 23"
               style={{
                 width: "100%",
@@ -182,6 +210,7 @@ export default function NewSimpleDeaPage() {
               name="city"
               value={formData.city}
               onChange={handleChange}
+              onFocus={() => handleFieldFocus("city")}
               placeholder="Ej: Madrid"
               style={{
                 width: "100%",
@@ -200,6 +229,7 @@ export default function NewSimpleDeaPage() {
               name="country"
               value={formData.country}
               onChange={handleChange}
+              onFocus={() => handleFieldFocus("country")}
               placeholder="Ej: España"
               style={{
                 width: "100%",
@@ -220,6 +250,7 @@ export default function NewSimpleDeaPage() {
             name="observations"
             value={formData.observations}
             onChange={handleChange}
+            onFocus={() => handleFieldFocus("observations")}
             rows={4}
             placeholder="Información adicional sobre el DEA..."
             style={{
@@ -249,7 +280,10 @@ export default function NewSimpleDeaPage() {
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
           <button
             type="button"
-            onClick={() => router.push("/")}
+            onClick={() => {
+              trackButtonClick("cancel", "add_dea_form");
+              router.push("/");
+            }}
             disabled={loading}
             style={{
               padding: "12px 24px",

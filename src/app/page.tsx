@@ -19,6 +19,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 
 import AedDetailModal from "@/components/AedDetailModal";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import type { Aed } from "@/types/aed";
 
 // Dynamic import to avoid SSR issues with Leaflet
@@ -62,6 +63,21 @@ export default function Home() {
   const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  const {
+    trackSearch,
+    trackSearchSuggestionClick,
+    trackGeolocationRequest,
+    trackSearchClear,
+    trackDeaCardClick,
+    trackDeaModalOpen,
+    trackDeaModalClose,
+    trackMarkerClick,
+    trackExternalLink,
+    trackNavClick,
+    trackResultsPanelToggle,
+    trackButtonClick,
+  } = useAnalytics();
 
   // Debounce for address search
   const searchAddressSuggestions = async (query: string) => {
@@ -145,7 +161,8 @@ export default function Home() {
     setAddress(newAddress);
   };
 
-  const handleSuggestionClick = async (suggestion: GeocodingResult) => {
+  const handleSuggestionClick = async (suggestion: GeocodingResult, index: number) => {
+    trackSearchSuggestionClick(index, suggestion.display_name);
     setAddress(suggestion.display_name);
     setShowSuggestions(false);
     setAddressSuggestions([]);
@@ -158,6 +175,7 @@ export default function Home() {
   };
 
   const handleFindNearestByGeolocation = async () => {
+    trackSearch("geolocation");
     setLoading(true);
     setError(null);
     setNearbyAeds([]);
@@ -179,6 +197,7 @@ export default function Home() {
         });
       });
 
+      trackGeolocationRequest("success");
       const { latitude, longitude } = position.coords;
       setSearchLocation({ lat: latitude, lng: longitude });
 
@@ -195,14 +214,18 @@ export default function Home() {
         };
         if (geoError.code === 1) {
           // PERMISSION_DENIED
+          trackGeolocationRequest("denied");
           setError("Necesitas permitir el acceso a tu ubicación.");
         } else if (geoError.code === 2) {
           // POSITION_UNAVAILABLE
+          trackGeolocationRequest("error");
           setError("No se pudo determinar tu ubicación.");
         } else {
+          trackGeolocationRequest("error");
           setError("Tiempo de espera agotado.");
         }
       } else {
+        trackGeolocationRequest("error");
         setError(err instanceof Error ? err.message : "Error al buscar DEAs.");
       }
       setLoading(false);
@@ -217,6 +240,7 @@ export default function Home() {
       return;
     }
 
+    trackSearch("address", address);
     setLoading(true);
     setError(null);
     setNearbyAeds([]);
@@ -252,17 +276,24 @@ export default function Home() {
     }
   };
 
-  const handleCardClick = (aed: NearbyAed) => {
+  const handleCardClick = (aed: NearbyAed, position: number) => {
+    trackDeaCardClick(aed.id, aed.name, position);
+    trackDeaModalOpen(aed.id, aed.name);
     setSelectedAed(aed);
     setModalOpen(true);
   };
 
-  const handleCloseModal = () => {
+  const handleCloseModal = (closeMethod: "button" | "backdrop" | "escape" = "button") => {
+    if (selectedAed) {
+      trackDeaModalClose(selectedAed.id, closeMethod);
+    }
     setModalOpen(false);
     setTimeout(() => setSelectedAed(null), 200);
   };
 
   const handleClearSearch = () => {
+    trackSearchClear();
+    trackResultsPanelToggle(false);
     setShowResults(false);
     setNearbyAeds([]);
     setSearchLocation(null);
@@ -271,11 +302,13 @@ export default function Home() {
   };
 
   const handleMapMarkerClick = async (aed: { id: string; code: string; name: string }) => {
+    trackMarkerClick(aed.id, aed.name);
     try {
       const response = await fetch(`/api/aeds/${aed.id}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
+          trackDeaModalOpen(aed.id, aed.name);
           setSelectedAed(data.data);
           setModalOpen(true);
         }
@@ -322,6 +355,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => {
+                    trackButtonClick("clear_address", "search_box");
                     setAddress("");
                     setShowSuggestions(false);
                     setAddressSuggestions([]);
@@ -340,7 +374,7 @@ export default function Home() {
                   <button
                     key={index}
                     type="button"
-                    onClick={() => handleSuggestionClick(suggestion)}
+                    onClick={() => handleSuggestionClick(suggestion, index)}
                     className="w-full p-3 text-left hover:bg-gray-50 transition-colors flex items-start gap-2"
                   >
                     <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
@@ -436,7 +470,7 @@ export default function Home() {
               {/* Results List */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {nearbyAeds.map((aed, index) => (
-                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed)} />
+                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed, index + 1)} />
                 ))}
               </div>
             </div>
@@ -469,7 +503,7 @@ export default function Home() {
               {/* Results List */}
               <div className="overflow-y-auto max-h-[40vh] p-4 space-y-3">
                 {nearbyAeds.map((aed, index) => (
-                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed)} compact />
+                  <NearbyAedCard key={aed.id} aed={aed} rank={index + 1} onClick={() => handleCardClick(aed, index + 1)} compact />
                 ))}
               </div>
             </div>
@@ -523,6 +557,7 @@ export default function Home() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-700 font-semibold underline decoration-1 underline-offset-2"
+                    onClick={() => trackExternalLink("https://www.globalemergency.online/proyectos/deamap", "Global Emergency", "about_section")}
                   >
                     Global Emergency
                   </a>
@@ -556,6 +591,7 @@ export default function Home() {
                 <Link
                   href="/dea/new"
                   className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                  onClick={() => trackNavClick("Agregar un DEA", "/dea/new")}
                 >
                   <MapPin className="w-4 h-4" />
                   Agregar un DEA
@@ -611,6 +647,7 @@ export default function Home() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors group"
+                    onClick={() => trackExternalLink("https://www.globalemergency.online/proyectos/deamap", "Global Emergency (footer)", "footer")}
                   >
                     <span className="font-semibold">Global Emergency</span>
                     <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -625,7 +662,11 @@ export default function Home() {
                   <h3 className="font-bold text-lg mb-3 text-white">Enlaces</h3>
                   <ul className="space-y-2 text-sm">
                     <li>
-                      <Link href="/dea/new-simple" className="text-gray-300 hover:text-white transition-colors inline-flex items-center gap-1">
+                      <Link
+                        href="/dea/new-simple"
+                        className="text-gray-300 hover:text-white transition-colors inline-flex items-center gap-1"
+                        onClick={() => trackNavClick("Agregar un DEA (footer)", "/dea/new-simple")}
+                      >
                         <PlusCircle className="w-3.5 h-3.5" />
                         Agregar un DEA
                       </Link>
@@ -636,6 +677,7 @@ export default function Home() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-gray-300 hover:text-white transition-colors inline-flex items-center gap-1"
+                        onClick={() => trackExternalLink("https://www.globalemergency.online", "Global Emergency (footer links)", "footer")}
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         Global Emergency

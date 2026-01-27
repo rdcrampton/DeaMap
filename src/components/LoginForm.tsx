@@ -1,18 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 export default function LoginForm() {
   const { login } = useAuth();
+  const { trackFormStart, trackFormFieldFocus, trackFormSubmit, trackAuthSubmit, trackAuthClick } =
+    useAnalytics();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [formStarted, setFormStarted] = useState(false);
+
+  // Track form start when user first interacts
+  useEffect(() => {
+    if (!formStarted && (formData.email || formData.password)) {
+      trackFormStart("login");
+      setFormStarted(true);
+    }
+  }, [formData, formStarted, trackFormStart]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,10 +33,15 @@ export default function LoginForm() {
 
     try {
       await login(formData);
+      trackAuthSubmit("login", true);
+      trackFormSubmit("login", true);
       // Usar recarga completa para asegurar que el estado se actualice correctamente
       window.location.href = "/";
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
+      const errorMessage = err instanceof Error ? err.message : "Error al iniciar sesión";
+      trackAuthSubmit("login", false, errorMessage);
+      trackFormSubmit("login", false, errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -55,6 +72,7 @@ export default function LoginForm() {
             onChange={(e) =>
               setFormData({ ...formData, email: e.target.value })
             }
+            onFocus={() => trackFormFieldFocus("login", "email")}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="tu@email.com"
           />
@@ -68,6 +86,7 @@ export default function LoginForm() {
             <Link
               href="/forgot-password"
               className="text-xs text-blue-600 hover:text-blue-800"
+              onClick={() => trackAuthClick("forgot_password")}
             >
               ¿Olvidaste tu contraseña?
             </Link>
@@ -80,6 +99,7 @@ export default function LoginForm() {
             onChange={(e) =>
               setFormData({ ...formData, password: e.target.value })
             }
+            onFocus={() => trackFormFieldFocus("login", "password")}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="••••••••"
           />
@@ -96,7 +116,11 @@ export default function LoginForm() {
 
       <p className="mt-4 text-center text-sm text-gray-600">
         ¿No tienes cuenta?{" "}
-        <Link href="/register" className="text-blue-600 hover:text-blue-800 font-medium">
+        <Link
+          href="/register"
+          className="text-blue-600 hover:text-blue-800 font-medium"
+          onClick={() => trackAuthClick("register")}
+        >
           Regístrate aquí
         </Link>
       </p>

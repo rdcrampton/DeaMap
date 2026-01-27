@@ -96,6 +96,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       autoUpdateFields: dataSource.auto_update_fields,
       sourceOrigin: dataSource.source_origin,
       regionCode: dataSource.region_code,
+      // Contadores globales de sincronización
+      totalRecordsSync: dataSource.total_records_sync,
+      recordsCreated: dataSource.records_created,
+      recordsUpdated: dataSource.records_updated,
+      recordsDeactivated: dataSource.records_deactivated,
       stats: {
         totalAeds: dataSource._count.managed_aeds,
         totalBatches: dataSource._count.batch_jobs,

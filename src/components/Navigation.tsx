@@ -20,12 +20,15 @@ import { useState } from "react";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 export default function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout, loading } = useAuth();
   const { hasOrganizations, selectedOrganization } = useOrganization();
+  const { trackNavClick, trackLogoClick, trackMobileMenuToggle, trackAuthClick, trackExternalLink } =
+    useAnalytics();
 
   const isHomePage = pathname === "/";
 
@@ -37,8 +40,23 @@ export default function Navigation() {
   };
 
   const handleLogout = async () => {
+    trackAuthClick("logout");
     await logout();
     setMobileMenuOpen(false);
+  };
+
+  const handleMobileMenuToggle = () => {
+    const newState = !mobileMenuOpen;
+    trackMobileMenuToggle(newState);
+    setMobileMenuOpen(newState);
+  };
+
+  const handleNavLinkClick = (label: string, href: string) => {
+    trackNavClick(label, href);
+  };
+
+  const handleExternalLinkClick = (url: string, linkText: string) => {
+    trackExternalLink(url, linkText, "navigation");
   };
 
   // Navigation links with permission-based visibility
@@ -78,7 +96,7 @@ export default function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-14">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2 group">
+          <Link href="/" className="flex items-center space-x-2 group" onClick={trackLogoClick}>
             <div className="relative h-8 w-8 sm:h-10 sm:w-10 transition-all duration-300 group-hover:scale-110">
               <Image
                 src="/favicon.svg"
@@ -97,7 +115,13 @@ export default function Navigation() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[9px] sm:text-[10px] text-gray-500 hover:text-gray-700 transition-colors -mt-0.5"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleExternalLinkClick(
+                    "https://www.globalemergency.online/proyectos/deamap",
+                    "Global Emergency (logo)"
+                  );
+                }}
               >
                 by Global Emergency
               </a>
@@ -113,6 +137,7 @@ export default function Navigation() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  onClick={() => handleNavLinkClick(link.label, link.href)}
                   className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-all duration-200 ${
                     active
                       ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
@@ -146,6 +171,7 @@ export default function Navigation() {
                   <>
                     <Link
                       href="/login"
+                      onClick={() => trackAuthClick("login")}
                       className="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-medium text-sm text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 transition-all duration-200"
                     >
                       <LogIn className="w-4 h-4" />
@@ -153,6 +179,7 @@ export default function Navigation() {
                     </Link>
                     <Link
                       href="/register"
+                      onClick={() => trackAuthClick("register")}
                       className="flex items-center space-x-1 px-3 py-1.5 rounded-lg font-medium text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md hover:shadow-lg transition-all duration-200"
                     >
                       <UserPlus className="w-4 h-4" />
@@ -166,7 +193,7 @@ export default function Navigation() {
 
           {/* Mobile menu button */}
           <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onClick={handleMobileMenuToggle}
             className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100/80 transition-colors"
             aria-label="Toggle menu"
           >
@@ -185,7 +212,10 @@ export default function Navigation() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={() => {
+                      handleNavLinkClick(link.label, link.href);
+                      setMobileMenuOpen(false);
+                    }}
                     className={`flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
                       active
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
@@ -222,7 +252,10 @@ export default function Navigation() {
                     <>
                       <Link
                         href="/login"
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => {
+                          trackAuthClick("login");
+                          setMobileMenuOpen(false);
+                        }}
                         className="flex items-center space-x-3 px-4 py-3 rounded-lg font-medium text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 transition-all duration-200"
                       >
                         <LogIn className="w-5 h-5" />
@@ -230,7 +263,10 @@ export default function Navigation() {
                       </Link>
                       <Link
                         href="/register"
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => {
+                          trackAuthClick("register");
+                          setMobileMenuOpen(false);
+                        }}
                         className="flex items-center space-x-3 px-4 py-3 rounded-lg font-medium bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md transition-all duration-200"
                       >
                         <UserPlus className="w-5 h-5" />

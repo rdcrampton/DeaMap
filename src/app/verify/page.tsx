@@ -1,12 +1,22 @@
 "use client";
 
-import { AlertTriangle, Loader2, Shield } from "lucide-react";
+import { AlertTriangle, Filter, Loader2, Search, Shield, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import NoOrganizationMessage from "@/components/verification/NoOrganizationMessage";
 import OrganizationSelector from "@/components/verification/OrganizationSelector";
 import { useAuth } from "@/contexts/AuthContext";
+
+type FilterType = "pending" | "published_unverified" | "published_verified" | "all_published";
+
+interface FilterOption {
+  value: FilterType;
+  label: string;
+  description: string;
+  badgeColor: string;
+  badgeText: string;
+}
 
 interface AedForVerification {
   id: string;
@@ -55,12 +65,46 @@ interface ApiResponse {
   isAdmin: boolean;
 }
 
+const FILTER_OPTIONS: FilterOption[] = [
+  {
+    value: "pending",
+    label: "Pendientes de verificar",
+    description: "DEAs en borrador o pendientes de revisión",
+    badgeColor: "bg-yellow-100 text-yellow-800",
+    badgeText: "Pendiente",
+  },
+  {
+    value: "published_unverified",
+    label: "Publicados sin verificar",
+    description: "DEAs publicados pero sin verificación manual",
+    badgeColor: "bg-orange-100 text-orange-800",
+    badgeText: "Sin verificar",
+  },
+  {
+    value: "published_verified",
+    label: "Publicados verificados",
+    description: "DEAs publicados y verificados manualmente",
+    badgeColor: "bg-green-100 text-green-800",
+    badgeText: "Verificado",
+  },
+  {
+    value: "all_published",
+    label: "Todos los publicados",
+    description: "Todos los DEAs publicados",
+    badgeColor: "bg-blue-100 text-blue-800",
+    badgeText: "Publicado",
+  },
+];
+
 export default function VerifyPage() {
   const { user, loading: authLoading } = useAuth();
   const [aeds, setAeds] = useState<AedForVerification[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [userOrganizations, setUserOrganizations] = useState<UserOrganization[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<FilterType>("pending");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -78,21 +122,30 @@ export default function VerifyPage() {
     }
   }, [authLoading, user, router]);
 
-  // Refetch when organization changes
+  // Refetch when organization, filter or search changes
   useEffect(() => {
     if (user && !loading) {
-      fetchAeds(1, selectedOrgId);
+      fetchAeds(1, selectedOrgId, filterType, searchTerm);
     }
-  }, [selectedOrgId]);
+  }, [selectedOrgId, filterType, searchTerm]);
 
-  const fetchAeds = async (page: number = 1, orgId: string | null = selectedOrgId) => {
+  const fetchAeds = async (
+    page: number = 1,
+    orgId: string | null = selectedOrgId,
+    filter: FilterType = filterType,
+    search: string = searchTerm
+  ) => {
     try {
       setLoading(page === 1);
       const url = new URL("/api/verify", window.location.origin);
       url.searchParams.set("page", page.toString());
       url.searchParams.set("limit", "12");
+      url.searchParams.set("filter_type", filter);
       if (orgId) {
         url.searchParams.set("organization_id", orgId);
+      }
+      if (search) {
+        url.searchParams.set("search", search);
       }
 
       const response = await fetch(url.toString());
@@ -122,8 +175,12 @@ export default function VerifyPage() {
       const url = new URL("/api/verify", window.location.origin);
       url.searchParams.set("page", nextPage.toString());
       url.searchParams.set("limit", "12");
+      url.searchParams.set("filter_type", filterType);
       if (selectedOrgId) {
         url.searchParams.set("organization_id", selectedOrgId);
+      }
+      if (searchTerm) {
+        url.searchParams.set("search", searchTerm);
       }
 
       const response = await fetch(url.toString());
@@ -146,6 +203,25 @@ export default function VerifyPage() {
     setSelectedOrgId(orgId);
     setAeds([]); // Clear current list
   };
+
+  const handleFilterChange = (newFilter: FilterType) => {
+    setFilterType(newFilter);
+    setAeds([]); // Clear current list
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchTerm(searchInput);
+    setAeds([]); // Clear current list
+  };
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setSearchTerm("");
+    setAeds([]); // Clear current list
+  };
+
+  const currentFilter = FILTER_OPTIONS.find((f) => f.value === filterType) || FILTER_OPTIONS[0];
 
   const startVerification = (aedId: string) => {
     router.push(`/verify/${aedId}`);
@@ -206,23 +282,96 @@ export default function VerifyPage() {
             </div>
           )}
 
-          {/* Organization selector (only for non-admin users) */}
-          {!isAdmin && userOrganizations.length > 0 && (
-            <div className="mb-6">
-              <OrganizationSelector
-                organizations={userOrganizations}
-                selectedOrgId={selectedOrgId}
-                onChange={handleOrganizationChange}
-              />
+          {/* Filters section */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Filtros</span>
             </div>
-          )}
+
+            <div className="flex flex-col gap-4">
+              {/* Search field */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Buscar DEA
+                </label>
+                <form onSubmit={handleSearch} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      placeholder="Código, nombre, dirección..."
+                      className="w-full pl-9 pr-9 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    {searchInput && (
+                      <button
+                        type="button"
+                        onClick={clearSearch}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Buscar
+                  </button>
+                </form>
+                {searchTerm && (
+                  <p className="mt-1 text-xs text-blue-600">
+                    Buscando: &quot;{searchTerm}&quot;
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Filter type selector */}
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Estado de verificación
+                  </label>
+                  <select
+                    value={filterType}
+                    onChange={(e) => handleFilterChange(e.target.value as FilterType)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">{currentFilter.description}</p>
+                </div>
+
+                {/* Organization selector (only for non-admin users) */}
+                {!isAdmin && userOrganizations.length > 0 && (
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Organización
+                    </label>
+                    <OrganizationSelector
+                      organizations={userOrganizations}
+                      selectedOrgId={selectedOrgId}
+                      onChange={handleOrganizationChange}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
           {pagination && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
               <div className="flex items-center justify-between text-sm text-blue-800">
                 <span>
                   Mostrando <strong>{aeds.length}</strong> de{" "}
-                  <strong>{pagination.totalRecords}</strong> DEAs pendientes
+                  <strong>{pagination.totalRecords}</strong> DEAs ({currentFilter.label.toLowerCase()})
                 </span>
                 <span className="text-blue-600">
                   Página {pagination.currentPage} de {pagination.totalPages}
@@ -233,7 +382,7 @@ export default function VerifyPage() {
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                   style={{
-                    width: `${(aeds.length / pagination.totalRecords) * 100}%`,
+                    width: `${pagination.totalRecords > 0 ? (aeds.length / pagination.totalRecords) * 100 : 0}%`,
                   }}
                 ></div>
               </div>
@@ -251,11 +400,45 @@ export default function VerifyPage() {
 
         {aeds.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">✅</div>
+            <div className="text-gray-400 text-6xl mb-4">
+              {searchTerm
+                ? "🔍"
+                : filterType === "pending"
+                  ? "✅"
+                  : filterType === "published_verified"
+                    ? "🎉"
+                    : "📋"}
+            </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              No hay DEAs pendientes de verificar
+              {searchTerm
+                ? "No se encontraron resultados"
+                : filterType === "pending"
+                  ? "No hay DEAs pendientes de verificar"
+                  : filterType === "published_unverified"
+                    ? "No hay DEAs publicados sin verificar"
+                    : filterType === "published_verified"
+                      ? "No hay DEAs verificados"
+                      : "No hay DEAs publicados"}
             </h3>
-            <p className="text-gray-600">Todos los DEAs han sido verificados</p>
+            <p className="text-gray-600">
+              {searchTerm
+                ? `No se encontraron DEAs que coincidan con "${searchTerm}"`
+                : filterType === "pending"
+                  ? "Todos los DEAs han sido verificados"
+                  : filterType === "published_unverified"
+                    ? "Todos los DEAs publicados ya han sido verificados manualmente"
+                    : filterType === "published_verified"
+                      ? "No hay DEAs que hayan sido verificados manualmente"
+                      : "No hay DEAs publicados en el sistema"}
+            </p>
+            {searchTerm && (
+              <button
+                onClick={clearSearch}
+                className="mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                Limpiar búsqueda
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -283,8 +466,10 @@ export default function VerifyPage() {
                           {aed.code ||
                             (aed.provisional_number ? `#${aed.provisional_number}` : "Sin código")}
                         </h3>
-                        <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                          Pendiente
+                        <span
+                          className={`text-xs font-medium px-2.5 py-0.5 rounded ${currentFilter.badgeColor}`}
+                        >
+                          {currentFilter.badgeText}
                         </span>
                       </div>
 

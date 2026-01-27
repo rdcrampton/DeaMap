@@ -153,6 +153,46 @@ export class JobProgress {
     });
   }
 
+  /**
+   * Increment successful records count without incrementing processedRecords
+   * Use this when processedRecords is already updated separately
+   */
+  incrementSuccessCount(count: number = 1): JobProgress {
+    return JobProgress.create({
+      ...this.data,
+      successfulRecords: this.data.successfulRecords + count,
+      lastActivityAt: new Date(),
+    });
+  }
+
+  /**
+   * Increment failed records count without incrementing processedRecords
+   * Use this when processedRecords is already updated separately
+   */
+  incrementFailedCount(count: number = 1): JobProgress {
+    return JobProgress.create({
+      ...this.data,
+      failedRecords: this.data.failedRecords + count,
+      lastActivityAt: new Date(),
+    });
+  }
+
+  /**
+   * Increment skipped records count without incrementing processedRecords
+   * Use this when processedRecords is already updated separately
+   */
+  incrementSkippedCount(count: number = 1): JobProgress {
+    return JobProgress.create({
+      ...this.data,
+      skippedRecords: this.data.skippedRecords + count,
+      lastActivityAt: new Date(),
+    });
+  }
+
+  /**
+   * @deprecated Use incrementSuccessCount() when processedRecords is managed separately
+   * Increments both processedRecords and successfulRecords
+   */
   incrementSuccess(count: number = 1): JobProgress {
     return JobProgress.create({
       ...this.data,
@@ -162,6 +202,10 @@ export class JobProgress {
     });
   }
 
+  /**
+   * @deprecated Use incrementFailedCount() when processedRecords is managed separately
+   * Increments both processedRecords and failedRecords
+   */
   incrementFailed(count: number = 1): JobProgress {
     return JobProgress.create({
       ...this.data,
@@ -171,6 +215,10 @@ export class JobProgress {
     });
   }
 
+  /**
+   * @deprecated Use incrementSkippedCount() when processedRecords is managed separately
+   * Increments both processedRecords and skippedRecords
+   */
   incrementSkipped(count: number = 1): JobProgress {
     return JobProgress.create({
       ...this.data,

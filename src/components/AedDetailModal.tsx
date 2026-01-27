@@ -10,8 +10,9 @@ import {
   Phone,
   X,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
+import { useAnalytics } from "@/hooks/useAnalytics";
 import type { Aed } from "@/types/aed";
 
 interface AedDetailModalProps {
@@ -22,11 +23,51 @@ interface AedDetailModalProps {
 
 export default function AedDetailModal({ aed, isOpen, onClose }: AedDetailModalProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const { trackDeaImageView, trackDeaPhoneClick, trackExternalLink, trackButtonClick } =
+    useAnalytics();
 
   // Reset selectedImageIndex when AED changes to avoid index out of bounds
   useEffect(() => {
     setSelectedImageIndex(0);
   }, [aed?.id]);
+
+  const handleImageChange = useCallback(
+    (index: number) => {
+      if (aed) {
+        trackDeaImageView(aed.id, index, aed.images?.length || 0);
+      }
+      setSelectedImageIndex(index);
+    },
+    [aed, trackDeaImageView]
+  );
+
+  const handlePhoneClick = useCallback(
+    (phone: string) => {
+      if (aed) {
+        trackDeaPhoneClick(aed.id, phone);
+      }
+    },
+    [aed, trackDeaPhoneClick]
+  );
+
+  const handleDirectionsClick = useCallback(() => {
+    if (aed) {
+      trackExternalLink(
+        `https://www.google.com/maps/search/?api=1&query=${aed.latitude},${aed.longitude}`,
+        "Cómo llegar",
+        "dea_modal"
+      );
+    }
+  }, [aed, trackExternalLink]);
+
+  const handleEmailClick = useCallback(
+    (_email: string) => {
+      if (aed) {
+        trackButtonClick("email_responsible", "dea_modal");
+      }
+    },
+    [aed, trackButtonClick]
+  );
 
   if (!isOpen || !aed) return null;
 
@@ -98,7 +139,7 @@ export default function AedDetailModal({ aed, isOpen, onClose }: AedDetailModalP
             {aed.images.map((image, index) => (
               <button
                 key={image.id}
-                onClick={() => setSelectedImageIndex(index)}
+                onClick={() => handleImageChange(index)}
                 className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
                   index === selectedImageIndex
                     ? "border-blue-500 shadow-lg"
@@ -192,7 +233,11 @@ export default function AedDetailModal({ aed, isOpen, onClose }: AedDetailModalP
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <Mail className="w-4 h-4" />
-                      <a href={`mailto:${aed.responsible.email}`} className="hover:text-blue-600">
+                      <a
+                        href={`mailto:${aed.responsible.email}`}
+                        className="hover:text-blue-600"
+                        onClick={() => handleEmailClick(aed.responsible!.email)}
+                      >
                         {aed.responsible.email}
                       </a>
                     </div>
@@ -200,7 +245,11 @@ export default function AedDetailModal({ aed, isOpen, onClose }: AedDetailModalP
                     {aed.responsible.phone && (
                       <div className="flex items-center space-x-2 text-sm text-gray-600">
                         <Phone className="w-4 h-4" />
-                        <a href={`tel:${aed.responsible.phone}`} className="hover:text-blue-600">
+                        <a
+                          href={`tel:${aed.responsible.phone}`}
+                          className="hover:text-blue-600"
+                          onClick={() => handlePhoneClick(aed.responsible!.phone!)}
+                        >
                           {aed.responsible.phone}
                         </a>
                       </div>
@@ -219,6 +268,7 @@ export default function AedDetailModal({ aed, isOpen, onClose }: AedDetailModalP
               rel="noopener noreferrer"
               className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all active:scale-95"
               style={{ minHeight: "48px" }}
+              onClick={handleDirectionsClick}
             >
               <NavigationIcon className="w-5 h-5" />
               <span>Cómo llegar</span>

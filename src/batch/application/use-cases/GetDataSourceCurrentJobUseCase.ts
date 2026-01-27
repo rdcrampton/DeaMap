@@ -32,6 +32,7 @@ export class GetDataSourceCurrentJobUseCase {
         {
           dataSourceId: input.dataSourceId,
           statuses: [
+            JobStatus.PENDING,
             JobStatus.IN_PROGRESS,
             JobStatus.RESUMING,
             JobStatus.WAITING,

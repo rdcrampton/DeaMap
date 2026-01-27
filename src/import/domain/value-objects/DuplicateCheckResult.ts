@@ -55,6 +55,14 @@ export class DuplicateCheckResult {
     return this._isPossibleDuplicate;
   }
 
+  /**
+   * Alias for isDuplicate - returns true if this is a confirmed duplicate
+   * (not just a possible duplicate)
+   */
+  get hasConfirmedDuplicate(): boolean {
+    return this._isDuplicate;
+  }
+
   get matches(): DuplicateMatch[] {
     return [...this._matches];
   }

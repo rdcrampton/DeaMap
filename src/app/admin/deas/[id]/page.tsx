@@ -23,22 +23,136 @@ import {
   Trash2,
 } from "lucide-react";
 
+/**
+ * Type for internal note structure
+ */
+interface InternalNote {
+  text: string;
+  author?: string;
+  date?: string;
+  type?: string;
+}
+
+/**
+ * Type for DEA update payload sent to API
+ */
+interface DeaUpdatePayload extends Partial<AdminDeaData> {
+  deleteImageIds?: string[];
+}
+
+/**
+ * Type for field values that can be edited
+ */
+type EditableFieldValue = string | boolean | number | null;
+
 interface AdminDeaData {
   id: string;
   code: string | null;
+  provisional_number: number | null;
   name: string;
   status: string;
   establishment_type: string | null;
+
+  // Geospatial
   latitude: number | null;
   longitude: number | null;
-  publication_mode: string;
+  coordinates_precision: string | null;
+
+  // Origin and traceability
+  source_origin: string;
+  source_details: string | null;
+  batch_job_id: string | null;
+  external_reference: string | null;
+
+  // Notes
+  public_notes: string | null;
+  internal_notes: InternalNote[] | null;
+  rejection_reason: string | null;
+  requires_attention: boolean;
+
+  // Verification and accessibility
   last_verified_at: string | null;
+  verification_method: string | null;
   is_publicly_accessible: boolean;
+  installation_date: string | null;
+
+  // Publication
+  publication_mode: string;
+  publication_requested_at: string | null;
+  publication_approved_at: string | null;
+  publication_approved_by: string | null;
+  published_at: string | null;
+
+  // Ownership
+  owner_user_id: string | null;
+
+  // Sequence
+  sequence: number;
+
+  // External data source
+  data_source_id: string | null;
+  last_synced_at: string | null;
+  sync_content_hash: string | null;
+
+  // Audit
   created_at: string;
   updated_at: string;
-  location: any;
-  schedule: any;
-  responsible: any;
+  created_by: string | null;
+  updated_by: string | null;
+
+  // Relations
+  location: {
+    id: string;
+    street_type: string | null;
+    street_name: string | null;
+    street_number: string | null;
+    postal_code: string | null;
+    city_name: string | null;
+    city_code: string | null;
+    district_code: string | null;
+    district_name: string | null;
+    neighborhood_code: string | null;
+    neighborhood_name: string | null;
+    floor: string | null;
+    location_details: string | null;
+    access_instructions: string | null;
+  };
+  schedule: {
+    id: string;
+    description: string | null;
+    has_24h_surveillance: boolean;
+    has_restricted_access: boolean;
+    weekday_opening: string | null;
+    weekday_closing: string | null;
+    saturday_opening: string | null;
+    saturday_closing: string | null;
+    sunday_opening: string | null;
+    sunday_closing: string | null;
+    holidays_as_weekday: boolean;
+    closed_on_holidays: boolean;
+    closed_in_august: boolean;
+    notes: string | null;
+  } | null;
+  responsible: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    alternative_phone: string | null;
+    ownership: string | null;
+    local_ownership: string | null;
+    local_use: string | null;
+    organization: string | null;
+    position: string | null;
+    department: string | null;
+    notes: any;
+  } | null;
+  batch_job: any;
+  data_source: {
+    id: string;
+    name: string;
+    description: string | null;
+  } | null;
   images: any[];
   status_changes: any[];
   publication_history: any[];
@@ -72,7 +186,7 @@ export default function AdminDeaDetailPage() {
       setIsSaving(true);
       setError(null);
 
-      const updatePayload: any = {
+      const updatePayload: DeaUpdatePayload = {
         ...editedData,
       };
 
@@ -116,15 +230,16 @@ export default function AdminDeaDetailPage() {
       setImagesToDelete([]);
       
       alert("Cambios guardados exitosamente");
-    } catch (err: any) {
-      setError(err.message || "Error al guardar");
-      alert("Error al guardar: " + (err.message || "Error desconocido"));
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Error al guardar";
+      setError(errorMessage);
+      alert("Error al guardar: " + errorMessage);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleFieldChange = (field: string, value: any) => {
+  const handleFieldChange = (field: string, value: EditableFieldValue) => {
     setEditedData((prev) => ({
       ...prev,
       [field]: value,
@@ -439,25 +554,460 @@ export default function AdminDeaDetailPage() {
               </div>
             </div>
 
-            {/* Location, Schedule, and Responsible cards remain read-only for now */}
+            {/* Location Card - Complete Information */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <MapPin className="w-5 h-5 text-blue-600" />
-                <h2 className="text-lg font-semibold text-gray-900">Ubicación</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Ubicación Completa</h2>
               </div>
-              <div className="space-y-2 text-sm">
-                <p className="text-gray-900">
-                  {aed.location.street_type} {aed.location.street_name}{" "}
-                  {aed.location.street_number}
-                </p>
-                <p className="text-gray-600">
-                  {aed.location.postal_code} - {aed.location.city_name}
-                </p>
-                {aed.location.district_name && (
-                  <p className="text-gray-600">{aed.location.district_name}</p>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                    <p className="text-gray-900">
+                      {aed.location.street_type} {aed.location.street_name}{" "}
+                      {aed.location.street_number}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal y Ciudad</label>
+                    <p className="text-gray-900">
+                      {aed.location.postal_code} - {aed.location.city_name}
+                    </p>
+                    {aed.location.city_code && (
+                      <p className="text-sm text-gray-600">Código ciudad: {aed.location.city_code}</p>
+                    )}
+                  </div>
+                  {aed.location.district_name && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Distrito</label>
+                      <p className="text-gray-900">{aed.location.district_name}</p>
+                      {aed.location.district_code && (
+                        <p className="text-sm text-gray-600">Código: {aed.location.district_code}</p>
+                      )}
+                    </div>
+                  )}
+                  {aed.location.neighborhood_name && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Barrio</label>
+                      <p className="text-gray-900">{aed.location.neighborhood_name}</p>
+                      {aed.location.neighborhood_code && (
+                        <p className="text-sm text-gray-600">Código: {aed.location.neighborhood_code}</p>
+                      )}
+                    </div>
+                  )}
+                  {aed.location.floor && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Planta/Nivel</label>
+                      <p className="text-gray-900">{aed.location.floor}</p>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Coordenadas</label>
+                    {aed.latitude && aed.longitude ? (
+                      <div className="space-y-1">
+                        <p className="text-gray-900 font-mono text-sm">
+                          {aed.latitude.toFixed(6)}, {aed.longitude.toFixed(6)}
+                        </p>
+                        {aed.coordinates_precision && (
+                          <p className="text-sm text-gray-600">Precisión: {aed.coordinates_precision}</p>
+                        )}
+                        {/* Mapa preview usando OpenStreetMap */}
+                        <div className="mt-2 relative rounded border border-gray-300 overflow-hidden">
+                          <iframe
+                            width="100%"
+                            height="300"
+                            frameBorder="0"
+                            scrolling="no"
+                            marginHeight={0}
+                            marginWidth={0}
+                            src={`https://www.openstreetmap.org/export/embed.html?bbox=${aed.longitude - 0.01},${aed.latitude - 0.01},${aed.longitude + 0.01},${aed.latitude + 0.01}&layer=mapnik&marker=${aed.latitude},${aed.longitude}`}
+                            style={{ border: 0 }}
+                          />
+                          <div className="absolute bottom-2 left-2 right-2 flex gap-2">
+                            <a
+                              href={`https://www.openstreetmap.org/?mlat=${aed.latitude}&mlon=${aed.longitude}#map=18/${aed.latitude}/${aed.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 px-3 py-1.5 bg-white/90 hover:bg-white text-sm text-blue-600 rounded shadow hover:shadow-md transition-all text-center"
+                            >
+                              Ver en OpenStreetMap
+                            </a>
+                            <a
+                              href={`https://www.google.com/maps?q=${aed.latitude},${aed.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 px-3 py-1.5 bg-white/90 hover:bg-white text-sm text-blue-600 rounded shadow hover:shadow-md transition-all text-center"
+                            >
+                              Ver en Google Maps
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-gray-600 italic">No disponibles</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {aed.location.location_details && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Detalles de Ubicación</label>
+                  <p className="text-gray-900 whitespace-pre-wrap">{aed.location.location_details}</p>
+                </div>
+              )}
+              {aed.location.access_instructions && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Instrucciones de Acceso</label>
+                  <p className="text-gray-900 whitespace-pre-wrap">{aed.location.access_instructions}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Schedule Card - Complete Information */}
+            {aed.schedule && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Horarios de Disponibilidad</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {aed.schedule.has_24h_surveillance && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                          24/7 Disponible
+                        </span>
+                      )}
+                      {aed.schedule.has_restricted_access && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+                          Acceso Restringido
+                        </span>
+                      )}
+                    </div>
+                    {aed.schedule.description && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                        <p className="text-gray-900">{aed.schedule.description}</p>
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Horario Semanal</label>
+                      <div className="space-y-2 text-sm">
+                        {aed.schedule.weekday_opening && aed.schedule.weekday_closing ? (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Lunes a Viernes:</span>
+                            <span className="text-gray-900 font-medium">
+                              {aed.schedule.weekday_opening} - {aed.schedule.weekday_closing}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Lunes a Viernes:</span>
+                            <span className="text-gray-500 italic">No especificado</span>
+                          </div>
+                        )}
+                        {aed.schedule.saturday_opening && aed.schedule.saturday_closing ? (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Sábados:</span>
+                            <span className="text-gray-900 font-medium">
+                              {aed.schedule.saturday_opening} - {aed.schedule.saturday_closing}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Sábados:</span>
+                            <span className="text-gray-500 italic">No especificado</span>
+                          </div>
+                        )}
+                        {aed.schedule.sunday_opening && aed.schedule.sunday_closing ? (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Domingos:</span>
+                            <span className="text-gray-900 font-medium">
+                              {aed.schedule.sunday_opening} - {aed.schedule.sunday_closing}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Domingos:</span>
+                            <span className="text-gray-500 italic">No especificado</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Días Especiales</label>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          {aed.schedule.holidays_as_weekday ? (
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-gray-400" />
+                          )}
+                          <span className="text-gray-700">Festivos como día laborable</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {aed.schedule.closed_on_holidays ? (
+                            <XCircle className="w-4 h-4 text-red-600" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                          )}
+                          <span className="text-gray-700">
+                            {aed.schedule.closed_on_holidays ? "Cerrado en festivos" : "Abierto en festivos"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {aed.schedule.closed_in_august ? (
+                            <XCircle className="w-4 h-4 text-red-600" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                          )}
+                          <span className="text-gray-700">
+                            {aed.schedule.closed_in_august ? "Cerrado en agosto" : "Abierto en agosto"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {aed.schedule.notes && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Notas Adicionales</label>
+                        <p className="text-gray-900 text-sm whitespace-pre-wrap">{aed.schedule.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Responsible Card - Complete Information */}
+            {aed.responsible && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">Responsable y Titular</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Responsable</label>
+                      <p className="text-gray-900 font-medium">{aed.responsible.name}</p>
+                    </div>
+                    {aed.responsible.organization && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Organización</label>
+                        <p className="text-gray-900">{aed.responsible.organization}</p>
+                      </div>
+                    )}
+                    {aed.responsible.position && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+                        <p className="text-gray-900">{aed.responsible.position}</p>
+                      </div>
+                    )}
+                    {aed.responsible.department && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
+                        <p className="text-gray-900">{aed.responsible.department}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Información de Contacto</label>
+                      <div className="space-y-1">
+                        {aed.responsible.email && (
+                          <p className="text-gray-900">
+                            <span className="text-gray-600">Email:</span>{" "}
+                            <a href={`mailto:${aed.responsible.email}`} className="text-blue-600 hover:underline">
+                              {aed.responsible.email}
+                            </a>
+                          </p>
+                        )}
+                        {aed.responsible.phone && (
+                          <p className="text-gray-900">
+                            <span className="text-gray-600">Teléfono:</span>{" "}
+                            <a href={`tel:${aed.responsible.phone}`} className="text-blue-600 hover:underline">
+                              {aed.responsible.phone}
+                            </a>
+                          </p>
+                        )}
+                        {aed.responsible.alternative_phone && (
+                          <p className="text-gray-900">
+                            <span className="text-gray-600">Teléfono alternativo:</span>{" "}
+                            <a href={`tel:${aed.responsible.alternative_phone}`} className="text-blue-600 hover:underline">
+                              {aed.responsible.alternative_phone}
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {aed.responsible.ownership && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Titularidad</label>
+                      <p className="text-gray-900">{aed.responsible.ownership}</p>
+                    </div>
+                  )}
+                  {aed.responsible.local_ownership && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Titularidad del Local</label>
+                      <p className="text-gray-900">{aed.responsible.local_ownership}</p>
+                    </div>
+                  )}
+                  {aed.responsible.local_use && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Uso del Local</label>
+                      <p className="text-gray-900">{aed.responsible.local_use}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Origin and Traceability Card */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Origen y Trazabilidad</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Origen de los Datos</label>
+                    <p className="text-gray-900">{aed.source_origin.replace(/_/g, " ")}</p>
+                    {aed.source_details && (
+                      <p className="text-sm text-gray-600 mt-1">{aed.source_details}</p>
+                    )}
+                  </div>
+                  {aed.external_reference && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Referencia Externa</label>
+                      <p className="text-gray-900 font-mono text-sm">{aed.external_reference}</p>
+                    </div>
+                  )}
+                  {aed.batch_job && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Lote de Importación</label>
+                      <p className="text-gray-900 font-mono text-xs">{aed.batch_job_id}</p>
+                    </div>
+                  )}
+                  {aed.data_source && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fuente de Datos</label>
+                      <p className="text-gray-900">{aed.data_source.name}</p>
+                      {aed.last_synced_at && (
+                        <p className="text-sm text-gray-600">
+                          Última sincronización:{" "}
+                          {new Date(aed.last_synced_at).toLocaleString("es-ES")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Verificación</label>
+                    {aed.last_verified_at ? (
+                      <div>
+                        <p className="text-gray-900">
+                          {new Date(aed.last_verified_at).toLocaleDateString("es-ES", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
+                        </p>
+                        {aed.verification_method && (
+                          <p className="text-sm text-gray-600">Método: {aed.verification_method}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-gray-600 italic">Sin verificar</p>
+                    )}
+                  </div>
+                  {aed.installation_date && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Instalación</label>
+                      <p className="text-gray-900">
+                        {new Date(aed.installation_date).toLocaleDateString("es-ES", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Metadatos</label>
+                    <div className="space-y-1 text-sm">
+                      <p className="text-gray-600">
+                        Creado: {new Date(aed.created_at).toLocaleString("es-ES")}
+                      </p>
+                      <p className="text-gray-600">
+                        Actualizado: {new Date(aed.updated_at).toLocaleString("es-ES")}
+                      </p>
+                      {aed.sequence && (
+                        <p className="text-gray-600">Secuencia: #{aed.sequence}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Notes Card */}
+            {(aed.public_notes || aed.internal_notes || aed.rejection_reason || aed.requires_attention) && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Notas y Observaciones</h2>
+                <div className="space-y-4">
+                  {aed.requires_attention && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="w-5 h-5 text-yellow-600" />
+                        <span className="font-medium text-yellow-900">Requiere Atención</span>
+                      </div>
+                    </div>
+                  )}
+                  {aed.rejection_reason && (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <label className="block text-sm font-medium text-red-900 mb-1">Motivo de Rechazo</label>
+                      <p className="text-red-800">{aed.rejection_reason}</p>
+                    </div>
+                  )}
+                  {aed.public_notes && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Notas Públicas</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{aed.public_notes}</p>
+                    </div>
+                  )}
+                  {aed.internal_notes && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Notas Internas</label>
+                      <div className="text-gray-900 text-sm">
+                        {Array.isArray(aed.internal_notes) ? (
+                          <div className="space-y-2">
+                            {aed.internal_notes.map((note: any, idx: number) => (
+                              <div key={idx} className="p-3 bg-gray-50 rounded border border-gray-200">
+                                <p className="whitespace-pre-wrap">{note.text || note}</p>
+                                {note.author && (
+                                  <p className="text-xs text-gray-600 mt-1">Por: {note.author}</p>
+                                )}
+                                {note.date && (
+                                  <p className="text-xs text-gray-600">
+                                    {new Date(note.date).toLocaleString("es-ES")}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{JSON.stringify(aed.internal_notes)}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

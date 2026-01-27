@@ -16,9 +16,11 @@ export interface DeaListItem {
   status: string;  // AED status (DRAFT, PUBLISHED, etc.)
   last_verified_at: Date | null;
   establishment_type: string | null;
-  assignment_type: string;  // Assignment type (CIVIL_PROTECTION, etc.)
-  assignment_status: string;  // Assignment status (ACTIVE, REVOKED, etc.)
-  assigned_at: Date;
+  assignment_type: string | null;  // Assignment type (CIVIL_PROTECTION, etc.) - null when viewing all DEAs
+  assignment_status: string | null;  // Assignment status (ACTIVE, REVOKED, etc.) - null when viewing all DEAs
+  assigned_at: Date | null;  // Assignment date - null when viewing all DEAs
+  coordinate_validation: string | null;  // VALID, INVALID, NEEDS_VALIDATION, NO_COMPARISON
+  coordinate_distance: number | null;  // Distance in meters between original and geocoded coords
 }
 
 export interface DeasListConfig {
