@@ -176,20 +176,44 @@ function validateUrl(value: unknown): ValidationFieldResult {
   const str = String(value).trim();
   if (!str) return { valid: true };
 
+  const invalidUrlResult: ValidationFieldResult = {
+    valid: false,
+    message: `"${str}" no es una URL válida`,
+    severity: "warning",
+    suggestion: "Las URLs deben comenzar con http:// o https://",
+  };
+
+  const isSharePointHost = (hostname: string): boolean => {
+    const normalizedHostname = hostname.toLowerCase();
+    return normalizedHostname === "sharepoint.com" || normalizedHostname.endsWith(".sharepoint.com");
+  };
+
   try {
     new URL(str);
     return { valid: true };
   } catch {
-    // Permitir URLs parciales de SharePoint y similares
-    if (str.startsWith("http") || str.includes("sharepoint.com")) {
+    // Si aparenta ser una URL absoluta pero no parsea, es inválida.
+    if (/^https?:/i.test(str)) {
+      return invalidUrlResult;
+    }
+
+    // Permitir rutas relativas típicas de SharePoint.
+    if (/^\/sites\/[^/\s]+(?:\/.*)?$/i.test(str)) {
       return { valid: true };
     }
-    return {
-      valid: false,
-      message: `"${str}" no es una URL vÃ¡lida`,
-      severity: "warning",
-      suggestion: "Las URLs deben comenzar con http:// o https://",
-    };
+
+    // Aceptar formato parcial de dominio SharePoint (sin esquema) validando hostname parseado.
+    const normalizedSharePointCandidate = `https://${str.replace(/^\/\//, "")}`;
+    try {
+      const parsedSharePointUrl = new URL(normalizedSharePointCandidate);
+      if (isSharePointHost(parsedSharePointUrl.hostname)) {
+        return { valid: true };
+      }
+    } catch {
+      // Si no parsea, es inválida.
+    }
+
+    return invalidUrlResult;
   }
 }
 
