@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Import Batches API
  *
  * GET /api/import - List import batches (filtered by AED_CSV_IMPORT type)
@@ -11,11 +11,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { JobType, type JobConfig, mergeWithDefaults } from "@/batch/domain";
-import { BatchJobOrchestrator } from "@/batch/application/orchestrator/BatchJobOrchestrator";
-import { PrismaBatchJobRepository } from "@/batch/infrastructure/repositories/PrismaBatchJobRepository";
-import { initializeProcessors } from "@/batch/application/processors";
-import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
+import { JobType } from "@/batch/domain";
+import { getBulkImportService } from "@/import/infrastructure/factories/createBulkImportService";
 import { uploadToS3 } from "@/lib/s3";
 import fs from "fs/promises";
 import path from "path";
@@ -142,21 +139,13 @@ export async function POST(request: NextRequest) {
 
     if (!filePath || !mappings || !Array.isArray(mappings)) {
       return NextResponse.json(
-        { error: "Faltan parámetros requeridos (filePath, mappings)" },
+        { error: "Faltan parÃ¡metros requeridos (filePath, mappings)" },
         { status: 400 }
       );
     }
 
-    // Initialize processors
-    const dataSourceRepository = new PrismaDataSourceRepository(prisma);
-    initializeProcessors(prisma, dataSourceRepository);
-
-    // Create orchestrator and repository
-    const repository = new PrismaBatchJobRepository(prisma);
-    const orchestrator = new BatchJobOrchestrator(repository);
-
     // Upload CSV file to S3 for persistent storage
-    console.log(`📤 [Import] Uploading CSV to S3: ${filePath}`);
+    console.log(`ðŸ“¤ [Import] Uploading CSV to S3: ${filePath}`);
 
     let s3Url: string;
     let fileSize: number;
@@ -179,53 +168,48 @@ export async function POST(request: NextRequest) {
         prefix: "batch-jobs/csv-imports",
       });
 
-      console.log(`✅ [Import] CSV uploaded to S3: ${s3Url} (${fileSize} bytes, hash: ${fileHash.substring(0, 8)}...)`);
+      console.log(`âœ… [Import] CSV uploaded to S3: ${s3Url} (${fileSize} bytes, hash: ${fileHash.substring(0, 8)}...)`);
 
       // Clean up temporary file
       await fs.unlink(filePath);
-      console.log(`🗑️ [Import] Temporary file deleted: ${filePath}`);
+      console.log(`ðŸ—‘ï¸ [Import] Temporary file deleted: ${filePath}`);
     } catch (error) {
-      console.error(`❌ [Import] Failed to upload CSV to S3:`, error);
+      console.error(`âŒ [Import] Failed to upload CSV to S3:`, error);
       return NextResponse.json(
         { error: "Error al subir el archivo CSV a almacenamiento permanente" },
         { status: 500 }
       );
     }
 
-    // Create configuration with S3 URL instead of /tmp path
-    const config: JobConfig = mergeWithDefaults({
-      type: JobType.AED_CSV_IMPORT,
-      filePath: s3Url, // Use S3 URL instead of /tmp path
-      columnMappings: mappings.map((m: { csvColumn: string; systemField: string }) => ({
-        csvColumn: m.csvColumn,
-        systemField: m.systemField,
-      })),
+    // Preparar auth SharePoint si se proporcionÃ³
+    const sharePointAuth = sharepointCookies
+      ? {
+          fedAuth: sharepointCookies.FedAuth || "",
+          rtFa: sharepointCookies.rtFa,
+        }
+      : undefined;
+
+    // Iniciar importaciÃ³n con @batchactions/import â€” procesa primer chunk inline
+    console.log(`ðŸš€ [Import] Starting import with @batchactions/import for ${fileName}`);
+
+    const service = getBulkImportService();
+    const result = await service.startImport({
+      s3Url,
+      fileName,
+      userId: user.userId,
       delimiter: ";",
+      batchSize: 50,
+      continueOnError: true,
       skipDuplicates: true,
-      duplicateThreshold: 0.9,
-      chunkSize: 50, // Process 50 records per chunk
-      sharePointAuth: sharepointCookies
-        ? {
-            fedAuth: sharepointCookies.FedAuth || "",
-            rtFa: sharepointCookies.rtFa,
-          }
-        : undefined,
+      sharePointAuth,
+      maxDurationMs: 80_000,
+      jobName: batchName || `ImportaciÃ³n CSV ${new Date().toISOString()}`,
     });
 
-    // Create the batch job (DO NOT START IT - let the CRON handle it)
-    const job = await orchestrator.create({
-      type: JobType.AED_CSV_IMPORT,
-      name: batchName || `Importación CSV ${new Date().toISOString()}`,
-      description: `Importación de ${fileName}`,
-      config,
-      createdBy: user.userId, // JWT payload has userId as UUID
-      tags: ["csv-import", "manual-upload"],
-    });
-
-    // Create artifact record to track the uploaded CSV file
+    // Crear artifact para tracking del archivo CSV
     await prisma.batchJobArtifact.create({
       data: {
-        job_id: job.id,
+        job_id: result.jobId,
         type: "FILE",
         name: fileName,
         description: `CSV source file for import job`,
@@ -236,29 +220,38 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`📋 [Import] Job ${job.id} created with S3 artifact and queued for CRON processing`);
+    const hasMore = !result.chunk.done;
+
+    console.log(
+      `ðŸ“‹ [Import] Job ${result.jobId} â€” first chunk processed: ` +
+      `${result.progress.processedRecords}/${result.progress.totalRecords} records ` +
+      `(${hasMore ? "more chunks pending" : "completed"})`
+    );
 
     return NextResponse.json({
       success: true,
-      batchId: job.id,
-      status: job.status, // Will be PENDING
+      batchId: result.jobId,
+      status: hasMore ? "IN_PROGRESS" : "COMPLETED",
       progress: {
-        totalRecords: 0,
-        processedRecords: 0,
-        successfulRecords: 0,
-        failedRecords: 0,
-        percentage: 0,
-        hasMore: true,
+        totalRecords: result.progress.totalRecords,
+        processedRecords: result.progress.processedRecords,
+        successfulRecords: Math.max(0, result.progress.processedRecords - result.progress.failedRecords),
+        failedRecords: result.progress.failedRecords,
+        percentage: result.progress.percentage,
+        hasMore,
       },
-      message: "Importación en cola. El procesamiento comenzará automáticamente en breve.",
+      message: hasMore
+        ? "Primer lote procesado. Los siguientes se procesarÃ¡n automÃ¡ticamente."
+        : "ImportaciÃ³n completada.",
     });
   } catch (error) {
     console.error("Error creating import batch:", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Error al crear la importación",
+        error: error instanceof Error ? error.message : "Error al crear la importaciÃ³n",
       },
       { status: 500 }
     );
   }
 }
+
