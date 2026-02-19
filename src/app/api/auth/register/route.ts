@@ -3,10 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createToken, setAuthCookie } from "@/lib/jwt";
 import { hashPassword, validatePassword } from "@/lib/password";
+import { authRateLimiter } from "@/lib/rate-limit";
 import type { AuthResponse, RegisterRequest, UserPublic } from "@/types";
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body: RegisterRequest = await request.json();
     const { email, password, name } = body;
 

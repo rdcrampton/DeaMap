@@ -11,12 +11,20 @@ const nextConfig: NextConfig = {
     },
   },
 
-  // Image optimization settings
+  // Image optimization settings - restricted to known image sources
   images: {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**",
+        hostname: "*.s3.*.amazonaws.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.cloudfront.net",
+      },
+      {
+        protocol: "https",
+        hostname: "*.sharepoint.com",
       },
     ],
   },
@@ -26,17 +34,7 @@ const nextConfig: NextConfig = {
 
   productionBrowserSourceMaps: process.env.VERCEL_ENV === "preview",
 
-  // Ensure proper handling of API routes
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "/api/:path*",
-      },
-    ];
-  },
-
-  // Add proper headers for security
+  // Security headers
   async headers() {
     return [
       {
@@ -49,6 +47,22 @@ const nextConfig: NextConfig = {
           {
             key: "X-Content-Type-Options",
             value: "nosniff",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()",
+          },
+          {
+            key: "X-DNS-Prefetch-Control",
+            value: "on",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
           },
         ],
       },

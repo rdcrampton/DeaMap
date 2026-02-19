@@ -416,7 +416,7 @@ export class SharePointImageDownloader implements IImageDownloader {
         };
       }
     } catch (error) {
-      const axiosError = error as any;
+      const axiosError = error as { response?: { status?: number }; message?: string };
       const statusCode = axiosError?.response?.status;
 
       // Casos especiales de error
@@ -433,10 +433,10 @@ export class SharePointImageDownloader implements IImageDownloader {
 
       return {
         valid: false,
-        message: `Error al validar cookies: ${axiosError?.message || String(error)}`,
+        message: `Error al validar cookies: ${error instanceof Error ? error.message : String(error)}`,
         details: {
           statusCode,
-          error: axiosError?.message || String(error),
+          error: error instanceof Error ? error.message : String(error),
         },
       };
     }

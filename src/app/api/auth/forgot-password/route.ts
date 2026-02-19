@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { authRateLimiter } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 const forgotPasswordSchema = z.object({
@@ -10,6 +11,9 @@ const forgotPasswordSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const validatedData = forgotPasswordSchema.parse(body);
 
@@ -30,15 +34,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate secure reset token
+    // Generate secure reset token — store only the hash in DB
     const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
     const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour from now
 
-    // Save token to database
+    // Save hashed token to database (plain token sent via email)
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        reset_token: resetToken,
+        reset_token: resetTokenHash,
         reset_token_expires: resetTokenExpires,
       },
     });

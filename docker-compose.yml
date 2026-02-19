@@ -4,9 +4,9 @@ services:
     image: postgis/postgis:17-3.4
     container_name: dea-postgres
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: toor
-      POSTGRES_DB: samur_dea
+      POSTGRES_USER: ${POSTGRES_USER:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toor}
+      POSTGRES_DB: ${POSTGRES_DB:-samur_dea}
     ports:
       - "5555:5432"
     volumes:

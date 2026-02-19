@@ -163,21 +163,61 @@ export async function canUserManageOrganization(
 }
 
 /**
- * Get user's permissions for a specific AED
+ * Get user's permissions for a specific AED in a single optimized pass.
+ * Uses 2 DB queries instead of 8 (4 functions x 2 queries each).
  */
 export async function getUserPermissionsForAed(userId: string, aedId: string) {
-  const [canView, canEdit, canVerify, canApprove] = await Promise.all([
-    canUserViewAed(userId, aedId),
-    canUserEditAed(userId, aedId),
-    canUserVerifyAed(userId, aedId),
-    canUserApprovePublication(userId, aedId),
-  ]);
+  // Query 1: get AED with owner and assignments
+  const aed = await prisma.aed.findUnique({
+    where: { id: aedId },
+    select: {
+      owner_user_id: true,
+      publication_mode: true,
+      assignments: {
+        where: { status: "ACTIVE" },
+        select: { organization_id: true },
+      },
+    },
+  });
+
+  if (!aed) {
+    return { can_view: false, can_edit: false, can_verify: false, can_approve: false };
+  }
+
+  const isOwner = aed.owner_user_id === userId;
+  const isPublic = aed.publication_mode !== "NONE";
+  const assignedOrgIds = aed.assignments.map((a) => a.organization_id);
+
+  // No assignments: resolve without another query
+  if (assignedOrgIds.length === 0) {
+    return {
+      can_view: isOwner || isPublic,
+      can_edit: isOwner,
+      can_verify: false,
+      can_approve: false,
+    };
+  }
+
+  // Query 2: user's memberships in assigned organizations (all permission flags)
+  const memberships = await prisma.organizationMember.findMany({
+    where: {
+      user_id: userId,
+      organization_id: { in: assignedOrgIds },
+    },
+    select: {
+      can_edit: true,
+      can_verify: true,
+      can_approve: true,
+    },
+  });
+
+  const isMember = memberships.length > 0;
 
   return {
-    can_view: canView,
-    can_edit: canEdit,
-    can_verify: canVerify,
-    can_approve: canApprove,
+    can_view: isOwner || isMember || isPublic,
+    can_edit: isOwner || memberships.some((m) => m.can_edit),
+    can_verify: memberships.some((m) => m.can_verify),
+    can_approve: memberships.some((m) => m.can_approve),
   };
 }
 

@@ -71,12 +71,12 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error("Error fetching organizations:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const isDevelopment = process.env.NODE_ENV === "development";
     return NextResponse.json(
       {
         success: false,
         error: "Failed to fetch organizations",
-        details: errorMessage
+        ...(isDevelopment && { details: error instanceof Error ? error.message : "Unknown error" }),
       },
       { status: 500 }
     );

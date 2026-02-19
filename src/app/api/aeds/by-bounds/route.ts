@@ -88,7 +88,10 @@ export async function GET(request: NextRequest) {
       strategy,
     });
 
-    return NextResponse.json(response);
+    const httpResponse = NextResponse.json(response);
+    // Cache clustered map data for 30s, allow stale for 2min while revalidating
+    httpResponse.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
+    return httpResponse;
   } catch (error) {
     console.error("Error fetching AEDs by bounds:", error);
     return NextResponse.json(

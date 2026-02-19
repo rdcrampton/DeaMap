@@ -3,7 +3,8 @@
  * Capa de Dominio - No depende de ninguna implementación
  */
 
-import type { ImageVariant } from "@/lib/s3-utils";
+/** Image variant types (domain concept, not tied to any storage impl) */
+export type ImageVariant = "original" | "processed" | "thumb";
 
 export interface ImageUploadOptions {
   buffer: Buffer;

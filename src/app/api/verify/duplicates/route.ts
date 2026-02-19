@@ -11,8 +11,7 @@ interface DuplicateAedData {
   establishment_type: string | null;
   latitude: number | null;
   longitude: number | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  internal_notes: any | null;
+  internal_notes: Array<{ text?: string; [key: string]: unknown }> | null;
   status: string;
   location: {
     street_type: string | null;
@@ -118,13 +117,13 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Filtrar por score si se especifica (search in internal_notes JSON)
-    let filteredAeds = aeds as unknown as DuplicateAedData[];
+    let filteredAeds = aeds as DuplicateAedData[];
     if (minScore || maxScore) {
       filteredAeds = filteredAeds.filter((aed) => {
         if (!aed.internal_notes || !Array.isArray(aed.internal_notes)) return false;
 
         // Look for duplicate note with score
-        const duplicateNote = (aed.internal_notes as Array<{ text?: string }>).find((n) =>
+        const duplicateNote = aed.internal_notes.find((n) =>
           n.text?.includes("score:")
         );
         if (!duplicateNote?.text) return false;
