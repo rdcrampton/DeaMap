@@ -105,4 +105,87 @@ export class PrismaAedRepository implements IAedRepository {
       return null;
     }
   }
+
+  // ============================================================
+  // Batch methods — optimized for checkBatch() (single query per field)
+  // ============================================================
+
+  async findByIds(ids: string[]): Promise<Map<string, DuplicateCheckResult>> {
+    const result = new Map<string, DuplicateCheckResult>();
+    if (ids.length === 0) return result;
+
+    try {
+      const aeds = await this.prisma.aed.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, code: true, external_reference: true },
+      });
+
+      for (const aed of aeds) {
+        result.set(aed.id, {
+          isDuplicate: true,
+          matchedBy: "id",
+          matchedAedId: aed.id,
+          matchedCode: aed.code,
+          matchedExternalReference: aed.external_reference,
+        });
+      }
+    } catch {
+      // Si algún ID no es UUID válido, Prisma puede fallar;
+      // fallback silencioso (los IDs inválidos simplemente no matchean)
+    }
+
+    return result;
+  }
+
+  async findByCodes(codes: string[]): Promise<Map<string, DuplicateCheckResult>> {
+    const result = new Map<string, DuplicateCheckResult>();
+    if (codes.length === 0) return result;
+
+    const aeds = await this.prisma.aed.findMany({
+      where: {
+        code: { in: codes, mode: "insensitive" },
+      },
+      select: { id: true, code: true, external_reference: true },
+    });
+
+    for (const aed of aeds) {
+      if (aed.code) {
+        result.set(aed.code.toLowerCase(), {
+          isDuplicate: true,
+          matchedBy: "code",
+          matchedAedId: aed.id,
+          matchedCode: aed.code,
+          matchedExternalReference: aed.external_reference,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  async findByExternalReferences(refs: string[]): Promise<Map<string, DuplicateCheckResult>> {
+    const result = new Map<string, DuplicateCheckResult>();
+    if (refs.length === 0) return result;
+
+    const aeds = await this.prisma.aed.findMany({
+      where: {
+        external_reference: { in: refs, mode: "insensitive" },
+      },
+      select: { id: true, code: true, external_reference: true },
+    });
+
+    for (const aed of aeds) {
+      if (aed.external_reference) {
+        result.set(aed.external_reference.toLowerCase(), {
+          isDuplicate: true,
+          matchedBy: "externalReference",
+          matchedAedId: aed.id,
+          matchedCode: aed.code,
+          matchedExternalReference: aed.external_reference,
+        });
+      }
+    }
+
+    return result;
+  }
 }

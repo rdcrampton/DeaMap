@@ -11,14 +11,9 @@ import {
   ImageDownloadResult,
   SharePointAuthConfig,
 } from "@/storage/domain/ports/IImageDownloader";
+import { isSharePointUrl } from "@/shared/utils/sharepoint";
 
 export class SharePointImageDownloader implements IImageDownloader {
-  private readonly SHAREPOINT_DOMAINS = [
-    "sharepoint.com",
-    "sharepoint-df.com",
-    "microsoft.sharepoint.com",
-  ];
-
   private readonly MIN_IMAGE_SIZE = 1024; // 1KB - tamaño mínimo esperado para una imagen
   private readonly LOGIN_INDICATORS = [
     "login",
@@ -30,18 +25,11 @@ export class SharePointImageDownloader implements IImageDownloader {
   ];
 
   supports(url: string): boolean {
-    return this.canHandle(url);
+    return isSharePointUrl(url);
   }
 
   canHandle(url: string): boolean {
-    try {
-      const urlObj = new URL(url);
-      return this.SHAREPOINT_DOMAINS.some((domain) =>
-        urlObj.hostname.toLowerCase().includes(domain)
-      );
-    } catch {
-      return false;
-    }
+    return isSharePointUrl(url);
   }
 
   async download(options: ImageDownloadOptions): Promise<ImageDownloadResult> {
