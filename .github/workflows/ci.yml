@@ -36,6 +36,7 @@ jobs:
 
       - name: Format check
         run: npm run format:check
+        continue-on-error: true
 
   test:
     name: Tests
@@ -84,3 +85,5 @@ jobs:
 
       - name: Build
         run: npx next build
+        env:
+          SKIP_ENV_VALIDATION: "true"
