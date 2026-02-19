@@ -29,10 +29,11 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search"); // Search by email or name
 
     // Build where clause
-    const where: any = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: Record<string, any> = {};
     if (role) where.role = role;
-    if (isActive !== null) where.is_active = isActive === "true";
-    if (isVerified !== null) where.is_verified = isVerified === "true";
+    if (isActive !== null && isActive !== undefined) where.is_active = isActive === "true";
+    if (isVerified !== null && isVerified !== undefined) where.is_verified = isVerified === "true";
 
     if (search) {
       where.OR = [
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    // Single query with nested include to avoid N+1 (was: 1 query per user)
     const users = await prisma.user.findMany({
       where,
       select: {
@@ -53,18 +55,10 @@ export async function GET(request: NextRequest) {
         last_login_at: true,
         created_at: true,
         updated_at: true,
-      },
-      orderBy: {
-        created_at: 'desc'
-      }
-    });
-
-    // Get organization memberships for each user
-    const usersWithOrgs = await Promise.all(
-      users.map(async (user) => {
-        const memberships = await prisma.organizationMember.findMany({
-          where: { user_id: user.id },
-          include: {
+        organization_members: {
+          select: {
+            role: true,
+            joined_at: true,
             organization: {
               select: {
                 id: true,
@@ -74,21 +68,28 @@ export async function GET(request: NextRequest) {
               }
             }
           }
-        });
+        }
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
 
-        return {
-          ...user,
-          organizations: memberships.map(m => ({
-            id: m.organization.id,
-            name: m.organization.name,
-            type: m.organization.type,
-            code: m.organization.code,
-            role: m.role,
-            joined_at: m.joined_at,
-          }))
-        };
-      })
-    );
+    // Map to expected response shape
+    const usersWithOrgs = users.map((user) => {
+      const { organization_members, ...userData } = user;
+      return {
+        ...userData,
+        organizations: organization_members.map((m) => ({
+          id: m.organization.id,
+          name: m.organization.name,
+          type: m.organization.type,
+          code: m.organization.code,
+          role: m.role,
+          joined_at: m.joined_at,
+        })),
+      };
+    });
 
     return NextResponse.json({
       success: true,

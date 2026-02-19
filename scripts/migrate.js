@@ -49,14 +49,20 @@ const MIGRATION_BRANCHES = ["main", "refactor", "claude/simple-dea-form"];
 const isClaudeBranch = gitBranch.startsWith("claude/");
 const isCopilotBranch = gitBranch.startsWith("copilot/");
 
-// Check if current branch matches any migration branch or is a claude/copilot branch
+// Branch database feature: if enabled, any non-production branch with its own DB
+// must run migrations to initialize the schema — otherwise the DB is empty
+const hasBranchDatabase = isFeatureEnabled() && !["main", "master"].includes(gitBranch);
+
+// Check if current branch matches any migration branch, is a claude/copilot branch,
+// or has a branch-specific database that needs schema initialization
 const shouldRunMigrations =
   isVercel &&
   (MIGRATION_BRANCHES.some(
     (branch) => gitBranch === branch || gitBranch.includes(branch)
   ) ||
     isClaudeBranch ||
-    isCopilotBranch);
+    isCopilotBranch ||
+    hasBranchDatabase);
 
 async function main() {
   console.log("🔍 Migration Check:");
@@ -103,8 +109,11 @@ async function main() {
   }
 
   // Run migrations
+  let migrationsWereFixed = false;
+
   if (shouldRunMigrations) {
     console.log("\n🚀 Running Prisma migrations...\n");
+
     try {
       execSync("npx prisma migrate deploy", {
         stdio: "inherit",
@@ -112,8 +121,38 @@ async function main() {
       });
       console.log("\n✅ Migrations completed successfully\n");
     } catch (error) {
-      console.error("\n❌ Migration failed:", error.message);
-      process.exit(1);
+      // On branch databases, handle known migration ordering issue:
+      // Migration 20250123000000 tries to ALTER TABLE external_data_sources
+      // before migration 20251218000000 creates it. This only fails on fresh DBs.
+      if (hasBranchDatabase) {
+        console.log("\n⚠️  Migration failed on branch database. Attempting to fix ordering issue...\n");
+        console.log("   ℹ️  Marking out-of-order migration as applied and retrying...\n");
+
+        try {
+          // Mark the problematic migration as already applied (skip it)
+          execSync(
+            "npx prisma migrate resolve --applied 20250123000000_add_missing_external_data_source_columns",
+            { stdio: "inherit", env: process.env }
+          );
+          console.log("   ✅ Migration marked as applied\n");
+
+          // Retry deploy - remaining migrations will run in order
+          // The new 20251218000001 migration will add the missing columns
+          console.log("🚀 Retrying Prisma migrations...\n");
+          execSync("npx prisma migrate deploy", {
+            stdio: "inherit",
+            env: process.env,
+          });
+          migrationsWereFixed = true;
+          console.log("\n✅ Migrations completed successfully (after fix)\n");
+        } catch (retryError) {
+          console.error("\n❌ Migration retry failed:", retryError.message);
+          process.exit(1);
+        }
+      } else {
+        console.error("\n❌ Migration failed:", error.message);
+        process.exit(1);
+      }
     }
   } else {
     console.log("\n⏭️  Skipping migrations (not in target branch on Vercel)\n");
@@ -132,8 +171,8 @@ async function main() {
     process.exit(1);
   }
 
-  // Seed dummy data for new branch databases
-  if (isNewDatabase && shouldRunMigrations) {
+  // Seed dummy data for new branch databases or freshly fixed ones
+  if ((isNewDatabase || migrationsWereFixed) && shouldRunMigrations) {
     console.log("🌱 Seeding dummy data for new branch database...\n");
     try {
       execSync("npx tsx prisma/seed-dummy.ts", {

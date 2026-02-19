@@ -34,6 +34,34 @@ describe("CsvPreview", () => {
     it("debe lanzar error si no hay columnas", () => {
       expect(() => CsvPreview.create([], [], 0)).toThrow("CSV must have at least one column");
     });
+
+    it("debe normalizar filas con menos columnas que headers (padding)", () => {
+      const preview = CsvPreview.create(
+        ["col1", "col2", "col3"],
+        [
+          ["a", "b"], // Falta una columna
+        ],
+        1
+      );
+
+      const data = preview.sampleData;
+      expect(data[0]).toEqual(["a", "b", ""]); // Rellena con vacío
+      expect(preview.isValid()).toBe(true); // Ahora es válido tras normalizar
+    });
+
+    it("debe normalizar filas con más columnas que headers (truncate)", () => {
+      const preview = CsvPreview.create(
+        ["col1", "col2"],
+        [
+          ["a", "b", "c"], // Columna extra
+        ],
+        1
+      );
+
+      const data = preview.sampleData;
+      expect(data[0]).toEqual(["a", "b"]); // Trunca
+      expect(preview.isValid()).toBe(true); // Válido tras normalizar
+    });
   });
 
   describe("Acceso a datos", () => {
@@ -123,28 +151,14 @@ describe("CsvPreview", () => {
       expect(preview.isValid()).toBe(true);
     });
 
-    it("debe ser inválido cuando las filas tienen diferente número de columnas", () => {
-      const preview = CsvPreview.create(
-        ["col1", "col2", "col3"],
-        [
-          ["a", "b", "c"],
-          ["d", "e"], // Falta una columna
-        ],
-        2
-      );
-
-      expect(preview.isValid()).toBe(false);
-    });
-
-    it("debe ser inválido cuando las filas tienen más columnas que headers", () => {
-      const preview = CsvPreview.create(
-        ["col1", "col2"],
-        [
-          ["a", "b"],
-          ["c", "d", "e"], // Columna extra
-        ],
-        2
-      );
+    it("debe ser inválido cuando hay headers vacíos", () => {
+      // Headers vacíos se filtran en create(), así que usamos fromJSON para bypass
+      const preview = CsvPreview.fromJSON({
+        headers: ["col1", "", "col3"],
+        sampleRows: [["a", "b", "c"]],
+        totalRows: 1,
+        delimiter: ";",
+      });
 
       expect(preview.isValid()).toBe(false);
     });

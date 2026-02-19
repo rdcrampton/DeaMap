@@ -3,11 +3,20 @@ import { cookies } from "next/headers";
 
 import type { JWTPayload } from "@/types";
 
-const SECRET_KEY = process.env.JWT_SECRET || "default-secret-key-change-in-production";
 const COOKIE_NAME = "auth-token";
 
-// Convert secret to Uint8Array as required by jose
-const secret = new TextEncoder().encode(SECRET_KEY);
+/**
+ * Lazily resolve the JWT secret.
+ * In production, throws if JWT_SECRET is missing (at runtime, not build time).
+ * In dev, falls back to a placeholder secret.
+ */
+function getSecret(): Uint8Array {
+  const key = process.env.JWT_SECRET;
+  if (!key && process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET environment variable is required in production");
+  }
+  return new TextEncoder().encode(key || "dev-only-secret-not-for-production");
+}
 
 /**
  * Create a JWT token
@@ -17,7 +26,7 @@ export async function createToken(payload: JWTPayload): Promise<string> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d") // 7 days
-    .sign(secret);
+    .sign(getSecret());
 
   return token;
 }
@@ -29,8 +38,13 @@ export async function verifyToken(
   token: string
 ): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, secret);
-    return payload as unknown as JWTPayload;
+    const { payload } = await jwtVerify(token, getSecret());
+    // Validate payload structure instead of blind cast
+    const { userId, email, role } = payload as Record<string, unknown>;
+    if (typeof userId !== "string" || typeof email !== "string" || typeof role !== "string") {
+      return null;
+    }
+    return { userId, email, role } as JWTPayload;
   } catch (error) {
     console.error("JWT verification failed:", error);
     return null;

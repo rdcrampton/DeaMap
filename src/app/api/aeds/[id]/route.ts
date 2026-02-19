@@ -55,7 +55,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // If not authenticated, filter by publication_mode
-    const filteredAed = filterAedByPublicationMode(aed as unknown as AedFullData);
+    const filteredAed = filterAedByPublicationMode(aed as AedFullData);
 
     if (!filteredAed) {
       return NextResponse.json(

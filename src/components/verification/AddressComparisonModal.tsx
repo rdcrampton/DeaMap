@@ -51,10 +51,141 @@ export default function AddressComparisonModal({
     coordinates: "suggested",
   });
 
-  if (!isOpen) return null;
+  // Map reference — must be declared before any early returns (Rules of Hooks)
+  const mapRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapInstanceRef = useRef<any>(null);
 
   const hasCurrentCoordinates = currentAddress.latitude && currentAddress.longitude;
   const hasSuggestedCoordinates = suggestedAddress.latitude && suggestedAddress.longitude;
+
+  // Initialize map with coordinates comparison — must be before early return (Rules of Hooks)
+  useEffect(() => {
+    if (!isOpen || (!hasCurrentCoordinates && !hasSuggestedCoordinates)) return;
+    if (!mapRef.current) return;
+
+    const loadMap = async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (!(window as any).L) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => initializeMap();
+        document.head.appendChild(script);
+      } else {
+        initializeMap();
+      }
+    };
+
+    const initializeMap = () => {
+      if (!mapRef.current) return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const L = (window as any).L;
+
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+      }
+
+      const bounds: [number, number][] = [];
+
+      if (hasCurrentCoordinates) {
+        bounds.push([currentAddress.latitude!, currentAddress.longitude!]);
+      }
+
+      if (hasSuggestedCoordinates) {
+        bounds.push([suggestedAddress.latitude!, suggestedAddress.longitude!]);
+      }
+
+      const map = L.map(mapRef.current);
+      mapInstanceRef.current = map;
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
+      }).addTo(map);
+
+      const redIcon = L.divIcon({
+        className: "custom-marker",
+        html: '<div style="background-color: #dc2626; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><div style="transform: rotate(45deg); margin-top: 4px; margin-left: 8px; color: white; font-weight: bold; font-size: 16px;">📍</div></div>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+      });
+
+      const blueIcon = L.divIcon({
+        className: "custom-marker",
+        html: '<div style="background-color: #2563eb; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><div style="transform: rotate(45deg); margin-top: 4px; margin-left: 8px; color: white; font-weight: bold; font-size: 16px;">📍</div></div>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+      });
+
+      if (hasCurrentCoordinates) {
+        const currentMarker = L.marker([currentAddress.latitude!, currentAddress.longitude!], {
+          icon: redIcon,
+        }).addTo(map);
+
+        currentMarker.bindPopup(`
+          <div style="min-width: 200px;">
+            <b style="color: #dc2626;">🔴 Ubicación Original (BD)</b><br/>
+            <div style="margin-top: 8px; font-size: 12px;">
+              ${currentAddress.street_type || ""} ${currentAddress.street_name || ""} ${currentAddress.street_number || ""}<br/>
+              <span style="font-family: monospace; color: #666;">
+                Lat: ${currentAddress.latitude!.toFixed(6)}<br/>
+                Lng: ${currentAddress.longitude!.toFixed(6)}
+              </span>
+            </div>
+          </div>
+        `);
+      }
+
+      if (hasSuggestedCoordinates) {
+        const suggestedMarker = L.marker(
+          [suggestedAddress.latitude!, suggestedAddress.longitude!],
+          { icon: blueIcon }
+        ).addTo(map);
+
+        suggestedMarker.bindPopup(`
+          <div style="min-width: 200px;">
+            <b style="color: #2563eb;">🔵 Ubicación Geocoder (${source === "google" ? "Google Maps" : "OSM"})</b><br/>
+            <div style="margin-top: 8px; font-size: 12px;">
+              ${suggestedAddress.street_type || ""} ${suggestedAddress.street_name || ""} ${suggestedAddress.street_number || ""}<br/>
+              <span style="font-family: monospace; color: #666;">
+                Lat: ${suggestedAddress.latitude!.toFixed(6)}<br/>
+                Lng: ${suggestedAddress.longitude!.toFixed(6)}
+              </span>
+            </div>
+          </div>
+        `);
+      }
+
+      if (bounds.length > 1) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+      } else if (bounds.length === 1) {
+        map.setView(bounds[0], 16);
+      }
+    };
+
+    loadMap();
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [
+    isOpen,
+    hasCurrentCoordinates,
+    hasSuggestedCoordinates,
+    currentAddress,
+    suggestedAddress,
+    source,
+  ]);
+
+  if (!isOpen) return null;
 
   // Check if values are different
   const isDifferent = (field: keyof AddressData) => {
@@ -222,142 +353,6 @@ export default function AddressComparisonModal({
       </div>
     );
   };
-
-  // Map reference
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-
-  // Initialize map with coordinates comparison
-  useEffect(() => {
-    if (!isOpen || (!hasCurrentCoordinates && !hasSuggestedCoordinates)) return;
-    if (!mapRef.current) return;
-
-    const loadMap = async () => {
-      // Load Leaflet library
-      if (!(window as any).L) {
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-        document.head.appendChild(link);
-
-        const script = document.createElement("script");
-        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-        script.onload = () => initializeMap();
-        document.head.appendChild(script);
-      } else {
-        initializeMap();
-      }
-    };
-
-    const initializeMap = () => {
-      if (!mapRef.current) return;
-
-      const L = (window as any).L;
-
-      // Remove existing map if any
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-      }
-
-      // Determine center and bounds
-      const bounds: [number, number][] = [];
-
-      if (hasCurrentCoordinates) {
-        bounds.push([currentAddress.latitude!, currentAddress.longitude!]);
-      }
-
-      if (hasSuggestedCoordinates) {
-        bounds.push([suggestedAddress.latitude!, suggestedAddress.longitude!]);
-      }
-
-      // Create map
-      const map = L.map(mapRef.current);
-      mapInstanceRef.current = map;
-
-      // Add OpenStreetMap tiles
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors",
-      }).addTo(map);
-
-      // Custom icons
-      const redIcon = L.divIcon({
-        className: "custom-marker",
-        html: '<div style="background-color: #dc2626; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><div style="transform: rotate(45deg); margin-top: 4px; margin-left: 8px; color: white; font-weight: bold; font-size: 16px;">📍</div></div>',
-        iconSize: [30, 30],
-        iconAnchor: [15, 30],
-      });
-
-      const blueIcon = L.divIcon({
-        className: "custom-marker",
-        html: '<div style="background-color: #2563eb; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><div style="transform: rotate(45deg); margin-top: 4px; margin-left: 8px; color: white; font-weight: bold; font-size: 16px;">📍</div></div>',
-        iconSize: [30, 30],
-        iconAnchor: [15, 30],
-      });
-
-      // Add markers
-      if (hasCurrentCoordinates) {
-        const currentMarker = L.marker([currentAddress.latitude!, currentAddress.longitude!], {
-          icon: redIcon,
-        }).addTo(map);
-
-        currentMarker.bindPopup(`
-          <div style="min-width: 200px;">
-            <b style="color: #dc2626;">🔴 Ubicación Original (BD)</b><br/>
-            <div style="margin-top: 8px; font-size: 12px;">
-              ${currentAddress.street_type || ""} ${currentAddress.street_name || ""} ${currentAddress.street_number || ""}<br/>
-              <span style="font-family: monospace; color: #666;">
-                Lat: ${currentAddress.latitude!.toFixed(6)}<br/>
-                Lng: ${currentAddress.longitude!.toFixed(6)}
-              </span>
-            </div>
-          </div>
-        `);
-      }
-
-      if (hasSuggestedCoordinates) {
-        const suggestedMarker = L.marker(
-          [suggestedAddress.latitude!, suggestedAddress.longitude!],
-          { icon: blueIcon }
-        ).addTo(map);
-
-        suggestedMarker.bindPopup(`
-          <div style="min-width: 200px;">
-            <b style="color: #2563eb;">🔵 Ubicación Geocoder (${source === "google" ? "Google Maps" : "OSM"})</b><br/>
-            <div style="margin-top: 8px; font-size: 12px;">
-              ${suggestedAddress.street_type || ""} ${suggestedAddress.street_name || ""} ${suggestedAddress.street_number || ""}<br/>
-              <span style="font-family: monospace; color: #666;">
-                Lat: ${suggestedAddress.latitude!.toFixed(6)}<br/>
-                Lng: ${suggestedAddress.longitude!.toFixed(6)}
-              </span>
-            </div>
-          </div>
-        `);
-      }
-
-      // Fit bounds to show all markers
-      if (bounds.length > 1) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
-      } else if (bounds.length === 1) {
-        map.setView(bounds[0], 16);
-      }
-    };
-
-    loadMap();
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [
-    isOpen,
-    hasCurrentCoordinates,
-    hasSuggestedCoordinates,
-    currentAddress,
-    suggestedAddress,
-    source,
-  ]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4 overflow-y-auto">

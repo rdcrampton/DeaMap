@@ -14,60 +14,59 @@ export interface AedFullData {
   id: string;
   code: string | null;
   name: string;
-  establishment_type: string | null;
+  establishment_type?: string | null;
   latitude: number | null;
   longitude: number | null;
-  published_at: Date | null;
+  published_at?: Date | null;
   publication_mode: PublicationMode;
 
   location?: {
-    id: string;
+    id?: string;
     street_type: string | null;
     street_name: string | null;
     street_number: string | null;
     postal_code: string | null;
-    city_name: string | null;
-    city_code: string | null;
-    district_code: string | null;
-    district_name: string | null;
-    neighborhood_code: string | null;
-    neighborhood_name: string | null;
-    floor: string | null;
-    location_details: string | null;
-    access_instructions: string | null;
+    city_name?: string | null;
+    city_code?: string | null;
+    district_code?: string | null;
+    district_name?: string | null;
+    neighborhood_code?: string | null;
+    neighborhood_name?: string | null;
+    floor?: string | null;
+    location_details?: string | null;
+    access_instructions?: string | null;
   } | null;
 
   schedule?: {
-    id: string;
-    description: string | null;
+    id?: string;
+    description?: string | null;
     has_24h_surveillance: boolean;
-    has_restricted_access: boolean;
+    has_restricted_access?: boolean;
     weekday_opening: string | null;
     weekday_closing: string | null;
-    saturday_opening: string | null;
-    saturday_closing: string | null;
-    sunday_opening: string | null;
-    sunday_closing: string | null;
-    holidays_as_weekday: boolean;
-    closed_on_holidays: boolean;
-    closed_in_august: boolean;
-    notes: string | null;
+    saturday_opening?: string | null;
+    saturday_closing?: string | null;
+    sunday_opening?: string | null;
+    sunday_closing?: string | null;
+    holidays_as_weekday?: boolean;
+    closed_on_holidays?: boolean;
+    closed_in_august?: boolean;
+    notes?: string | null;
   } | null;
 
   responsible?: {
-    id: string;
+    id?: string;
     name: string;
     email: string | null;
     phone: string | null;
-    alternative_phone: string | null;
-    ownership: string | null;
-    local_ownership: string | null;
-    local_use: string | null;
-    organization: string | null;
-    position: string | null;
-    department: string | null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    notes: any | null;
+    alternative_phone?: string | null;
+    ownership?: string | null;
+    local_ownership?: string | null;
+    local_use?: string | null;
+    organization?: string | null;
+    position?: string | null;
+    department?: string | null;
+    notes?: Record<string, unknown>[] | null;
   } | null;
 
   images?: Array<{

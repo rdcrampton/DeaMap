@@ -6,9 +6,35 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { getUserFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { filterAedByPublicationMode } from "@/lib/publication-filter";
 import type { AedFullData } from "@/lib/publication-filter";
+
+/**
+ * Simple in-memory rate limiter for anonymous AED creation.
+ * Limits to MAX_REQUESTS per IP within WINDOW_MS.
+ */
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RATE_LIMIT_MAX_REQUESTS = 5;
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+
+  entry.count++;
+  return true;
+}
 
 /**
  * Types for creating a new AED
@@ -173,10 +199,10 @@ export async function GET(request: NextRequest) {
 
     // Filter each AED based on its publication_mode
     const filteredAeds = aeds
-      .map((aed) => filterAedByPublicationMode(aed as unknown as AedFullData))
-      .filter((aed) => aed !== null);
+      .map((aed) => filterAedByPublicationMode(aed as AedFullData))
+      .filter((aed): aed is NonNullable<typeof aed> => aed !== null);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: filteredAeds,
       pagination: {
@@ -186,6 +212,11 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     });
+
+    // Cache public AED list for 60s, allow stale for 5min while revalidating
+    response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+
+    return response;
   } catch (error) {
     console.error("Error fetching AEDs:", error);
     return NextResponse.json(
@@ -207,10 +238,24 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit anonymous requests (authenticated users bypass)
+    const user = await getUserFromRequest(request);
+    if (!user) {
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || request.headers.get("x-real-ip")
+        || "unknown";
+      if (!checkRateLimit(ip)) {
+        return NextResponse.json(
+          { success: false, error: "Demasiadas solicitudes. Inténtelo más tarde." },
+          { status: 429 }
+        );
+      }
+    }
+
     const body: CreateAedRequest = await request.json();
 
-    // Validate only name is required
-    if (!body.name) {
+    // Validate required fields and basic sanitization
+    if (!body.name || typeof body.name !== "string" || body.name.trim().length < 2 || body.name.length > 500) {
       return NextResponse.json(
         {
           success: false,

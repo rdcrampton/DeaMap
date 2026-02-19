@@ -83,7 +83,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Build where clause for assignments
-    const whereClause: any = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const whereClause: Record<string, any> = {};
 
     // Organization filter
     if (organizationId) {

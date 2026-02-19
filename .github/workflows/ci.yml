@@ -1,0 +1,188 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-safety:
+    name: Migration Safety Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Checkout base branch for comparison
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: base
+
+      - name: Check for destructive migration operations
+        run: |
+          echo "🔍 Scanning migrations for destructive operations..."
+          echo ""
+
+          # Find new or modified migration files compared to base
+          NEW_MIGRATIONS=""
+          MODIFIED_MIGRATIONS=""
+
+          for file in prisma/migrations/*/migration.sql; do
+            [ -f "$file" ] || continue
+            migration_name=$(dirname "$file" | xargs basename)
+
+            if [ ! -f "base/$file" ]; then
+              NEW_MIGRATIONS="$NEW_MIGRATIONS $migration_name"
+            elif ! diff -q "$file" "base/$file" > /dev/null 2>&1; then
+              MODIFIED_MIGRATIONS="$MODIFIED_MIGRATIONS $migration_name"
+            fi
+          done
+
+          # Flag modified existing migrations (checksum will break Prisma)
+          if [ -n "$MODIFIED_MIGRATIONS" ]; then
+            echo "::error::❌ EXISTING MIGRATIONS MODIFIED — this will break Prisma checksum verification in production!"
+            echo ""
+            for m in $MODIFIED_MIGRATIONS; do
+              echo "  ⛔ $m"
+            done
+            echo ""
+            echo "Prisma verifies checksums of applied migrations. Modifying an already-applied migration"
+            echo "will cause 'prisma migrate deploy' to fail in any environment where it was previously applied."
+            echo ""
+            FAILED=true
+          fi
+
+          # Scan new migrations for destructive patterns
+          DESTRUCTIVE_FOUND=false
+          DESTRUCTIVE_PATTERNS="DROP TABLE|DROP COLUMN|DROP INDEX|DROP CONSTRAINT|DROP TYPE|DROP ENUM|TRUNCATE|DELETE FROM|ALTER COLUMN.*TYPE|RENAME TABLE|RENAME COLUMN"
+
+          if [ -n "$NEW_MIGRATIONS" ]; then
+            echo "📋 New migrations in this PR:"
+            for m in $NEW_MIGRATIONS; do
+              echo "  ✅ $m"
+            done
+            echo ""
+
+            for m in $NEW_MIGRATIONS; do
+              file="prisma/migrations/$m/migration.sql"
+              # Search for destructive patterns (case-insensitive, ignoring comments)
+              matches=$(grep -inE "$DESTRUCTIVE_PATTERNS" "$file" | grep -v '^\s*--' || true)
+
+              if [ -n "$matches" ]; then
+                DESTRUCTIVE_FOUND=true
+                echo "::warning::⚠️  DESTRUCTIVE OPERATIONS found in $m"
+                echo "$matches" | while IFS= read -r line; do
+                  echo "  → $line"
+                done
+                echo ""
+              fi
+            done
+          fi
+
+          if [ -n "$MODIFIED_MIGRATIONS" ]; then
+            echo ""
+            exit 1
+          fi
+
+          if [ "$DESTRUCTIVE_FOUND" = true ]; then
+            echo ""
+            echo "⚠️  Destructive operations detected. This PR requires EXPLICIT approval from a reviewer"
+            echo "   who has verified that these operations are safe for the production database."
+            echo ""
+            echo "   Reviewers: check that no production data is lost and that rollback is possible."
+            echo ""
+            # Warning only — does not block merge, but makes it very visible
+            exit 0
+          fi
+
+          if [ -z "$NEW_MIGRATIONS" ] && [ -z "$MODIFIED_MIGRATIONS" ]; then
+            echo "✅ No migration changes in this PR"
+          else
+            echo "✅ All new migrations are non-destructive (safe for production)"
+          fi
+
+  quality:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+        continue-on-error: true
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [quality, test, migration-safety]
+    if: always() && needs.quality.result == 'success' && needs.test.result == 'success' && (needs.migration-safety.result == 'success' || needs.migration-safety.result == 'skipped')
+
+    env:
+      DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+      JWT_SECRET: "ci-build-only-secret-not-for-production-use-32chars"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npx next build
+        env:
+          SKIP_ENV_VALIDATION: "true"

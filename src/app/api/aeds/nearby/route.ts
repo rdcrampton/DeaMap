@@ -1,8 +1,9 @@
 /**
  * API Route: /api/aeds/nearby
  *
- * Find nearest AEDs to a specific location
- * Optimized for emergency situations
+ * Find nearest AEDs to a specific location using PostGIS spatial queries.
+ * Leverages the spatial index on the geom column for fast lookups.
+ * Optimized for emergency situations.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -10,32 +11,14 @@ import { prisma } from "@/lib/db";
 import { filterAedByPublicationMode } from "@/lib/publication-filter";
 import type { AedFullData } from "@/lib/publication-filter";
 
-/**
- * Calculate distance between two points using Haversine formula
- * Returns distance in kilometers
- */
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371; // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+interface NearbyAedRow {
+  id: string;
+  distance_km: number;
 }
 
 /**
  * GET /api/aeds/nearby
- * Find nearest AEDs to a location
+ * Find nearest AEDs to a location using PostGIS ST_DWithin + ST_Distance
  *
  * Query params:
  * - lat: latitude (required)
@@ -77,130 +60,116 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Calculate bounding box for initial filtering (rough square around point)
-    // 1 degree of latitude ≈ 111 km
-    const latDelta = radius / 111;
-    // 1 degree of longitude varies by latitude, but this is a rough approximation
-    const lngDelta = radius / (111 * Math.cos((lat * Math.PI) / 180));
+    // Convert radius from km to meters for ST_DWithin (geography uses meters)
+    const radiusMeters = radius * 1000;
 
-    const minLat = lat - latDelta;
-    const maxLat = lat + latDelta;
-    const minLng = lng - lngDelta;
-    const maxLng = lng + lngDelta;
+    // Use PostGIS ST_DWithin for spatial filtering + ST_Distance for sorting.
+    // This leverages the spatial index on the geom column instead of
+    // fetching all AEDs and calculating Haversine distances in JS.
+    const nearbyAeds = await prisma.$queryRaw<NearbyAedRow[]>`
+      SELECT
+        a.id,
+        ST_Distance(
+          a.geom::geography,
+          ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
+        ) / 1000.0 AS distance_km
+      FROM aeds a
+      WHERE a.status = 'PUBLISHED'
+        AND a.publication_mode != 'NONE'
+        AND a.geom IS NOT NULL
+        AND ST_DWithin(
+          a.geom::geography,
+          ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+          ${radiusMeters}
+        )
+      ORDER BY distance_km ASC
+      LIMIT ${limit}
+    `;
 
-    // Fetch AEDs within bounding box
-    const aeds = await prisma.aed.findMany({
-      where: {
-        status: "PUBLISHED",
-        publication_mode: {
-          not: "NONE",
-        },
-        latitude: {
-          gte: minLat,
-          lte: maxLat,
-        },
-        longitude: {
-          gte: minLng,
-          lte: maxLng,
-        },
-      },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        establishment_type: true,
-        latitude: true,
-        longitude: true,
-        published_at: true,
-        publication_mode: true,
-        location: {
-          select: {
-            street_type: true,
-            street_name: true,
-            street_number: true,
-            postal_code: true,
-            access_instructions: true,
-            district_name: true,
-            neighborhood_name: true,
-            city_name: true,
-            location_details: true,
-          },
-        },
-        schedule: {
-          select: {
-            has_24h_surveillance: true,
-            has_restricted_access: true,
-            weekday_opening: true,
-            weekday_closing: true,
-            saturday_opening: true,
-            saturday_closing: true,
-            sunday_opening: true,
-            sunday_closing: true,
-          },
-        },
-        responsible: {
-          select: {
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        images: {
+    // Build distance lookup from PostGIS results
+    const aedIds = nearbyAeds.map((a) => a.id);
+    const distanceMap = new Map(nearbyAeds.map((a) => [a.id, Number(a.distance_km)]));
+
+    // Fetch full related data only for the matched AEDs
+    const fullAeds = aedIds.length > 0
+      ? await prisma.aed.findMany({
+          where: { id: { in: aedIds } },
           select: {
             id: true,
-            type: true,
-            original_url: true,
-            processed_url: true,
-            thumbnail_url: true,
-            order: true,
+            code: true,
+            name: true,
+            establishment_type: true,
+            latitude: true,
+            longitude: true,
+            published_at: true,
+            publication_mode: true,
+            location: {
+              select: {
+                street_type: true,
+                street_name: true,
+                street_number: true,
+                postal_code: true,
+                access_instructions: true,
+                district_name: true,
+                neighborhood_name: true,
+                city_name: true,
+                location_details: true,
+              },
+            },
+            schedule: {
+              select: {
+                has_24h_surveillance: true,
+                has_restricted_access: true,
+                weekday_opening: true,
+                weekday_closing: true,
+                saturday_opening: true,
+                saturday_closing: true,
+                sunday_opening: true,
+                sunday_closing: true,
+              },
+            },
+            responsible: {
+              select: {
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+            images: {
+              select: {
+                id: true,
+                type: true,
+                original_url: true,
+                processed_url: true,
+                thumbnail_url: true,
+                order: true,
+              },
+              where: {
+                is_verified: true,
+              },
+              orderBy: {
+                order: "asc",
+              },
+              take: 5,
+            },
           },
-          where: {
-            is_verified: true,
-          },
-          orderBy: {
-            order: "asc",
-          },
-          take: 5,
-        },
-      },
-    });
+        })
+      : [];
 
-    // Calculate distances and filter by radius
-    const aedsWithDistance = aeds
-      .map((aed) => {
-        if (aed.latitude === null || aed.longitude === null) {
-          return null;
-        }
+    // Re-sort by PostGIS distance and apply publication filter
+    const sortedAeds = fullAeds.sort(
+      (a, b) => (distanceMap.get(a.id) ?? Infinity) - (distanceMap.get(b.id) ?? Infinity)
+    );
 
-        const distance = calculateDistance(lat, lng, aed.latitude, aed.longitude);
-
-        // Filter by radius
-        if (distance > radius) {
-          return null;
-        }
-
-        return {
-          ...aed,
-          distance,
-        };
-      })
-      .filter((aed) => aed !== null);
-
-    // Sort by distance and limit results
-    const sortedAeds = aedsWithDistance
-      .sort((a, b) => a!.distance - b!.distance)
-      .slice(0, limit);
-
-    // Filter each AED based on its publication_mode
     const filteredAeds = sortedAeds
-      .map((aed) => filterAedByPublicationMode(aed as unknown as AedFullData))
-      .filter((aed) => aed !== null)
-      .map((aed, index) => ({
+      .map((aed) => filterAedByPublicationMode(aed as AedFullData))
+      .filter((aed): aed is NonNullable<typeof aed> => aed !== null)
+      .map((aed) => ({
         ...aed,
-        distance: sortedAeds[index]?.distance || 0,
+        distance: aed.id ? (distanceMap.get(aed.id) ?? 0) : 0,
       }));
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: filteredAeds,
       query: {
@@ -214,6 +183,11 @@ export async function GET(request: NextRequest) {
         searchRadius: radius,
       },
     });
+
+    // Cache nearby results for 60s, allow stale for 5min while revalidating
+    response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+
+    return response;
   } catch (error) {
     console.error("Error fetching nearby AEDs:", error);
     return NextResponse.json(

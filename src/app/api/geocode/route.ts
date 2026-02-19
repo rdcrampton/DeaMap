@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { geocodeRateLimiter } from "@/lib/rate-limit";
+
 interface GoogleGeocodingResult {
   formatted_address: string;
   address_components: Array<{
@@ -33,6 +35,9 @@ interface NormalizedResult {
 
 export async function GET(request: NextRequest) {
   try {
+    const rateLimitResponse = geocodeRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("q");
     const city = searchParams.get("city");

@@ -1,9 +1,12 @@
 /**
  * Adapter de S3 para almacenamiento de imágenes
  * Capa de Infraestructura - Implementa IImageStorage
+ *
+ * Uses the shared S3Client singleton from @/lib/s3 to avoid
+ * creating multiple client instances.
  */
 
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import {
   IImageStorage,
@@ -11,27 +14,15 @@ import {
   ImageUploadResult,
 } from "@/storage/domain/ports/IImageStorage";
 import { buildImageKey, buildS3Url, extractExtension } from "@/lib/s3-utils";
+import { getS3Client, getS3BucketName, getS3Region } from "@/lib/s3";
 
 export class S3ImageStorageAdapter implements IImageStorage {
-  private readonly s3Client: S3Client;
   private readonly bucketName: string;
   private readonly region: string;
 
   constructor() {
-    this.region = process.env.AWS_REGION || "eu-west-1";
-    this.bucketName = process.env.AWS_S3_BUCKET_NAME || "";
-
-    if (!this.bucketName) {
-      throw new Error("AWS_S3_BUCKET_NAME is not configured");
-    }
-
-    this.s3Client = new S3Client({
-      region: this.region,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-      },
-    });
+    this.region = getS3Region();
+    this.bucketName = getS3BucketName();
   }
 
   async upload(options: ImageUploadOptions): Promise<ImageUploadResult> {
@@ -69,7 +60,7 @@ export class S3ImageStorageAdapter implements IImageStorage {
       Metadata: metadata,
     });
 
-    await this.s3Client.send(command);
+    await getS3Client().send(command);
 
     const url = buildS3Url(this.bucketName, this.region, key);
 
@@ -86,11 +77,10 @@ export class S3ImageStorageAdapter implements IImageStorage {
       Key: key,
     });
 
-    await this.s3Client.send(command);
+    await getS3Client().send(command);
   }
 
   getPublicUrl(key: string): string {
-    // Use the centralized buildS3Url utility which handles CDN logic
     return buildS3Url(this.bucketName, this.region, key);
   }
 }

@@ -99,11 +99,14 @@ function isSharePointUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase();
-    
-    // Verificar dominios de SharePoint
-    return hostname.includes('sharepoint.com') || 
-           hostname.includes('sharepoint-df.com') ||
-           hostname.includes('sharepointonline.com');
+
+    // Verificar dominios de SharePoint con endsWith para evitar subdominios maliciosos
+    return hostname.endsWith('.sharepoint.com') ||
+           hostname === 'sharepoint.com' ||
+           hostname.endsWith('.sharepoint-df.com') ||
+           hostname === 'sharepoint-df.com' ||
+           hostname.endsWith('.sharepointonline.com') ||
+           hostname === 'sharepointonline.com';
   } catch {
     return false;
   }

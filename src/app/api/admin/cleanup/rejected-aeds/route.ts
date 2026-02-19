@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 /**
@@ -9,16 +9,10 @@ import { prisma } from "@/lib/db";
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await requireAuth(request);
+    const user = await requireAdmin(request);
     if (!user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
-
-    // Verificar que el usuario sea admin
-    // TODO: Añadir verificación de rol cuando esté implementado
-    // if (user.role !== 'ADMIN') {
-    //   return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    // }
 
     // Obtener parámetros de la URL
     const { searchParams } = new URL(request.url);
@@ -35,11 +29,10 @@ export async function DELETE(request: NextRequest) {
         status: "INACTIVE",
         published_at: null, // Solo los que nunca fueron publicados
         created_at: { lt: cutoffDate },
-        // TODO: Re-implement JSON filter with Prisma 7 syntax
-        // status_metadata: {
-        //   path: ['reason'],
-        //   in: ['REJECTED_VERIFICATION', 'DUPLICATE'],
-        // },
+        OR: [
+          { status_metadata: { path: ["reason"], equals: "REJECTED_VERIFICATION" } },
+          { status_metadata: { path: ["reason"], equals: "DUPLICATE" } },
+        ],
       },
       select: {
         id: true,
@@ -60,8 +53,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Eliminar DEAs en una transacción
-    const result = await prisma.$transaction(async (tx: any) => {
-      const deletedIds = deassToDelete.map((d: any) => d.id);
+    const result = await prisma.$transaction(async (tx) => {
+      const deletedIds = deassToDelete.map((d) => d.id);
 
       // Eliminar imágenes primero (por la relación)
       await tx.aedImage.deleteMany({
@@ -94,12 +87,12 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({
       message: "DEAs eliminados exitosamente",
       deleted: result.count,
-      details: deassToDelete.map((d: any) => ({
+      details: deassToDelete.map((d) => ({
         id: d.id,
         code: d.code,
         name: d.name,
         created_at: d.created_at,
-        reason: (d.status_metadata as any)?.reason,
+        reason: (d.status_metadata as Record<string, unknown>)?.reason,
       })),
     });
   } catch (error) {

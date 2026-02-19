@@ -4,6 +4,7 @@ import js from "@eslint/js";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import nextPlugin from "@next/eslint-plugin-next";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +28,7 @@ const eslintConfig = [
     plugins: {
       "@typescript-eslint": tsPlugin,
       "@next/next": nextPlugin,
+      "react-hooks": reactHooksPlugin,
     },
     languageOptions: {
       parser: tsParser,
@@ -106,7 +108,8 @@ const eslintConfig = [
       'no-console': 'off',
       "prefer-const": "error",
       "no-var": "error",
-      "react-hooks/exhaustive-deps": "off", // Plugin no disponible
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
 ];

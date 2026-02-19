@@ -11,12 +11,24 @@ import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 
+import dynamic from "next/dynamic";
+
 import AddressValidation from "@/components/verification/AddressValidation";
 import ArrowPlacer from "@/components/verification/ArrowPlacer";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DeaInfoEdit from "@/components/verification/DeaInfoEdit";
-import ImageBlur from "@/components/verification/ImageBlur";
 import ImageCropper from "@/components/verification/ImageCropper";
+
+// Lazy-load ImageBlur — it pulls in @vladmandic/face-api (~3 MB)
+const ImageBlur = dynamic(() => import("@/components/verification/ImageBlur"), {
+  loading: () => (
+    <div className="flex items-center justify-center p-8">
+      <Loader2 className="animate-spin h-8 w-8" />
+      <span className="ml-2">Cargando editor de difuminado...</span>
+    </div>
+  ),
+  ssr: false,
+});
 import ImageMultiSelector from "@/components/verification/ImageMultiSelector";
 import ResponsibleForm from "@/components/verification/ResponsibleForm";
 import { useAuth } from "@/contexts/AuthContext";
