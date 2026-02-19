@@ -49,14 +49,20 @@ const MIGRATION_BRANCHES = ["main", "refactor", "claude/simple-dea-form"];
 const isClaudeBranch = gitBranch.startsWith("claude/");
 const isCopilotBranch = gitBranch.startsWith("copilot/");
 
-// Check if current branch matches any migration branch or is a claude/copilot branch
+// Branch database feature: if enabled, any non-production branch with its own DB
+// must run migrations to initialize the schema — otherwise the DB is empty
+const hasBranchDatabase = isFeatureEnabled() && !["main", "master"].includes(gitBranch);
+
+// Check if current branch matches any migration branch, is a claude/copilot branch,
+// or has a branch-specific database that needs schema initialization
 const shouldRunMigrations =
   isVercel &&
   (MIGRATION_BRANCHES.some(
     (branch) => gitBranch === branch || gitBranch.includes(branch)
   ) ||
     isClaudeBranch ||
-    isCopilotBranch);
+    isCopilotBranch ||
+    hasBranchDatabase);
 
 async function main() {
   console.log("🔍 Migration Check:");
