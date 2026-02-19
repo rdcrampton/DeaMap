@@ -18,16 +18,11 @@ import type { SharePointAuthConfig } from "@/storage/domain/ports/IImageDownload
 import type { PrismaClient } from "@/generated/client/client";
 import { AedImageType } from "@/generated/client/enums";
 import { randomUUID } from "crypto";
+import { isSharePointUrl } from "@/shared/utils/sharepoint";
 
 // ============================================================
 // Tipos y constantes
 // ============================================================
-
-const SHAREPOINT_DOMAINS = [
-  "sharepoint.com",
-  "sharepoint-df.com",
-  "microsoft.sharepoint.com",
-];
 
 type ImageFieldKey =
   | "photo1Url"
@@ -320,23 +315,6 @@ function createAfterProcess(
       }
     }
   };
-}
-
-// ============================================================
-// Helpers
-// ============================================================
-
-/**
- * Verifica si una URL pertenece a SharePoint
- */
-function isSharePointUrl(url: string): boolean {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase();
-    return SHAREPOINT_DOMAINS.some((domain) => hostname.includes(domain));
-  } catch {
-    return false;
-  }
 }
 
 // ============================================================

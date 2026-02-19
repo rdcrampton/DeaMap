@@ -8,7 +8,7 @@
  * Reutiliza la lÃ³gica existente de DuplicateDetectionService y IAedRepository.
  */
 
-import type { DuplicateChecker, DuplicateCheckResult as BulkImportDuplicateResult } from "@batchactions/import";
+import type { DuplicateChecker, DuplicateCheckResult as BulkImportDuplicateResult, ProcessingContext } from "@batchactions/import";
 import type { IAedRepository } from "../../domain/ports/IAedRepository";
 
 export interface AedDuplicateCheckerOptions {
@@ -125,6 +125,104 @@ export class AedDuplicateChecker implements DuplicateChecker {
 
     // No se encontrÃ³ ningÃºn duplicado
     return { isDuplicate: false };
+  }
+
+  /**
+   * Batch-optimized duplicate check: 3 queries max for an entire batch
+   * instead of up to 3N individual queries.
+   *
+   * Strategy:
+   * 1. Collect all IDs, codes, and external references from the batch
+   * 2. Run 3 batch queries (findByIds, findByCodes, findByExternalReferences)
+   * 3. Match results back to each record using cascade priority: ID → Code → ExternalRef
+   */
+  async checkBatch(
+    records: readonly { fields: Record<string, unknown>; context: ProcessingContext }[],
+  ): Promise<readonly BulkImportDuplicateResult[]> {
+    // 1. Collect all identifiers from the batch
+    const allIds: string[] = [];
+    const allCodes: string[] = [];
+    const allExternalRefs: string[] = [];
+
+    const recordIdentifiers = records.map(({ fields }) => {
+      const id = this.extractString(fields, "id");
+      const code = this.extractString(fields, "code");
+      const externalRef = this.extractString(fields, "externalReference");
+
+      if (id) allIds.push(id);
+      if (code) allCodes.push(code);
+      if (externalRef) allExternalRefs.push(externalRef);
+
+      return { id, code, externalRef };
+    });
+
+    // 2. Run batch queries (max 3 queries regardless of batch size)
+    const [idMatches, codeMatches, refMatches] = await Promise.all([
+      allIds.length > 0 ? this.aedRepository.findByIds(allIds) : new Map(),
+      allCodes.length > 0 ? this.aedRepository.findByCodes(allCodes) : new Map(),
+      allExternalRefs.length > 0 ? this.aedRepository.findByExternalReferences(allExternalRefs) : new Map(),
+    ]);
+
+    // 3. Match results back to each record using cascade priority
+    return recordIdentifiers.map(({ id, code, externalRef }) => {
+      // No identifiers → not a duplicate
+      if (!id && !code && !externalRef) {
+        return { isDuplicate: false };
+      }
+
+      // Priority 1: Match by ID
+      if (id) {
+        const match = idMatches.get(id);
+        if (match) {
+          return {
+            isDuplicate: true,
+            existingId: match.matchedAedId,
+            metadata: {
+              matchedBy: "id",
+              matchedCode: match.matchedCode,
+              matchedExternalReference: match.matchedExternalReference,
+              skipDuplicates: this.skipDuplicates,
+            },
+          };
+        }
+      }
+
+      // Priority 2: Match by code
+      if (code) {
+        const match = codeMatches.get(code.toLowerCase());
+        if (match) {
+          return {
+            isDuplicate: true,
+            existingId: match.matchedAedId,
+            metadata: {
+              matchedBy: "code",
+              matchedCode: match.matchedCode,
+              matchedExternalReference: match.matchedExternalReference,
+              skipDuplicates: this.skipDuplicates,
+            },
+          };
+        }
+      }
+
+      // Priority 3: Match by external reference
+      if (externalRef) {
+        const match = refMatches.get(externalRef.toLowerCase());
+        if (match) {
+          return {
+            isDuplicate: true,
+            existingId: match.matchedAedId,
+            metadata: {
+              matchedBy: "externalReference",
+              matchedCode: match.matchedCode,
+              matchedExternalReference: match.matchedExternalReference,
+              skipDuplicates: this.skipDuplicates,
+            },
+          };
+        }
+      }
+
+      return { isDuplicate: false };
+    });
   }
 
   /**

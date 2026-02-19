@@ -10,6 +10,7 @@
 
 import type { DataSource } from "@batchactions/import";
 import type { SourceMetadata } from "@batchactions/core";
+import { MAX_CSV_FILE_SIZE_BYTES } from "../../constants";
 
 /**
  * DataSource que lee desde una URL de S3 (o cualquier HTTP/HTTPS URL).
@@ -21,14 +22,18 @@ import type { SourceMetadata } from "@batchactions/core";
  * importer.from(source, new CsvParser());
  * ```
  */
+/** Límite máximo de tamaño importado desde constants */
+
 export class S3DataSource implements DataSource {
   private readonly url: string;
   private readonly fileName: string;
+  private readonly maxFileSize: number;
   private cachedContent: string | null = null;
 
-  constructor(url: string, fileName?: string) {
+  constructor(url: string, fileName?: string, maxFileSize?: number) {
     this.url = url;
     this.fileName = fileName || this.extractFileName(url);
+    this.maxFileSize = maxFileSize ?? MAX_CSV_FILE_SIZE_BYTES;
   }
 
   /**
@@ -71,6 +76,7 @@ export class S3DataSource implements DataSource {
 
   /**
    * Descarga el archivo desde la URL.
+   * Valida el tamaño antes de descargar el contenido completo.
    */
   private async download(): Promise<string> {
     const response = await fetch(this.url);
@@ -81,7 +87,28 @@ export class S3DataSource implements DataSource {
       );
     }
 
+    // Validar tamaño si el servidor lo reporta
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) {
+      const size = parseInt(contentLength, 10);
+      if (!isNaN(size) && size > this.maxFileSize) {
+        throw new Error(
+          `CSV file too large: ${(size / 1024 / 1024).toFixed(1)} MB ` +
+          `(max ${(this.maxFileSize / 1024 / 1024).toFixed(0)} MB)`
+        );
+      }
+    }
+
     const buffer = await response.arrayBuffer();
+
+    // Validar tamaño real del contenido descargado
+    if (buffer.byteLength > this.maxFileSize) {
+      throw new Error(
+        `CSV file too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)} MB ` +
+        `(max ${(this.maxFileSize / 1024 / 1024).toFixed(0)} MB)`
+      );
+    }
+
     const content = Buffer.from(buffer).toString("utf-8");
 
     // Eliminar BOM si existe

@@ -10,6 +10,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
+import { UserRole } from "@/generated/client/enums";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -19,22 +21,39 @@ interface RouteParams {
  * POST /api/import/[id]/cancel
  * Cancel an import (dual-mode: bulkimport / legacy)
  */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    // Verify authentication
+    const user = await requireAuth(request);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "No autenticado" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
 
-    console.log(`🚫 [Import Cancel] Cancelling import ${id}`);
+    console.log(`🚫 [Import Cancel] Cancelling import ${id} by user ${user.userId}`);
 
     // Leer metadata del job para determinar el motor
     const job = await prisma.batchJob.findUnique({
       where: { id },
-      select: { metadata: true, status: true },
+      select: { metadata: true, status: true, created_by: true },
     });
 
     if (!job) {
       return NextResponse.json(
         { success: false, error: `Job ${id} not found` },
         { status: 404 }
+      );
+    }
+
+    // Verificar que el usuario es dueño del job o admin
+    if (job.created_by !== user.userId && user.role !== UserRole.ADMIN) {
+      return NextResponse.json(
+        { success: false, error: "No autorizado para cancelar este job" },
+        { status: 403 }
       );
     }
 

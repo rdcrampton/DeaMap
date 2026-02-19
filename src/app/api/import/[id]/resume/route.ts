@@ -10,6 +10,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
+import { UserRole } from "@/generated/client/enums";
 import { getBulkImportService } from "@/import/infrastructure/factories/createBulkImportService";
 import type { ImportContext } from "@/import/infrastructure/state/PrismaStateStore";
 
@@ -21,11 +23,20 @@ interface RouteParams {
  * POST /api/import/[id]/resume
  * Resume/continue an import (dual-mode: bulkimport / legacy)
  */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    // Verify authentication
+    const user = await requireAuth(request);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "No autenticado" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
 
-    console.log(`📥 [Import Resume] Resuming import ${id}`);
+    console.log(`📥 [Import Resume] Resuming import ${id} by user ${user.userId}`);
 
     // Leer metadata del job para determinar el motor
     const job = await prisma.batchJob.findUnique({
@@ -37,6 +48,14 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(
         { success: false, error: `Job ${id} not found` },
         { status: 404 }
+      );
+    }
+
+    // Verificar que el usuario es dueño del job o admin
+    if (job.created_by !== user.userId && user.role !== UserRole.ADMIN) {
+      return NextResponse.json(
+        { success: false, error: "No autorizado para reanudar este job" },
+        { status: 403 }
       );
     }
 

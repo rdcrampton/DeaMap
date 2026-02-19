@@ -26,17 +26,40 @@ import { initializeProcessors } from "@/batch/application/processors";
 import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
 import { getBulkImportService } from "@/import/infrastructure/factories/createBulkImportService";
 import type { ImportContext } from "@/import/infrastructure/state/PrismaStateStore";
+import {
+  VERCEL_CRON_MAX_DURATION_MS,
+  CRON_SAFETY_TIMEOUT_MS,
+  ORPHANED_JOB_TIMEOUT_MS,
+  CRON_MAX_JOBS_PER_INVOCATION,
+} from "@/import/constants";
 
-const repository = new PrismaBatchJobRepository(prisma);
-const dataSourceRepository = new PrismaDataSourceRepository(prisma);
+// Lazy initialization para evitar side effects en cold starts de serverless.
+// Se inicializa solo cuando se necesita procesar un job legacy.
+let _repository: PrismaBatchJobRepository | null = null;
+let _orchestrator: BatchJobOrchestrator | null = null;
+let _processorsInitialized = false;
 
-// Initialize processors (legacy engine)
-initializeProcessors(prisma, dataSourceRepository);
+function getLegacyRepository(): PrismaBatchJobRepository {
+  if (!_repository) {
+    _repository = new PrismaBatchJobRepository(prisma);
+  }
+  return _repository;
+}
 
-const orchestrator = new BatchJobOrchestrator(repository);
+function getLegacyOrchestrator(): BatchJobOrchestrator {
+  if (!_orchestrator) {
+    const repository = getLegacyRepository();
+    if (!_processorsInitialized) {
+      const dataSourceRepository = new PrismaDataSourceRepository(prisma);
+      initializeProcessors(prisma, dataSourceRepository);
+      _processorsInitialized = true;
+    }
+    _orchestrator = new BatchJobOrchestrator(repository);
+  }
+  return _orchestrator;
+}
 
-// Timeout mÃ¡s corto para CRON (50s timeout en Vercel, dejamos 5s buffer)
-const CRON_MAX_DURATION_MS = 45_000;
+// Timeouts importados desde @/import/constants
 
 /**
  * Process waiting jobs (main logic)
@@ -46,19 +69,31 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
 
   try {
-    // Verify Vercel Cron Secret (optional)
+    // Verify Vercel Cron Secret
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.warn("ðŸš« [Cron] Unauthorized cron request");
+    if (!cronSecret) {
+      if (process.env.NODE_ENV === "production") {
+        console.error("[Cron] CRON_SECRET not configured in production — rejecting request");
+        return NextResponse.json(
+          { success: false, error: "Server misconfiguration: CRON_SECRET not set" },
+          { status: 500 }
+        );
+      }
+      // En desarrollo, permitir sin secret pero loguear warning
+      console.warn("[Cron] CRON_SECRET not configured — allowing unauthenticated access (dev only)");
+    } else if (authHeader !== `Bearer ${cronSecret}`) {
+      console.warn("🚫 [Cron] Unauthorized cron request");
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
     console.log("â° [Cron] Starting batch job processing...");
 
+    const repository = getLegacyRepository();
+
     // 1. RECOVER ORPHANED JOBS (IN_PROGRESS without heartbeat for >3 minutes)
-    const orphanedJobs = await repository.findTimedOutJobs(180000); // 3 minutes
+    const orphanedJobs = await repository.findTimedOutJobs(ORPHANED_JOB_TIMEOUT_MS);
 
     if (orphanedJobs.length > 0) {
       console.log(`ðŸ”§ [Cron] Found ${orphanedJobs.length} orphaned jobs, marking as INTERRUPTED`);
@@ -80,10 +115,10 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
     const interruptedJobs = resumableJobs.filter(j => j.status === 'INTERRUPTED' || j.status === 'PAUSED');
 
     // 3. FIND WAITING JOBS (already started but waiting for continuation)
-    const waitingJobs = await repository.findWaitingJobs(5);
+    const waitingJobs = await repository.findWaitingJobs(CRON_MAX_JOBS_PER_INVOCATION);
 
     // 4. COMBINE: INTERRUPTED first (recovery priority), then PENDING (FIFO), then WAITING
-    const jobsToProcess = [...interruptedJobs, ...pendingJobs, ...waitingJobs].slice(0, 5);
+    const jobsToProcess = [...interruptedJobs, ...pendingJobs, ...waitingJobs].slice(0, CRON_MAX_JOBS_PER_INVOCATION);
 
     if (jobsToProcess.length === 0) {
       console.log("ðŸ’¤ [Cron] No jobs to process");
@@ -160,6 +195,7 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
           results.push({ ...jobResult, jobName: job.name, engine });
         } else {
           // Legacy engine (BatchJobOrchestrator)
+          const orchestrator = getLegacyOrchestrator();
           const result = wasPending
             ? await orchestrator.start(job.id)
             : await orchestrator.continue(job.id);
@@ -209,7 +245,7 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
 
       // 3. Check if we're running out of time (Vercel cron timeout)
       const elapsed = Date.now() - startTime;
-      if (elapsed > 50000) {
+      if (elapsed > CRON_SAFETY_TIMEOUT_MS) {
         // 50 seconds - leave 10s buffer for response
         console.warn(
           `â° [Cron] Approaching timeout (${elapsed}ms), stopping after processing ${results.length} jobs`
@@ -303,7 +339,7 @@ async function processBulkImportJob(
     fileName: importContext.fileName,
     delimiter: importContext.delimiter,
     sharePointAuth: importContext.sharePointAuth,
-    maxDurationMs: CRON_MAX_DURATION_MS,
+    maxDurationMs: VERCEL_CRON_MAX_DURATION_MS,
     skipDuplicates: importContext.skipDuplicates,
   });
 

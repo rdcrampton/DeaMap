@@ -44,7 +44,7 @@ function validateLatitude(value: unknown): ValidationFieldResult {
   const str = String(value).trim();
   if (!str) return { valid: true }; // VacÃ­o es vÃ¡lido (campo opcional)
 
-  const normalized = str.replace(",", ".");
+  const normalized = str.replace(/,/g, ".");
   const num = parseFloat(normalized);
 
   if (isNaN(num)) {
@@ -77,7 +77,7 @@ function validateLongitude(value: unknown): ValidationFieldResult {
   const str = String(value).trim();
   if (!str) return { valid: true };
 
-  const normalized = str.replace(",", ".");
+  const normalized = str.replace(/,/g, ".");
   const num = parseFloat(normalized);
 
   if (isNaN(num)) {
@@ -260,7 +260,7 @@ function transformCoordinate(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   const str = String(value).trim();
   if (!str) return str;
-  return str.replace(",", ".");
+  return str.replace(/,/g, ".");
 }
 
 /**
@@ -393,6 +393,9 @@ export const aedImportSchema: SchemaDefinition = {
   fields: [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map(toSchemaField),
   strict: false, // Permitir columnas desconocidas (CSV puede tener columnas extra)
   skipEmptyRows: true,
+  // Campos que deben ser únicos dentro del mismo CSV (intra-import dedup).
+  // La dedup contra la base de datos la hace AedDuplicateChecker (external dedup).
+  uniqueFields: ["code", "externalReference"],
 };
 
 /**

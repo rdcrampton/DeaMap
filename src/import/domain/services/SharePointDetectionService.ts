@@ -7,6 +7,7 @@
 
 import { AedImportData } from "../value-objects/AedImportData";
 import { ColumnMapping } from "../../application/services/ColumnMappingService";
+import { isSharePointUrl } from "@/shared/utils/sharepoint";
 
 export interface SharePointDetectionResult {
   detected: boolean;
@@ -15,12 +16,6 @@ export interface SharePointDetectionResult {
 }
 
 export class SharePointDetectionService {
-  private readonly SHAREPOINT_DOMAINS = [
-    "sharepoint.com",
-    "sharepoint-df.com",
-    "microsoft.sharepoint.com",
-  ];
-
   private readonly IMAGE_FIELDS = [
     "photo1Url",
     "photo2Url",
@@ -64,7 +59,7 @@ export class SharePointDetectionService {
           const url = value.trim();
 
           // Verificar si es URL de SharePoint
-          if (this.isSharePointUrl(url)) {
+          if (isSharePointUrl(url)) {
             // Agregar a las URLs de muestra (máximo 3)
             if (sharepointUrls.length < 3 && !sharepointUrls.includes(url)) {
               sharepointUrls.push(url);
@@ -87,21 +82,6 @@ export class SharePointDetectionService {
       sampleUrls: sharepointUrls,
       imageFields: Array.from(fieldsWithSharePoint),
     };
-  }
-
-  /**
-   * Verifica si una URL pertenece a SharePoint
-   */
-  private isSharePointUrl(url: string): boolean {
-    try {
-      const urlObj = new URL(url);
-      const hostname = urlObj.hostname.toLowerCase();
-
-      return this.SHAREPOINT_DOMAINS.some((domain) => hostname.includes(domain));
-    } catch {
-      // URL inválida, no es SharePoint
-      return false;
-    }
   }
 
   /**

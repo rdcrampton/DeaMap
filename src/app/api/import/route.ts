@@ -16,7 +16,13 @@ import { getBulkImportService } from "@/import/infrastructure/factories/createBu
 import { uploadToS3 } from "@/lib/s3";
 import fs from "fs/promises";
 import path from "path";
+import os from "os";
 import crypto from "crypto";
+import {
+  DEFAULT_CSV_DELIMITER,
+  DEFAULT_BATCH_SIZE,
+  VERCEL_API_MAX_DURATION_MS,
+} from "@/import/constants";
 
 /**
  * GET /api/import
@@ -144,6 +150,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validar que filePath esté dentro de /tmp o del directorio temporal del OS
+    // para prevenir path traversal (lectura/borrado de archivos arbitrarios)
+    const resolvedPath = path.resolve(filePath);
+    const allowedDirs = [path.resolve("/tmp"), path.resolve(os.tmpdir())];
+    const isPathSafe = allowedDirs.some(
+      (dir) => resolvedPath.startsWith(dir + path.sep) || resolvedPath === dir
+    );
+
+    if (!isPathSafe) {
+      console.warn(`🚫 [Import] Rejected unsafe filePath: ${filePath} (resolved: ${resolvedPath})`);
+      return NextResponse.json(
+        { error: "filePath debe estar dentro del directorio temporal" },
+        { status: 400 }
+      );
+    }
+
     // Upload CSV file to S3 for persistent storage
     console.log(`ðŸ“¤ [Import] Uploading CSV to S3: ${filePath}`);
 
@@ -197,12 +219,12 @@ export async function POST(request: NextRequest) {
       s3Url,
       fileName,
       userId: user.userId,
-      delimiter: ";",
-      batchSize: 50,
+      delimiter: DEFAULT_CSV_DELIMITER,
+      batchSize: DEFAULT_BATCH_SIZE,
       continueOnError: true,
       skipDuplicates: true,
       sharePointAuth,
-      maxDurationMs: 80_000,
+      maxDurationMs: VERCEL_API_MAX_DURATION_MS,
       jobName: batchName || `ImportaciÃ³n CSV ${new Date().toISOString()}`,
     });
 

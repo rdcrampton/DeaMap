@@ -416,7 +416,9 @@ export class PrismaStateStore implements StateStore {
       };
     }
 
-    const totalProcessed = job.processed_records + job.failed_records;
+    // processed_records ya incluye los failed (ver saveJobState:
+    // processedRecords = sum(batch.processedCount) que incluye éxitos + fallos)
+    const totalProcessed = job.processed_records;
     const elapsedMs = job.started_at
       ? Date.now() - job.started_at.getTime()
       : 0;

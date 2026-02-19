@@ -56,7 +56,7 @@ function toStringOrNull(value: unknown): string | null {
  */
 function parseCoordinate(value: unknown): number | undefined {
   if (value === null || value === undefined) return undefined;
-  const str = String(value).trim().replace(",", ".");
+  const str = String(value).trim().replace(/,/g, ".");
   if (!str) return undefined;
   const num = parseFloat(str);
   return isNaN(num) ? undefined : num;
@@ -67,25 +67,29 @@ function parseCoordinate(value: unknown): number | undefined {
  */
 function hasScheduleData(data: Record<string, unknown>): boolean {
   return !!(
-    data.is24x7 ||
     data.weekdayOpening ||
     data.weekdayClosing ||
     data.saturdayOpening ||
     data.saturdayClosing ||
     data.sundayOpening ||
     data.sundayClosing ||
-    data.has24hSurveillance
+    data.has24hSurveillance ||
+    data.hasRestrictedAccess ||
+    data.scheduleDescription
   );
 }
 
 /**
  * Verifica si hay datos del responsable en el registro.
+ * Los nombres de campo corresponden a las keys del schema (FieldDefinition):
+ * submitterName, submitterEmail, submitterPhone, alternativePhone,
+ * ownership, localOwnership, organization, position, department.
  */
 function hasResponsibleData(data: Record<string, unknown>): boolean {
   return !!(
-    data.responsibleName ||
-    data.responsibleEmail ||
-    data.responsiblePhone ||
+    data.submitterName ||
+    data.submitterEmail ||
+    data.submitterPhone ||
     data.ownership ||
     data.localOwnership
   );
@@ -126,118 +130,118 @@ export function createAedRecordProcessor(
     const latitude = parseCoordinate(data.latitude);
     const longitude = parseCoordinate(data.longitude);
 
-    // ========================================
-    // 1. CREATE LOCATION (siempre)
-    // ========================================
-    const location = await prisma.aedLocation.create({
-      data: {
-        street_type: toStringOrNull(data.streetType),
-        street_name: toStringOrNull(data.streetName),
-        street_number: toStringOrNull(data.streetNumber),
-        postal_code: toStringOrNull(data.postalCode),
-        city_name: toStringOrNull(data.city || data.cityName),
-        city_code: toStringOrNull(data.cityCode),
-        district_code: toStringOrNull(data.districtCode),
-        district_name: toStringOrNull(data.district),
-        neighborhood_code: toStringOrNull(data.neighborhoodCode),
-        neighborhood_name: toStringOrNull(data.neighborhood || data.neighborhoodName),
-        floor: toStringOrNull(data.floor),
-        location_details: toStringOrNull(data.locationDetails),
-        access_instructions: toStringOrNull(data.accessDescription),
-      },
-    });
-
-    // ========================================
-    // 2. CREATE SCHEDULE (condicional)
-    // ========================================
-    let scheduleId: string | undefined;
-
-    if (hasScheduleData(data)) {
-      const schedule = await prisma.aedSchedule.create({
+    // Transacción atómica: si cualquier paso falla, se hace rollback completo.
+    // Esto evita registros huérfanos de Location/Schedule/Responsible.
+    await prisma.$transaction(async (tx) => {
+      // ========================================
+      // 1. CREATE LOCATION (siempre)
+      // ========================================
+      const location = await tx.aedLocation.create({
         data: {
-          weekday_opening: toStringOrNull(data.weekdayOpening),
-          weekday_closing: toStringOrNull(data.weekdayClosing),
-          saturday_opening: toStringOrNull(data.saturdayOpening),
-          saturday_closing: toStringOrNull(data.saturdayClosing),
-          sunday_opening: toStringOrNull(data.sundayOpening),
-          sunday_closing: toStringOrNull(data.sundayClosing),
-          has_24h_surveillance: parseBoolean(data.has24hSurveillance),
-          has_restricted_access: parseBoolean(data.hasRestrictedAccess),
-          description: toStringOrNull(data.scheduleDescription),
-          notes: toStringOrNull(data.scheduleNotes),
+          street_type: toStringOrNull(data.streetType),
+          street_name: toStringOrNull(data.streetName),
+          street_number: toStringOrNull(data.streetNumber),
+          postal_code: toStringOrNull(data.postalCode),
+          city_name: toStringOrNull(data.city || data.cityName),
+          city_code: toStringOrNull(data.cityCode),
+          district_code: toStringOrNull(data.districtCode),
+          district_name: toStringOrNull(data.district),
+          neighborhood_code: toStringOrNull(data.neighborhoodCode),
+          neighborhood_name: toStringOrNull(data.neighborhood || data.neighborhoodName),
+          floor: toStringOrNull(data.floor),
+          location_details: toStringOrNull(data.locationDetails),
+          access_instructions: toStringOrNull(data.accessDescription),
         },
       });
-      scheduleId = schedule.id;
-    }
 
-    // ========================================
-    // 3. CREATE RESPONSIBLE (condicional)
-    // ========================================
-    let responsibleId: string | undefined;
+      // ========================================
+      // 2. CREATE SCHEDULE (condicional)
+      // ========================================
+      let scheduleId: string | undefined;
 
-    if (hasResponsibleData(data)) {
-      const responsible = await prisma.aedResponsible.create({
+      if (hasScheduleData(data)) {
+        const schedule = await tx.aedSchedule.create({
+          data: {
+            weekday_opening: toStringOrNull(data.weekdayOpening),
+            weekday_closing: toStringOrNull(data.weekdayClosing),
+            saturday_opening: toStringOrNull(data.saturdayOpening),
+            saturday_closing: toStringOrNull(data.saturdayClosing),
+            sunday_opening: toStringOrNull(data.sundayOpening),
+            sunday_closing: toStringOrNull(data.sundayClosing),
+            has_24h_surveillance: parseBoolean(data.has24hSurveillance),
+            has_restricted_access: parseBoolean(data.hasRestrictedAccess),
+            description: toStringOrNull(data.scheduleDescription),
+            notes: toStringOrNull(data.scheduleNotes),
+          },
+        });
+        scheduleId = schedule.id;
+      }
+
+      // ========================================
+      // 3. CREATE RESPONSIBLE (condicional)
+      // ========================================
+      let responsibleId: string | undefined;
+
+      if (hasResponsibleData(data)) {
+        const responsible = await tx.aedResponsible.create({
+          data: {
+            name: toStringOrNull(data.submitterName) || "Sin especificar",
+            email: toStringOrNull(data.submitterEmail),
+            phone: toStringOrNull(data.submitterPhone),
+            alternative_phone: toStringOrNull(data.alternativePhone),
+            ownership: toStringOrNull(data.ownership),
+            local_ownership: toStringOrNull(data.localOwnership),
+            local_use: toStringOrNull(data.localUse),
+            organization: toStringOrNull(data.organization),
+            position: toStringOrNull(data.position),
+            department: toStringOrNull(data.department),
+          },
+        });
+        responsibleId = responsible.id;
+      }
+
+      // ========================================
+      // 4. CREATE AED
+      // ========================================
+      await tx.aed.create({
         data: {
-          name: toStringOrNull(data.responsibleName) || "Sin especificar",
-          email: toStringOrNull(data.responsibleEmail),
-          phone: toStringOrNull(data.responsiblePhone),
-          alternative_phone: toStringOrNull(data.responsibleAlternativePhone),
-          ownership: toStringOrNull(data.ownership),
-          local_ownership: toStringOrNull(data.localOwnership),
-          local_use: toStringOrNull(data.localUse),
-          organization: toStringOrNull(data.responsibleOrganization),
-          position: toStringOrNull(data.responsiblePosition),
-          department: toStringOrNull(data.responsibleDepartment),
+          id: aedId,
+
+          // Código e identificadores
+          code: toStringOrNull(data.code),
+          external_reference: toStringOrNull(data.externalReference),
+
+          // Datos básicos
+          name: String(data.proposedName || "").trim(),
+          establishment_type: toStringOrNull(data.establishmentType),
+
+          // Coordenadas
+          latitude,
+          longitude,
+          coordinates_precision: toStringOrNull(data.coordinatesPrecision),
+
+          // Relaciones
+          location_id: location.id,
+          schedule_id: scheduleId,
+          responsible_id: responsibleId,
+
+          // Origen y trazabilidad
+          source_origin: "CSV_IMPORT",
+          source_details: `Importación CSV: ${fileName || "unknown"}`,
+          batch_job_id: context.jobId,
+
+          // Notas
+          public_notes: toStringOrNull(data.publicNotes || data.freeComment),
+
+          // Estado inicial
+          status: "DRAFT",
         },
       });
-      responsibleId = responsible.id;
-    }
-
-    // ========================================
-    // 4. CREATE AED
-    // ========================================
-    // Location, Schedule y Responsible ya fueron creados arriba.
-    // El AED se crea con sus relaciones. Si falla, @batchactions/import
-    // marcarÃ¡ el record como failed y los registros huÃ©rfanos se
-    // limpiarÃ¡n en un proceso de mantenimiento.
-    await prisma.aed.create({
-      data: {
-        id: aedId,
-
-        // CÃ³digo e identificadores
-        code: toStringOrNull(data.code),
-        external_reference: toStringOrNull(data.externalReference),
-
-        // Datos bÃ¡sicos
-        name: String(data.proposedName || "").trim(),
-        establishment_type: toStringOrNull(data.establishmentType),
-
-        // Coordenadas
-        latitude,
-        longitude,
-        coordinates_precision: toStringOrNull(data.coordinatesPrecision),
-
-        // Relaciones
-        location_id: location.id,
-        schedule_id: scheduleId,
-        responsible_id: responsibleId,
-
-        // Origen y trazabilidad
-        source_origin: "CSV_IMPORT",
-        source_details: `ImportaciÃ³n CSV: ${fileName || "unknown"}`,
-        batch_job_id: context.jobId,
-
-        // Notas
-        public_notes: toStringOrNull(data.publicNotes || data.freeComment),
-
-        // Estado inicial
-        status: "DRAFT",
-      },
     });
 
-    // Nota: Las imÃ¡genes se descargan/suben en el hook afterProcess
-    // para mantener separaciÃ³n de responsabilidades y evitar que
-    // un fallo de imagen bloquee la creaciÃ³n del AED.
+    // Nota: Las imágenes se descargan/suben en el hook afterProcess
+    // para mantener separación de responsabilidades y evitar que
+    // un fallo de imagen bloquee la creación del AED.
   };
 }
 

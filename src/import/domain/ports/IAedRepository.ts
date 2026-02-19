@@ -33,4 +33,22 @@ export interface IAedRepository {
    * Busca un AED por ID y retorna información básica
    */
   findById(id: string): Promise<DuplicateCheckResult | null>;
+
+  /**
+   * Busca AEDs por múltiples IDs en una sola query.
+   * Retorna un Map de id → DuplicateCheckResult para los encontrados.
+   */
+  findByIds(ids: string[]): Promise<Map<string, DuplicateCheckResult>>;
+
+  /**
+   * Busca AEDs por múltiples códigos en una sola query.
+   * Retorna un Map de code (lowercase) → DuplicateCheckResult para los encontrados.
+   */
+  findByCodes(codes: string[]): Promise<Map<string, DuplicateCheckResult>>;
+
+  /**
+   * Busca AEDs por múltiples referencias externas en una sola query.
+   * Retorna un Map de externalReference (lowercase) → DuplicateCheckResult para los encontrados.
+   */
+  findByExternalReferences(refs: string[]): Promise<Map<string, DuplicateCheckResult>>;
 }
