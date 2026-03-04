@@ -3,47 +3,54 @@ import { NextRequest } from "next/server";
 
 import type { JWTPayload } from "@/types";
 
-import { getCurrentUser } from "./jwt";
+import { getCurrentUserFromRequest } from "./jwt";
 
-/**
- * Get the current user from the request without requiring authentication
- * Returns null if not authenticated, making it suitable for optional auth checks
- */
-export async function getUserFromRequest(_request: NextRequest): Promise<JWTPayload | null> {
-  return getCurrentUser();
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number = 401
+  ) {
+    super(message);
+    this.name = "AuthError";
+  }
 }
 
 /**
- * Middleware to check if user is authenticated
+ * Get the current user from the request without requiring authentication.
+ * Returns null if not authenticated — suitable for optional auth checks.
  */
-export async function requireAuth(_request: NextRequest): Promise<JWTPayload | null> {
-  const user = await getCurrentUser();
+export async function getUserFromRequest(request: NextRequest): Promise<JWTPayload | null> {
+  return getCurrentUserFromRequest(request);
+}
+
+/**
+ * Require the user to be authenticated. Throws AuthError if not.
+ */
+export async function requireAuth(request: NextRequest): Promise<JWTPayload> {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) {
+    throw new AuthError("No autenticado");
+  }
   return user;
 }
 
 /**
- * Middleware to check if user has specific role
+ * Require the user to have a specific role. Throws AuthError if not.
  */
 export async function requireRole(
-  _request: NextRequest,
+  request: NextRequest,
   allowedRoles: UserRole[]
-): Promise<JWTPayload | null> {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    return null;
-  }
-
+): Promise<JWTPayload> {
+  const user = await requireAuth(request);
   if (!allowedRoles.includes(user.role)) {
-    return null;
+    throw new AuthError("No tienes permisos para esta acción", 403);
   }
-
   return user;
 }
 
 /**
- * Middleware to check if user is admin
+ * Require the user to be an admin. Throws AuthError if not.
  */
-export async function requireAdmin(_request: NextRequest): Promise<JWTPayload | null> {
-  return requireRole(_request, [UserRole.ADMIN]);
+export async function requireAdmin(request: NextRequest): Promise<JWTPayload> {
+  return requireRole(request, [UserRole.ADMIN]);
 }

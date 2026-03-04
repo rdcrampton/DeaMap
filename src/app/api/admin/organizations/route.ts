@@ -5,32 +5,26 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, AuthError } from "@/lib/auth";
 import type { CreateOrganizationRequest } from "@/types/organization";
+import type { Prisma } from "@/generated/client/client";
+import type { OrganizationType } from "@/generated/client/enums";
 
 /**
  * GET /api/admin/organizations
  * List all organizations (with optional filters)
  */
 export async function GET(request: NextRequest) {
-  // Verify admin permissions
-  const admin = await requireAdmin(request);
-  if (!admin) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized - Admin access required" },
-      { status: 403 }
-    );
-  }
-
   try {
+    await requireAdmin(request);
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
     const isActive = searchParams.get("is_active");
     const cityCode = searchParams.get("city_code");
 
     // Build where clause
-    const where: any = {};
-    if (type) where.type = type;
+    const where: Prisma.OrganizationWhereInput = {};
+    if (type) where.type = type as OrganizationType;
     if (isActive) where.is_active = isActive === "true";
     if (cityCode) where.city_code = cityCode;
 
@@ -42,34 +36,39 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             code: true,
-          }
+          },
         },
         child_orgs: {
           select: {
             id: true,
             name: true,
             code: true,
-          }
+          },
         },
         _count: {
           select: {
             members: true,
             aed_assignments: true,
             verifications: true,
-          }
-        }
+          },
+        },
       },
       orderBy: {
-        created_at: 'desc'
-      }
+        created_at: "desc",
+      },
     });
 
     return NextResponse.json({
       success: true,
-      data: organizations
+      data: organizations,
     });
-
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.statusCode }
+      );
+    }
     console.error("Error fetching organizations:", error);
     const isDevelopment = process.env.NODE_ENV === "development";
     return NextResponse.json(
@@ -88,16 +87,8 @@ export async function GET(request: NextRequest) {
  * Create a new organization
  */
 export async function POST(request: NextRequest) {
-  // Verify admin permissions
-  const admin = await requireAdmin(request);
-  if (!admin) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized - Admin access required" },
-      { status: 403 }
-    );
-  }
-
   try {
+    const admin = await requireAdmin(request);
     const body: CreateOrganizationRequest = await request.json();
 
     // Validate required fields
@@ -111,7 +102,7 @@ export async function POST(request: NextRequest) {
     // Check if code already exists (if provided)
     if (body.code) {
       const existing = await prisma.organization.findUnique({
-        where: { code: body.code }
+        where: { code: body.code },
       });
 
       if (existing) {
@@ -132,7 +123,7 @@ export async function POST(request: NextRequest) {
         phone: body.phone || undefined,
         website: body.website || undefined,
         description: body.description || undefined,
-        scope_type: body.scope_type || 'CITY',
+        scope_type: body.scope_type || "CITY",
         city_code: body.city_code || undefined,
         city_name: body.city_name || undefined,
         district_codes: body.district_codes || [],
@@ -152,18 +143,26 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             code: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: organization,
-      message: `Organization '${organization.name}' created successfully`
-    }, { status: 201 });
-
+    return NextResponse.json(
+      {
+        success: true,
+        data: organization,
+        message: `Organization '${organization.name}' created successfully`,
+      },
+      { status: 201 }
+    );
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.statusCode }
+      );
+    }
     console.error("Error creating organization:", error);
     return NextResponse.json(
       { success: false, error: "Failed to create organization" },

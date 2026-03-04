@@ -175,7 +175,10 @@ export default function VerifyPage({ params }: VerifyPageProps) {
             current_step: VerificationStep.COMPLETED,
             validation: {
               ...prev.validation,
-              data: { ...((prev.validation.data as object) || {}), current_step: VerificationStep.COMPLETED },
+              data: {
+                ...((prev.validation.data as object) || {}),
+                current_step: VerificationStep.COMPLETED,
+              },
             },
           }
         : prev
@@ -204,7 +207,10 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               current_step: VerificationStep.REVIEW,
               validation: {
                 ...prev.validation,
-                data: { ...((prev.validation.data as object) || {}), current_step: VerificationStep.REVIEW },
+                data: {
+                  ...((prev.validation.data as object) || {}),
+                  current_step: VerificationStep.REVIEW,
+                },
               },
             }
           : prev
@@ -350,7 +356,9 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   let finalImages: AedImage[] = data.aed.images;
 
                   // Persist image changes (add/delete) if needed — single PATCH, no extra GETs
-                  const hasChanges = result.deletedImageIds.length > 0 || (result.newImages && result.newImages.length > 0);
+                  const hasChanges =
+                    result.deletedImageIds.length > 0 ||
+                    (result.newImages && result.newImages.length > 0);
                   if (hasChanges) {
                     const response = await fetch(`/api/aeds/${resolvedParams.id}`, {
                       method: "PATCH",
@@ -449,7 +457,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               }}
               onCropComplete={async (cropData: CropData, croppedImageUrl?: string) => {
                 // Keep the blob: URL client-side only (never send to server)
-                setLocalImageUrls(prev => ({
+                setLocalImageUrls((prev) => ({
                   ...prev,
                   croppedImageUrl: croppedImageUrl || currentImage.url,
                 }));
@@ -501,7 +509,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               imageUrl={currentCroppedImageUrl || currentImage.url}
               onBlurComplete={async (blurAreas: BlurArea[], blurredImageUrl?: string) => {
                 // Keep blob: URL client-side only
-                setLocalImageUrls(prev => ({
+                setLocalImageUrls((prev) => ({
                   ...prev,
                   blurredImageUrl: blurredImageUrl || currentCroppedImageUrl || currentImage.url,
                 }));
@@ -514,7 +522,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               }}
               onSkip={async () => {
                 // Continue without blur — carry forward cropped image URL locally
-                setLocalImageUrls(prev => ({
+                setLocalImageUrls((prev) => ({
                   ...prev,
                   blurredImageUrl: currentCroppedImageUrl || currentImage.url,
                 }));
@@ -570,7 +578,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
               onArrowComplete={async (arrowData: ArrowData, processedImageUrl?: string) => {
                 // Keep the data: URL for preview client-side only
                 if (processedImageUrl) {
-                  setLocalImageUrls(prev => ({
+                  setLocalImageUrls((prev) => ({
                     ...prev,
                     processedUrls: { ...prev.processedUrls, [currentImage.id]: processedImageUrl },
                   }));
@@ -588,7 +596,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                 const updatedProcessedImages = [...processedImages, newProcessedImage];
 
                 // Reset per-image temp URLs for the next image
-                setLocalImageUrls(prev => ({
+                setLocalImageUrls((prev) => ({
                   ...prev,
                   croppedImageUrl: undefined,
                   blurredImageUrl: undefined,
@@ -665,12 +673,12 @@ export default function VerifyPage({ params }: VerifyPageProps) {
         const processedImages = validationData?.processed_images || [];
 
         // Agrupar por tipo
-        const frontImages = validatedImages.filter(img => img.type === 'FRONT');
-        const interiorImages = validatedImages.filter(img => img.type !== 'FRONT');
+        const frontImages = validatedImages.filter((img) => img.type === "FRONT");
+        const interiorImages = validatedImages.filter((img) => img.type !== "FRONT");
 
         // Función auxiliar para obtener info de procesamiento e imagen procesada
         const getImageProcessing = (imageId: string) => {
-          const processed = processedImages.find(p => p.image_id === imageId);
+          const processed = processedImages.find((p) => p.image_id === imageId);
           return {
             hasCrop: !!processed?.crop_data,
             hasBlur: !!(processed?.blur_areas && processed.blur_areas.length > 0),
@@ -724,7 +732,9 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                     {/* Front images */}
                     {frontImages.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-600 mb-2">Imágenes Frontales</h4>
+                        <h4 className="text-sm font-medium text-gray-600 mb-2">
+                          Imágenes Frontales
+                        </h4>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                           {frontImages.map((img) => {
                             const processing = getImageProcessing(img.id);
@@ -742,17 +752,26 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                                 </div>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {processing.hasCrop && (
-                                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded" title="Recortada">
+                                    <span
+                                      className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                      title="Recortada"
+                                    >
                                       ✂️
                                     </span>
                                   )}
                                   {processing.hasBlur && (
-                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded" title="Difuminada">
+                                    <span
+                                      className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded"
+                                      title="Difuminada"
+                                    >
                                       🔒
                                     </span>
                                   )}
                                   {processing.hasArrow && (
-                                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded" title="Con flecha">
+                                    <span
+                                      className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded"
+                                      title="Con flecha"
+                                    >
                                       🎯
                                     </span>
                                   )}
@@ -767,7 +786,9 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                     {/* Interior images */}
                     {interiorImages.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-600 mb-2">Imágenes de Interior</h4>
+                        <h4 className="text-sm font-medium text-gray-600 mb-2">
+                          Imágenes de Interior
+                        </h4>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                           {interiorImages.map((img) => {
                             const processing = getImageProcessing(img.id);
@@ -785,17 +806,26 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                                 </div>
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {processing.hasCrop && (
-                                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded" title="Recortada">
+                                    <span
+                                      className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded"
+                                      title="Recortada"
+                                    >
                                       ✂️
                                     </span>
                                   )}
                                   {processing.hasBlur && (
-                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded" title="Difuminada">
+                                    <span
+                                      className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded"
+                                      title="Difuminada"
+                                    >
                                       🔒
                                     </span>
                                   )}
                                   {processing.hasArrow && (
-                                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded" title="Con flecha">
+                                    <span
+                                      className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded"
+                                      title="Con flecha"
+                                    >
                                       🎯
                                     </span>
                                   )}

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Sesión de verificación no encontrada" }, { status: 404 });
     }
 
-    console.log('🔄 Iniciando procesamiento de imágenes...');
+    console.log("🔄 Iniciando procesamiento de imágenes...");
 
     // Extraer datos de procesamiento
     const validationData = validation.data as any;
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     for (const processedImg of processedImages) {
       // Buscar la imagen en la BD
-      const imageRecord = validation.aed.images.find(img => img.id === processedImg.image_id);
+      const imageRecord = validation.aed.images.find((img) => img.id === processedImg.image_id);
 
       if (!imageRecord) {
         console.warn(`⚠️ Imagen ${processedImg.image_id} no encontrada en BD`);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Subir imágenes (originales y procesadas) a S3 y actualizar BD
     for (const [imageId, processedBuffer] of processedBuffers) {
-      const imageRecord = validation.aed.images.find(img => img.id === imageId);
+      const imageRecord = validation.aed.images.find((img) => img.id === imageId);
       if (!imageRecord) continue;
 
       const extension = extractExtension(imageRecord.original_url);
@@ -88,26 +88,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const originalBuffer = Buffer.from(originalArrayBuffer);
 
         // Generar key para imagen original con formato correcto
-        const originalKey = buildImageKey(id, imageId, 'original', extension);
+        const originalKey = buildImageKey(id, imageId, "original", extension);
 
         // Subir imagen original a S3 con formato estructurado
         const newOriginalUrl = await uploadToS3({
           buffer: originalBuffer,
           filename: originalKey,
-          contentType: imageRecord.original_url.includes('.png') ? 'image/png' : 'image/jpeg',
+          contentType: imageRecord.original_url.includes(".png") ? "image/png" : "image/jpeg",
           prefix: id,
         });
 
         console.log(`✅ Imagen original ${imageId} re-subida: ${newOriginalUrl}`);
 
         // 2. Subir imagen procesada
-        const processedKey = buildImageKey(id, imageId, 'processed', extension);
+        const processedKey = buildImageKey(id, imageId, "processed", extension);
 
         console.log(`☁️ Subiendo imagen procesada ${imageId} a S3...`);
         const processedUrl = await uploadToS3({
           buffer: processedBuffer,
           filename: processedKey,
-          contentType: 'image/jpeg',
+          contentType: "image/jpeg",
           prefix: id,
         });
 
@@ -123,7 +123,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           },
         });
 
-        console.log(`✅ Imagen ${imageId} guardada y verificada - Original: ${newOriginalUrl}, Procesada: ${processedUrl}`);
+        console.log(
+          `✅ Imagen ${imageId} guardada y verificada - Original: ${newOriginalUrl}, Procesada: ${processedUrl}`
+        );
       } catch (error) {
         console.error(`❌ Error procesando imagen ${imageId}:`, error);
         // Continue with other images even if one fails
@@ -172,11 +174,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     // Fallback: use any organization the user belongs to
-    const orgId = userAssignment?.organization_id
-      || (await prisma.organizationMember.findFirst({
-           where: { user_id: user.userId },
-           select: { organization_id: true },
-         }))?.organization_id;
+    const orgId =
+      userAssignment?.organization_id ||
+      (
+        await prisma.organizationMember.findFirst({
+          where: { user_id: user.userId },
+          select: { organization_id: true },
+        })
+      )?.organization_id;
 
     if (orgId) {
       // Mark any previous verification for this AED+org as superseded
@@ -193,7 +198,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           verified_by: user.userId,
           verified_at: now,
           verified_photos: true,
-          verified_address: !!(validationData?.validated_address),
+          verified_address: !!validationData?.validated_address,
           verified_access: false,
           verified_schedule: false,
           verified_signage: false,
@@ -203,14 +208,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     }
 
-    console.log('🎉 Verificación completada exitosamente');
+    console.log("🎉 Verificación completada exitosamente");
 
     return NextResponse.json(updatedValidation);
   } catch (error) {
     console.error("Error completing verification:", error);
-    return NextResponse.json({
-      error: "Error al completar verificación",
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Error al completar verificación",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }

@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAdmin, AuthError } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { uploadToS3 } from "@/lib/s3";
 import { buildImageKey, extractExtension } from "@/lib/s3-utils";
@@ -29,18 +29,9 @@ interface ProcessImageBody {
   arrowData?: ArrowData;
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireAuth(request);
-    if (!user || user.role !== "ADMIN") {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized - Admin access required" },
-        { status: 403 }
-      );
-    }
+    const user = await requireAdmin(request);
 
     const { id: aedId } = await params;
     const body: ProcessImageBody = await request.json();
@@ -53,10 +44,7 @@ export async function POST(
     });
 
     if (!aed) {
-      return NextResponse.json(
-        { success: false, error: "AED not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: "AED not found" }, { status: 404 });
     }
 
     let originalBuffer: Buffer;
@@ -202,6 +190,12 @@ export async function POST(
       },
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.statusCode }
+      );
+    }
     console.error("Error processing image:", error);
     return NextResponse.json(
       {

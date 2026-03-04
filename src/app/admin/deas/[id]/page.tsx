@@ -35,10 +35,9 @@ import dynamic from "next/dynamic";
 import type { ImageProcessingResult } from "@/components/dea/DeaImageProcessor";
 
 // Lazy-load to avoid SSR issues with canvas/leaflet
-const DeaImageProcessor = dynamic(
-  () => import("@/components/dea/DeaImageProcessor"),
-  { ssr: false }
-);
+const DeaImageProcessor = dynamic(() => import("@/components/dea/DeaImageProcessor"), {
+  ssr: false,
+});
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -258,12 +257,20 @@ function EditableField({
     return (
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-        <p className="text-gray-900">{displayValue || (value != null && value !== "" ? String(value) : <span className="text-gray-400 italic">No especificado</span>)}</p>
+        <p className="text-gray-900">
+          {displayValue ||
+            (value != null && value !== "" ? (
+              String(value)
+            ) : (
+              <span className="text-gray-400 italic">No especificado</span>
+            ))}
+        </p>
       </div>
     );
   }
 
-  const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm";
+  const inputClass =
+    "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm";
 
   if (type === "select" && options) {
     return (
@@ -340,7 +347,9 @@ function EditableField({
 export default function AdminDeaDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [data, setData] = useState<{ aed: AdminDeaData; counts: Record<string, number> } | null>(null);
+  const [data, setData] = useState<{ aed: AdminDeaData; counts: Record<string, number> } | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("general");
@@ -361,7 +370,12 @@ export default function AdminDeaDetailPage() {
 
   // Image processor modal
   const [imageProcessor, setImageProcessor] = useState<ImageProcessorState>({
-    isOpen: false, imageUrl: "", imageId: null, label: "", newImageIndex: null, imageType: "FRONT",
+    isOpen: false,
+    imageUrl: "",
+    imageId: null,
+    label: "",
+    newImageIndex: null,
+    imageType: "FRONT",
   });
   const [processingImageId, setProcessingImageId] = useState<string | null>(null);
 
@@ -464,7 +478,11 @@ export default function AdminDeaDetailPage() {
   // ── Image processing ──
 
   /** Open processor for an existing image (reprocess from original) */
-  const handleProcessExistingImage = (image: { id: string; original_url: string; type: string }) => {
+  const handleProcessExistingImage = (image: {
+    id: string;
+    original_url: string;
+    type: string;
+  }) => {
     setImageProcessor({
       isOpen: true,
       imageUrl: image.original_url,
@@ -655,14 +673,20 @@ export default function AdminDeaDetailPage() {
     const badges: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
       PUBLISHED: { label: "Publicado", color: "bg-green-100 text-green-800", icon: CheckCircle },
       DRAFT: { label: "Borrador", color: "bg-gray-100 text-gray-800", icon: FileText },
-      PENDING_REVIEW: { label: "Pendiente", color: "bg-yellow-100 text-yellow-800", icon: AlertCircle },
+      PENDING_REVIEW: {
+        label: "Pendiente",
+        color: "bg-yellow-100 text-yellow-800",
+        icon: AlertCircle,
+      },
       REJECTED: { label: "Rechazado", color: "bg-red-100 text-red-800", icon: XCircle },
       INACTIVE: { label: "Inactivo", color: "bg-gray-100 text-gray-600", icon: XCircle },
     };
     const badge = badges[status] || badges.DRAFT;
     const Icon = badge.icon;
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${badge.color}`}>
+      <span
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${badge.color}`}
+      >
         <Icon className="w-4 h-4" />
         {badge.label}
       </span>
@@ -678,7 +702,9 @@ export default function AdminDeaDetailPage() {
     };
     const modeInfo = modes[mode] || modes.NONE;
     return (
-      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${modeInfo.color}`}>
+      <span
+        className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${modeInfo.color}`}
+      >
         {modeInfo.label}
       </span>
     );
@@ -704,7 +730,10 @@ export default function AdminDeaDetailPage() {
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
           <p className="text-gray-600 mb-4">{error || "No se pudo cargar el DEA"}</p>
-          <button onClick={() => router.back()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <button
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
             Volver
           </button>
         </div>
@@ -724,7 +753,11 @@ export default function AdminDeaDetailPage() {
 
   const tabs = [
     { id: "general", label: "General", icon: FileText },
-    { id: "images", label: `Imágenes (${aed.images.length - imagesToDelete.length + newImages.length})`, icon: ImageIcon },
+    {
+      id: "images",
+      label: `Imágenes (${aed.images.length - imagesToDelete.length + newImages.length})`,
+      icon: ImageIcon,
+    },
     { id: "verifications", label: `Verificaciones (${counts.verifications})`, icon: CheckCircle },
     { id: "assignments", label: `Asignaciones (${counts.active_assignments})`, icon: Users },
     { id: "history", label: "Histórico", icon: Activity },
@@ -758,7 +791,11 @@ export default function AdminDeaDetailPage() {
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           onClick={() => setLightboxUrl(null)}
         >
-          <img src={lightboxUrl} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg" />
+          <img
+            src={lightboxUrl}
+            alt="Preview"
+            className="max-w-full max-h-full object-contain rounded-lg"
+          />
           <button
             onClick={() => setLightboxUrl(null)}
             className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2"
@@ -824,7 +861,7 @@ export default function AdminDeaDetailPage() {
               {isEditing ? (
                 <input
                   type="text"
-                  value={getAedValue("name") as string || ""}
+                  value={(getAedValue("name") as string) || ""}
                   onChange={(e) => handleAedChange("name", e.target.value)}
                   className="text-2xl font-bold text-gray-900 mb-2 border-b-2 border-blue-300 focus:border-blue-600 outline-none bg-transparent w-full"
                 />
@@ -835,7 +872,7 @@ export default function AdminDeaDetailPage() {
                 {isEditing ? (
                   <input
                     type="text"
-                    value={getAedValue("code") as string || ""}
+                    value={(getAedValue("code") as string) || ""}
                     onChange={(e) => handleAedChange("code", e.target.value || null)}
                     placeholder="Código"
                     className="text-sm bg-gray-100 px-2 py-1 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 w-40"
@@ -847,8 +884,10 @@ export default function AdminDeaDetailPage() {
                     </span>
                   )
                 )}
-                {getStatusBadge(getAedValue("status") as string || aed.status)}
-                {getPublicationModeBadge(getAedValue("publication_mode") as string || aed.publication_mode)}
+                {getStatusBadge((getAedValue("status") as string) || aed.status)}
+                {getPublicationModeBadge(
+                  (getAedValue("publication_mode") as string) || aed.publication_mode
+                )}
               </div>
             </div>
           </div>
@@ -938,11 +977,24 @@ export default function AdminDeaDetailPage() {
                 />
                 <EditableField
                   label="Fecha de instalación"
-                  value={getAedValue("installation_date") ? String(getAedValue("installation_date")).split("T")[0] : null}
-                  onChange={(v) => handleAedChange("installation_date", v ? new Date(v as string).toISOString() : null)}
+                  value={
+                    getAedValue("installation_date")
+                      ? String(getAedValue("installation_date")).split("T")[0]
+                      : null
+                  }
+                  onChange={(v) =>
+                    handleAedChange(
+                      "installation_date",
+                      v ? new Date(v as string).toISOString() : null
+                    )
+                  }
                   isEditing={isEditing}
                   type="date"
-                  displayValue={aed.installation_date ? new Date(aed.installation_date).toLocaleDateString("es-ES") : undefined}
+                  displayValue={
+                    aed.installation_date
+                      ? new Date(aed.installation_date).toLocaleDateString("es-ES")
+                      : undefined
+                  }
                 />
                 <EditableField
                   label="Requiere atención"
@@ -1358,20 +1410,32 @@ export default function AdminDeaDetailPage() {
                   placeholder="Motivo por el que fue rechazado..."
                 />
                 {/* Internal notes (read-only for now — complex JSON) */}
-                {aed.internal_notes && Array.isArray(aed.internal_notes) && aed.internal_notes.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notas Internas</label>
-                    <div className="space-y-2">
-                      {aed.internal_notes.map((note: InternalNote, idx: number) => (
-                        <div key={idx} className="p-3 bg-gray-50 rounded border border-gray-200">
-                          <p className="text-sm whitespace-pre-wrap">{note.text || String(note)}</p>
-                          {note.author && <p className="text-xs text-gray-600 mt-1">Por: {note.author}</p>}
-                          {note.date && <p className="text-xs text-gray-600">{new Date(note.date).toLocaleString("es-ES")}</p>}
-                        </div>
-                      ))}
+                {aed.internal_notes &&
+                  Array.isArray(aed.internal_notes) &&
+                  aed.internal_notes.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Notas Internas
+                      </label>
+                      <div className="space-y-2">
+                        {aed.internal_notes.map((note: InternalNote, idx: number) => (
+                          <div key={idx} className="p-3 bg-gray-50 rounded border border-gray-200">
+                            <p className="text-sm whitespace-pre-wrap">
+                              {note.text || String(note)}
+                            </p>
+                            {note.author && (
+                              <p className="text-xs text-gray-600 mt-1">Por: {note.author}</p>
+                            )}
+                            {note.date && (
+                              <p className="text-xs text-gray-600">
+                                {new Date(note.date).toLocaleString("es-ES")}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
 
@@ -1381,42 +1445,64 @@ export default function AdminDeaDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Origen de los Datos</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Origen de los Datos
+                    </label>
                     <p className="text-gray-900">{aed.source_origin.replace(/_/g, " ")}</p>
-                    {aed.source_details && <p className="text-sm text-gray-600 mt-1">{aed.source_details}</p>}
+                    {aed.source_details && (
+                      <p className="text-sm text-gray-600 mt-1">{aed.source_details}</p>
+                    )}
                   </div>
                   {aed.external_reference && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Referencia Externa</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Referencia Externa
+                      </label>
                       <p className="text-gray-900 font-mono text-sm">{aed.external_reference}</p>
                     </div>
                   )}
                   {aed.data_source && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Fuente de Datos</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fuente de Datos
+                      </label>
                       <p className="text-gray-900">{aed.data_source.name}</p>
                     </div>
                   )}
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Verificación</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Verificación
+                    </label>
                     {aed.last_verified_at ? (
                       <div>
                         <p className="text-gray-900">
-                          {new Date(aed.last_verified_at).toLocaleDateString("es-ES", { year: "numeric", month: "long", day: "numeric" })}
+                          {new Date(aed.last_verified_at).toLocaleDateString("es-ES", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
                         </p>
-                        {aed.verification_method && <p className="text-sm text-gray-600">Método: {aed.verification_method}</p>}
+                        {aed.verification_method && (
+                          <p className="text-sm text-gray-600">Método: {aed.verification_method}</p>
+                        )}
                       </div>
                     ) : (
                       <p className="text-gray-600 italic">Sin verificar</p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Metadatos</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Metadatos
+                    </label>
                     <div className="space-y-1 text-sm">
-                      <p className="text-gray-600">Creado: {new Date(aed.created_at).toLocaleString("es-ES")}</p>
-                      <p className="text-gray-600">Actualizado: {new Date(aed.updated_at).toLocaleString("es-ES")}</p>
+                      <p className="text-gray-600">
+                        Creado: {new Date(aed.created_at).toLocaleString("es-ES")}
+                      </p>
+                      <p className="text-gray-600">
+                        Actualizado: {new Date(aed.updated_at).toLocaleString("es-ES")}
+                      </p>
                       {aed.sequence && <p className="text-gray-600">Secuencia: #{aed.sequence}</p>}
                     </div>
                   </div>
@@ -1475,7 +1561,10 @@ export default function AdminDeaDetailPage() {
                   const markedForDeletion = imagesToDelete.includes(image.id);
                   const isProcessing = processingImageId === image.id;
                   return (
-                    <div key={image.id} className={`relative group ${markedForDeletion ? "opacity-40" : ""}`}>
+                    <div
+                      key={image.id}
+                      className={`relative group ${markedForDeletion ? "opacity-40" : ""}`}
+                    >
                       {/* Loading overlay when processing */}
                       {isProcessing && (
                         <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 rounded-lg">
@@ -1487,7 +1576,11 @@ export default function AdminDeaDetailPage() {
                       )}
                       <div
                         className="cursor-pointer"
-                        onClick={() => !markedForDeletion && !isProcessing && setLightboxUrl(image.processed_url || image.original_url)}
+                        onClick={() =>
+                          !markedForDeletion &&
+                          !isProcessing &&
+                          setLightboxUrl(image.processed_url || image.original_url)
+                        }
                       >
                         <img
                           src={image.processed_url || image.original_url}
@@ -1497,11 +1590,15 @@ export default function AdminDeaDetailPage() {
                       </div>
                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent rounded-b-lg p-2">
                         <span className="text-white text-xs font-medium">
-                          {imageTypeOptions.find((o) => o.value === image.type)?.label || image.type}
+                          {imageTypeOptions.find((o) => o.value === image.type)?.label ||
+                            image.type}
                         </span>
                       </div>
                       {image.is_verified && !markedForDeletion && (
-                        <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1" title="Verificada">
+                        <div
+                          className="absolute top-2 right-2 bg-green-500 rounded-full p-1"
+                          title="Verificada"
+                        >
                           <CheckCircle className="w-3 h-3 text-white" />
                         </div>
                       )}
@@ -1510,7 +1607,9 @@ export default function AdminDeaDetailPage() {
                       {!markedForDeletion && !isEditing && !isProcessing && (
                         <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                           <button
-                            onClick={() => setLightboxUrl(image.processed_url || image.original_url)}
+                            onClick={() =>
+                              setLightboxUrl(image.processed_url || image.original_url)
+                            }
                             className="bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5"
                             title="Ver imagen"
                           >
@@ -1524,7 +1623,9 @@ export default function AdminDeaDetailPage() {
                         <div className="absolute top-2 left-2 flex gap-1">
                           {markedForDeletion ? (
                             <button
-                              onClick={() => setImagesToDelete((prev) => prev.filter((i) => i !== image.id))}
+                              onClick={() =>
+                                setImagesToDelete((prev) => prev.filter((i) => i !== image.id))
+                              }
                               className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1.5 shadow-lg"
                               title="Deshacer eliminación"
                             >
@@ -1613,9 +1714,17 @@ export default function AdminDeaDetailPage() {
                       <button
                         onClick={() => handleProcessNewImage(idx)}
                         className="bg-purple-500 hover:bg-purple-600 text-white rounded-full p-1 shadow-lg"
-                        title={img.processingResult ? "Reprocesar" : "Procesar (recortar, difuminar, flecha)"}
+                        title={
+                          img.processingResult
+                            ? "Reprocesar"
+                            : "Procesar (recortar, difuminar, flecha)"
+                        }
                       >
-                        {img.processingResult ? <RefreshCw className="w-3 h-3" /> : <Scissors className="w-3 h-3" />}
+                        {img.processingResult ? (
+                          <RefreshCw className="w-3 h-3" />
+                        ) : (
+                          <Scissors className="w-3 h-3" />
+                        )}
                       </button>
                       <button
                         onClick={() => handleRemoveNewImage(idx)}
@@ -1659,10 +1768,14 @@ export default function AdminDeaDetailPage() {
                     <div key={verification.id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <p className="font-medium text-gray-900">{verification.organization.name}</p>
+                          <p className="font-medium text-gray-900">
+                            {verification.organization.name}
+                          </p>
                           <p className="text-sm text-gray-600">
                             {new Date(verification.verified_at).toLocaleDateString("es-ES", {
-                              year: "numeric", month: "long", day: "numeric",
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
                             })}
                           </p>
                         </div>
@@ -1671,13 +1784,35 @@ export default function AdminDeaDetailPage() {
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {verification.verified_photos && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Fotos</span>}
-                        {verification.verified_address && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Dirección</span>}
-                        {verification.verified_schedule && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Horario</span>}
-                        {verification.verified_access && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Acceso</span>}
-                        {verification.verified_signage && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Señalización</span>}
+                        {verification.verified_photos && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            Fotos
+                          </span>
+                        )}
+                        {verification.verified_address && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            Dirección
+                          </span>
+                        )}
+                        {verification.verified_schedule && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            Horario
+                          </span>
+                        )}
+                        {verification.verified_access && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            Acceso
+                          </span>
+                        )}
+                        {verification.verified_signage && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            Señalización
+                          </span>
+                        )}
                       </div>
-                      {verification.notes && <p className="text-sm text-gray-600 mt-2">{verification.notes}</p>}
+                      {verification.notes && (
+                        <p className="text-sm text-gray-600 mt-2">{verification.notes}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1685,56 +1820,86 @@ export default function AdminDeaDetailPage() {
             </div>
 
             {/* Photo Validations */}
-            {aed.validations && (aed.validations as Array<{ id: string; status: string; completed_at: string | null; started_at: string; result: unknown }>).length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                  Validaciones Fotográficas ({(aed.validations as unknown[]).length})
-                </h2>
-                <div className="space-y-4">
-                  {(aed.validations as Array<{ id: string; status: string; completed_at: string | null; started_at: string; result: { processed_images_count?: number } | null }>).map((validation) => (
-                    <div key={validation.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="font-medium text-gray-900">Validación de imágenes</p>
-                          <p className="text-sm text-gray-600">
-                            {validation.completed_at
-                              ? new Date(validation.completed_at).toLocaleDateString("es-ES", {
-                                  year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
-                                })
-                              : new Date(validation.started_at).toLocaleDateString("es-ES", {
-                                  year: "numeric", month: "long", day: "numeric",
-                                })}
-                          </p>
-                        </div>
-                        <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            validation.status === "COMPLETED"
-                              ? "bg-green-100 text-green-800"
+            {aed.validations &&
+              (
+                aed.validations as Array<{
+                  id: string;
+                  status: string;
+                  completed_at: string | null;
+                  started_at: string;
+                  result: unknown;
+                }>
+              ).length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                    Validaciones Fotográficas ({(aed.validations as unknown[]).length})
+                  </h2>
+                  <div className="space-y-4">
+                    {(
+                      aed.validations as Array<{
+                        id: string;
+                        status: string;
+                        completed_at: string | null;
+                        started_at: string;
+                        result: { processed_images_count?: number } | null;
+                      }>
+                    ).map((validation) => (
+                      <div key={validation.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-medium text-gray-900">Validación de imágenes</p>
+                            <p className="text-sm text-gray-600">
+                              {validation.completed_at
+                                ? new Date(validation.completed_at).toLocaleDateString("es-ES", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : new Date(validation.started_at).toLocaleDateString("es-ES", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })}
+                            </p>
+                          </div>
+                          <span
+                            className={`text-xs px-2 py-1 rounded ${
+                              validation.status === "COMPLETED"
+                                ? "bg-green-100 text-green-800"
+                                : validation.status === "IN_PROGRESS"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {validation.status === "COMPLETED"
+                              ? "Completada"
                               : validation.status === "IN_PROGRESS"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {validation.status === "COMPLETED" ? "Completada" : validation.status === "IN_PROGRESS" ? "En progreso" : validation.status}
-                        </span>
+                                ? "En progreso"
+                                : validation.status}
+                          </span>
+                        </div>
+                        {validation.result?.processed_images_count != null && (
+                          <p className="text-sm text-gray-600">
+                            {validation.result.processed_images_count} imagen(es) procesada(s)
+                          </p>
+                        )}
                       </div>
-                      {validation.result?.processed_images_count != null && (
-                        <p className="text-sm text-gray-600">{validation.result.processed_images_count} imagen(es) procesada(s)</p>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {aed.org_verifications.length === 0 && (!aed.validations || (aed.validations as unknown[]).length === 0) && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="text-center py-12">
-                  <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600">No hay verificaciones registradas</p>
+            {aed.org_verifications.length === 0 &&
+              (!aed.validations || (aed.validations as unknown[]).length === 0) && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="text-center py-12">
+                    <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600">No hay verificaciones registradas</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
         )}
 
@@ -1760,15 +1925,20 @@ export default function AdminDeaDetailPage() {
                       </div>
                       <span
                         className={`text-xs px-2 py-1 rounded ${
-                          assignment.status === "ACTIVE" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                          assignment.status === "ACTIVE"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
                         }`}
                       >
                         {assignment.status}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600">
-                      Asignado: {new Date(assignment.assigned_at).toLocaleDateString("es-ES", {
-                        year: "numeric", month: "long", day: "numeric",
+                      Asignado:{" "}
+                      {new Date(assignment.assigned_at).toLocaleDateString("es-ES", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
                       })}
                     </p>
                   </div>
@@ -1791,7 +1961,10 @@ export default function AdminDeaDetailPage() {
               ) : (
                 <div className="space-y-3">
                   {aed.status_changes.slice(0, 20).map((change) => (
-                    <div key={change.id} className="flex items-start gap-3 border-l-2 border-gray-200 pl-3">
+                    <div
+                      key={change.id}
+                      className="flex items-start gap-3 border-l-2 border-gray-200 pl-3"
+                    >
                       <Activity className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-900">
@@ -1802,7 +1975,9 @@ export default function AdminDeaDetailPage() {
                         {change.reason && <p className="text-xs text-gray-500">{change.reason}</p>}
                         <p className="text-xs text-gray-600">
                           {new Date(change.created_at).toLocaleString("es-ES")}
-                          {change.modified_by && <span className="ml-2 text-gray-400">por {change.modified_by}</span>}
+                          {change.modified_by && (
+                            <span className="ml-2 text-gray-400">por {change.modified_by}</span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -1821,7 +1996,10 @@ export default function AdminDeaDetailPage() {
               ) : (
                 <div className="space-y-3">
                   {aed.field_changes.slice(0, 30).map((change) => (
-                    <div key={change.id} className="flex items-start gap-3 border-l-2 border-blue-200 pl-3">
+                    <div
+                      key={change.id}
+                      className="flex items-start gap-3 border-l-2 border-blue-200 pl-3"
+                    >
                       <Edit2 className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-900">

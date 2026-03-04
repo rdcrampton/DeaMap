@@ -370,7 +370,9 @@ export default function ImageMultiSelector({
                 if (file) {
                   try {
                     // Comprimir la imagen antes de subirla
-                    console.log(`📸 Subiendo imagen: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+                    console.log(
+                      `📸 Subiendo imagen: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`
+                    );
 
                     const compressedUrl = await compressImageFile(file, {
                       maxWidth: 1920,
@@ -381,8 +383,8 @@ export default function ImageMultiSelector({
 
                     handleAddNewImage(compressedUrl);
                   } catch (error) {
-                    console.error('Error comprimiendo imagen:', error);
-                    alert('Error al procesar la imagen. Por favor, intenta con otra imagen.');
+                    console.error("Error comprimiendo imagen:", error);
+                    alert("Error al procesar la imagen. Por favor, intenta con otra imagen.");
                   } finally {
                     // Limpiar el input para permitir subir el mismo archivo otra vez
                     e.target.value = "";

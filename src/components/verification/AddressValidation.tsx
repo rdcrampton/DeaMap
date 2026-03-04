@@ -119,7 +119,8 @@ export default function AddressValidation({
     country: currentAddress?.country || "España",
     floor: currentAddress?.floor,
     location_details: currentAddress?.location_details || currentAddress?.specific_location || "",
-    access_instructions: currentAddress?.access_instructions || currentAddress?.access_description || "",
+    access_instructions:
+      currentAddress?.access_instructions || currentAddress?.access_description || "",
   });
 
   const hasAddress = addressForm.street_name || addressForm.street_type;
@@ -954,9 +955,7 @@ export default function AddressValidation({
                 />
               </div>
 
-              <h5 className="text-xs font-semibold text-gray-700 mb-2 mt-4">
-                🌍 Geografía
-              </h5>
+              <h5 className="text-xs font-semibold text-gray-700 mb-2 mt-4">🌍 Geografía</h5>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1120,13 +1119,14 @@ export default function AddressValidation({
                   <p className="text-xs text-gray-500 font-mono">
                     📍 {addressForm.latitude!.toFixed(6)}, {addressForm.longitude!.toFixed(6)}
                   </p>
-                  {currentAddress?.latitude && currentAddress?.longitude &&
-                   (Math.abs(addressForm.latitude! - currentAddress.latitude) > 0.00001 ||
-                    Math.abs(addressForm.longitude! - currentAddress.longitude) > 0.00001) && (
-                    <p className="text-xs text-green-700 mt-1 font-medium">
-                      ✅ Coordenadas ajustadas manualmente
-                    </p>
-                  )}
+                  {currentAddress?.latitude &&
+                    currentAddress?.longitude &&
+                    (Math.abs(addressForm.latitude! - currentAddress.latitude) > 0.00001 ||
+                      Math.abs(addressForm.longitude! - currentAddress.longitude) > 0.00001) && (
+                      <p className="text-xs text-green-700 mt-1 font-medium">
+                        ✅ Coordenadas ajustadas manualmente
+                      </p>
+                    )}
                 </div>
               ) : (
                 <p className="text-xs text-yellow-700 mt-2">

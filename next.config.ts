@@ -34,9 +34,18 @@ const nextConfig: NextConfig = {
 
   productionBrowserSourceMaps: process.env.VERCEL_ENV === "preview",
 
-  // Security headers
+  // Security headers (CORS is handled dynamically in src/middleware.ts)
   async headers() {
     return [
+      // .well-known files for iOS/Android app-domain association (credential autofill)
+      {
+        source: "/.well-known/:path*",
+        headers: [
+          { key: "Content-Type", value: "application/json" },
+          { key: "Cache-Control", value: "public, max-age=3600" },
+        ],
+      },
+      // Security headers for all routes
       {
         source: "/(.*)",
         headers: [

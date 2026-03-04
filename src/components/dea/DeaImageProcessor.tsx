@@ -83,17 +83,20 @@ export default function DeaImageProcessor({
     setStep("crop");
   }, []);
 
-  const handleArrowComplete = useCallback((arrow: ArrowData, processedImageUrl?: string) => {
-    setArrowData(arrow);
-    setStep("done");
+  const handleArrowComplete = useCallback(
+    (arrow: ArrowData, processedImageUrl?: string) => {
+      setArrowData(arrow);
+      setStep("done");
 
-    onComplete({
-      cropData,
-      blurAreas,
-      arrowData: arrow,
-      previewUrl: processedImageUrl || blurredUrl || croppedUrl || undefined,
-    });
-  }, [cropData, blurAreas, blurredUrl, croppedUrl, onComplete]);
+      onComplete({
+        cropData,
+        blurAreas,
+        arrowData: arrow,
+        previewUrl: processedImageUrl || blurredUrl || croppedUrl || undefined,
+      });
+    },
+    [cropData, blurAreas, blurredUrl, croppedUrl, onComplete]
+  );
 
   const handleArrowCancel = useCallback(() => {
     // Go back to blur
@@ -138,9 +141,7 @@ export default function DeaImageProcessor({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Procesar: {imageLabel}
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-900">Procesar: {imageLabel}</h3>
             {/* Step indicator */}
             <div className="hidden sm:flex items-center gap-1 text-sm">
               {(["crop", "blur", "arrow"] as ProcessingStep[]).map((s, i) => (

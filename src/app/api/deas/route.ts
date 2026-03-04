@@ -20,10 +20,7 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth(request);
 
     if (!user) {
-      return NextResponse.json(
-        { success: false, error: "No autorizado" },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -34,7 +31,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "25")));
     const skip = (page - 1) * limit;
     const search = searchParams.get("search") || undefined;
-    const status = searchParams.get("status") || undefined;  // Assignment status
+    const status = searchParams.get("status") || undefined; // Assignment status
     const aedStatus = searchParams.get("aed_status") || undefined;
     const assignmentType = searchParams.get("assignment_type") || undefined;
 
@@ -151,8 +148,13 @@ export async function GET(request: NextRequest) {
 
       deas = aeds.map((aed) => {
         const loc = aed.location;
-        const addressParts = [loc?.street_type, loc?.street_name, loc?.street_number].filter(Boolean);
-        const geoValidation = loc?.geocoding_validation as { status?: string; distance_meters?: number } | null;
+        const addressParts = [loc?.street_type, loc?.street_name, loc?.street_number].filter(
+          Boolean
+        );
+        const geoValidation = loc?.geocoding_validation as {
+          status?: string;
+          distance_meters?: number;
+        } | null;
         const assignment = aed.assignments[0] || null;
 
         return {
@@ -257,8 +259,13 @@ export async function GET(request: NextRequest) {
 
       deas = assignments.map((assignment) => {
         const loc = assignment.aed.location;
-        const addressParts = [loc?.street_type, loc?.street_name, loc?.street_number].filter(Boolean);
-        const geoValidation = loc?.geocoding_validation as { status?: string; distance_meters?: number } | null;
+        const addressParts = [loc?.street_type, loc?.street_name, loc?.street_number].filter(
+          Boolean
+        );
+        const geoValidation = loc?.geocoding_validation as {
+          status?: string;
+          distance_meters?: number;
+        } | null;
 
         return {
           id: assignment.aed.id,

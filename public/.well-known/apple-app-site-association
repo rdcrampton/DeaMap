@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["3NP6Q84729.es.deamap.mobile"],
+        "components": [
+          {
+            "/": "*"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["3NP6Q84729.es.deamap.mobile"]
+  }
+}

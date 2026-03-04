@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { Building2, User, Mail, Phone, Loader2, CheckCircle } from 'lucide-react';
-import { useState } from 'react';
+import { Building2, User, Mail, Phone, Loader2, CheckCircle } from "lucide-react";
+import { useState } from "react";
 
 interface ResponsibleFormProps {
   _aedId: string;
@@ -39,20 +39,20 @@ interface ResponsibleData {
 export default function ResponsibleForm({
   _aedId,
   currentResponsible,
-  onAssignmentComplete
+  onAssignmentComplete,
 }: ResponsibleFormProps) {
   const [formData, setFormData] = useState<ResponsibleData>({
-    name: currentResponsible?.name || '',
-    email: currentResponsible?.email || '',
-    phone: currentResponsible?.phone || '',
-    alternative_phone: currentResponsible?.alternative_phone || '',
-    ownership: currentResponsible?.ownership || '',
-    local_ownership: currentResponsible?.local_ownership || '',
-    local_use: currentResponsible?.local_use || '',
-    organization: currentResponsible?.organization || '',
-    position: currentResponsible?.position || '',
-    department: currentResponsible?.department || '',
-    observations: currentResponsible?.observations || ''
+    name: currentResponsible?.name || "",
+    email: currentResponsible?.email || "",
+    phone: currentResponsible?.phone || "",
+    alternative_phone: currentResponsible?.alternative_phone || "",
+    ownership: currentResponsible?.ownership || "",
+    local_ownership: currentResponsible?.local_ownership || "",
+    local_use: currentResponsible?.local_use || "",
+    organization: currentResponsible?.organization || "",
+    position: currentResponsible?.position || "",
+    department: currentResponsible?.department || "",
+    observations: currentResponsible?.observations || "",
   });
 
   const [saving, setSaving] = useState(false);
@@ -62,7 +62,7 @@ export default function ResponsibleForm({
     e.preventDefault();
 
     if (!formData.name) {
-      alert('El nombre del responsable es obligatorio');
+      alert("El nombre del responsable es obligatorio");
       return;
     }
 
@@ -73,8 +73,8 @@ export default function ResponsibleForm({
       // Keep saving=true so the spinner stays visible until the step transitions.
       onAssignmentComplete(formData);
     } catch (error) {
-      console.error('Error saving responsible:', error);
-      alert('Error al guardar el responsable');
+      console.error("Error saving responsible:", error);
+      alert("Error al guardar el responsable");
       setSaving(false);
     }
   };
@@ -83,7 +83,7 @@ export default function ResponsibleForm({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
     setSaved(false);
   };
 
@@ -113,9 +113,7 @@ export default function ResponsibleForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
               <input
@@ -130,9 +128,7 @@ export default function ResponsibleForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Teléfono
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
             <div className="relative">
               <Phone className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
               <input
@@ -171,9 +167,7 @@ export default function ResponsibleForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Organización
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Organización</label>
             <input
               type="text"
               name="organization"
@@ -185,9 +179,7 @@ export default function ResponsibleForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cargo
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
             <input
               type="text"
               name="position"
@@ -199,9 +191,7 @@ export default function ResponsibleForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Departamento
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
             <input
               type="text"
               name="department"
@@ -220,9 +210,7 @@ export default function ResponsibleForm({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Titularidad DEA
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Titularidad DEA</label>
             <select
               name="ownership"
               value={formData.ownership}
@@ -252,9 +240,7 @@ export default function ResponsibleForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Uso del Local
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Uso del Local</label>
             <select
               name="local_use"
               value={formData.local_use}
@@ -271,9 +257,7 @@ export default function ResponsibleForm({
 
       {/* Observations */}
       <div className="bg-white border rounded-lg p-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Observaciones
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Observaciones</label>
         <textarea
           name="observations"
           value={formData.observations}
@@ -304,7 +288,7 @@ export default function ResponsibleForm({
               Guardando...
             </>
           ) : (
-            'Guardar Responsable'
+            "Guardar Responsable"
           )}
         </button>
       </div>

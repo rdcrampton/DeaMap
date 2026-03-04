@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAdmin, AuthError } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { uploadToS3 } from "@/lib/s3";
 
@@ -14,19 +14,10 @@ import { uploadToS3 } from "@/lib/s3";
  * Get complete DEA information including all relationships and history
  * Only accessible by ADMIN users
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Require ADMIN authentication
-    const user = await requireAuth(request);
-    if (!user || user.role !== "ADMIN") {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized - Admin access required" },
-        { status: 403 }
-      );
-    }
+    const user = await requireAdmin(request);
 
     const { id } = await params;
 
@@ -167,6 +158,12 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.statusCode }
+      );
+    }
     console.error("Error fetching admin AED detail:", error);
     return NextResponse.json(
       {
@@ -241,18 +238,9 @@ function trackNestedChanges(
  * Supports: top-level fields, location, schedule, responsible, images (add/delete)
  * All changes are recorded in AedFieldChange for audit trail
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireAuth(request);
-    if (!user || user.role !== "ADMIN") {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized - Admin access required" },
-        { status: 403 }
-      );
-    }
+    const user = await requireAdmin(request);
 
     const { id } = await params;
     const body = await request.json();
@@ -294,20 +282,27 @@ export async function PATCH(
     });
 
     if (!currentAed) {
-      return NextResponse.json(
-        { success: false, error: "AED not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: "AED not found" }, { status: 404 });
     }
 
     const fieldChanges: FieldChangeRecord[] = [];
 
     // ── Track AED-level field changes ──
     const aedFields = [
-      "name", "code", "provisional_number", "establishment_type",
-      "status", "publication_mode", "is_publicly_accessible",
-      "public_notes", "rejection_reason", "requires_attention",
-      "installation_date", "latitude", "longitude", "coordinates_precision",
+      "name",
+      "code",
+      "provisional_number",
+      "establishment_type",
+      "status",
+      "publication_mode",
+      "is_publicly_accessible",
+      "public_notes",
+      "rejection_reason",
+      "requires_attention",
+      "installation_date",
+      "latitude",
+      "longitude",
+      "coordinates_precision",
     ];
 
     for (const key of aedFields) {
@@ -338,20 +333,32 @@ export async function PATCH(
     // ── Track schedule changes ──
     if (scheduleUpdate) {
       const currentSchedule = (currentAed.schedule || {}) as Record<string, unknown>;
-      trackNestedChanges(fieldChanges, id, user.userId, "schedule", currentSchedule, scheduleUpdate);
+      trackNestedChanges(
+        fieldChanges,
+        id,
+        user.userId,
+        "schedule",
+        currentSchedule,
+        scheduleUpdate
+      );
     }
 
     // ── Track responsible changes ──
     if (responsibleUpdate) {
       const currentResponsible = (currentAed.responsible || {}) as Record<string, unknown>;
-      trackNestedChanges(fieldChanges, id, user.userId, "responsible", currentResponsible, responsibleUpdate);
+      trackNestedChanges(
+        fieldChanges,
+        id,
+        user.userId,
+        "responsible",
+        currentResponsible,
+        responsibleUpdate
+      );
     }
 
     // ── Track image deletions ──
     if (deleteImageIds && deleteImageIds.length > 0) {
-      const imagesToDelete = currentAed.images.filter((img) =>
-        deleteImageIds.includes(img.id)
-      );
+      const imagesToDelete = currentAed.images.filter((img) => deleteImageIds.includes(img.id));
       imagesToDelete.forEach((img) => {
         fieldChanges.push({
           aed_id: id,
@@ -437,7 +444,13 @@ export async function PATCH(
       // 3. Update location if provided
       if (locationUpdate && currentAed.location) {
         // Filter out non-schema fields
-        const { id: _locId, created_at: _locCreated, aed: _locAed, address_validation: _locAV, ...cleanLocation } = locationUpdate;
+        const {
+          id: _locId,
+          created_at: _locCreated,
+          aed: _locAed,
+          address_validation: _locAV,
+          ...cleanLocation
+        } = locationUpdate;
         await tx.aedLocation.update({
           where: { id: currentAed.location.id },
           data: {
@@ -449,7 +462,12 @@ export async function PATCH(
 
       // 4. Update or create schedule
       if (scheduleUpdate) {
-        const { id: _schedId, created_at: _schedCreated, aed: _schedAed, ...cleanSchedule } = scheduleUpdate;
+        const {
+          id: _schedId,
+          created_at: _schedCreated,
+          aed: _schedAed,
+          ...cleanSchedule
+        } = scheduleUpdate;
         if (currentAed.schedule) {
           await tx.aedSchedule.update({
             where: { id: currentAed.schedule.id },
@@ -474,7 +492,12 @@ export async function PATCH(
 
       // 5. Update or create responsible
       if (responsibleUpdate) {
-        const { id: _respId, created_at: _respCreated, aeds: _respAeds, ...cleanResponsible } = responsibleUpdate;
+        const {
+          id: _respId,
+          created_at: _respCreated,
+          aeds: _respAeds,
+          ...cleanResponsible
+        } = responsibleUpdate;
         if (currentAed.responsible) {
           await tx.aedResponsible.update({
             where: { id: currentAed.responsible.id },
@@ -501,11 +524,24 @@ export async function PATCH(
       // 6. Build AED update data (only schema-valid fields)
       const validAedFields: Record<string, unknown> = {};
       const allowedAedFields = [
-        "name", "code", "provisional_number", "establishment_type",
-        "status", "publication_mode", "is_publicly_accessible",
-        "public_notes", "internal_notes", "rejection_reason", "requires_attention",
-        "installation_date", "latitude", "longitude", "coordinates_precision",
-        "source_origin", "source_details", "external_reference",
+        "name",
+        "code",
+        "provisional_number",
+        "establishment_type",
+        "status",
+        "publication_mode",
+        "is_publicly_accessible",
+        "public_notes",
+        "internal_notes",
+        "rejection_reason",
+        "requires_attention",
+        "installation_date",
+        "latitude",
+        "longitude",
+        "coordinates_precision",
+        "source_origin",
+        "source_details",
+        "external_reference",
         "verification_method",
       ];
 
@@ -570,6 +606,12 @@ export async function PATCH(
       images_added: addImages?.length || 0,
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.statusCode }
+      );
+    }
     console.error("Error updating AED:", error);
     return NextResponse.json(
       {
