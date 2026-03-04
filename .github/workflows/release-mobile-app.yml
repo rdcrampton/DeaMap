@@ -152,6 +152,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Setup Android signing
+        env:
+          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          mkdir -p mobile/keystores
+          echo "$ANDROID_SIGNING_KEY" | base64 --decode > mobile/keystores/release.keystore
+          cat > mobile/keystores/keystore.properties << EOF
+          storeFile=../../keystores/release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+
       - name: Install dependencies
         run: npm ci
         working-directory: mobile
@@ -182,37 +198,13 @@ jobs:
           ./gradlew assembleRelease
           ./gradlew bundleRelease
 
-      - name: Sign Release APK
-        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407 # v1
-        id: sign_apk
-        with:
-          releaseDirectory: mobile/android/app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0"
-
-      - name: Sign Release AAB
-        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407 # v1
-        id: sign_aab
-        with:
-          releaseDirectory: mobile/android/app/build/outputs/bundle/release
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0"
-
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: app-release-android-${{ needs.prepare.outputs.version }}
           path: |
-            ${{ steps.sign_apk.outputs.signedReleaseFile }}
-            ${{ steps.sign_aab.outputs.signedReleaseFile }}
+            mobile/android/app/build/outputs/apk/release/*.apk
+            mobile/android/app/build/outputs/bundle/release/*.aab
           retention-days: 30
 
       - name: Generate release notes
@@ -227,7 +219,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: es.deamap.mobile
-          releaseFiles: ${{ steps.sign_aab.outputs.signedReleaseFile }}
+          releaseFiles: mobile/android/app/build/outputs/bundle/release/*.aab
           track: ${{ github.event.inputs.android_track || 'internal' }}
           status: completed
           whatsNewDirectory: ./mobile/whatsnew
@@ -390,7 +382,7 @@ jobs:
             -project ios/App/App.xcodeproj \
             -scheme App \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \

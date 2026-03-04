@@ -68,6 +68,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Setup Android signing
+        if: env.ANDROID_SIGNING_KEY != ''
+        env:
+          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # Write keystore from base64 secret
+          mkdir -p mobile/keystores
+          echo "$ANDROID_SIGNING_KEY" | base64 --decode > mobile/keystores/release.keystore
+          # Create keystore.properties so Gradle uses release signing directly (V2/V3)
+          cat > mobile/keystores/keystore.properties << EOF
+          storeFile=../../keystores/release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+
       - name: Install dependencies
         run: npm ci
         working-directory: mobile
@@ -98,45 +117,12 @@ jobs:
         run: ./gradlew assembleRelease
         working-directory: mobile/android
 
-      - name: Sign Release APK
-        if: env.ANDROID_SIGNING_KEY != ''
-        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407 # v1
-        with:
-          releaseDirectory: mobile/android/app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        env:
-          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
-          BUILD_TOOLS_VERSION: "34.0.0"
-
-      - name: Sign Release AAB
-        if: env.ANDROID_SIGNING_KEY != ''
-        uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407 # v1
-        with:
-          releaseDirectory: mobile/android/app/build/outputs/bundle/release
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        env:
-          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
-          BUILD_TOOLS_VERSION: "34.0.0"
-
       - name: Verify release signing
-        if: env.ANDROID_SIGNING_KEY != ''
         run: |
-          # Check for signed AAB (may be *-signed.aab or app-release.aab if signed in-place)
-          AAB_COUNT=$(find mobile/android/app/build/outputs/bundle/release -name "*.aab" | wc -l)
-          if [ "$AAB_COUNT" -eq 0 ]; then
-            echo "::error::No AAB found in release directory — build or signing may have failed"
-            exit 1
-          fi
-          echo "✅ Found $AAB_COUNT AAB file(s) in release directory"
+          echo "=== Release AAB ==="
           ls -la mobile/android/app/build/outputs/bundle/release/*.aab
-        env:
-          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          echo "=== Release APK ==="
+          ls -la mobile/android/app/build/outputs/apk/release/*.apk
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4

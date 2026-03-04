@@ -137,7 +137,7 @@ jobs:
               -project ios/App/App.xcodeproj \
               -scheme App \
               -archivePath "$RUNNER_TEMP/App.xcarchive" \
-              -sdk iphoneos \
+              -destination "generic/platform=iOS" \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="Apple Distribution" \
@@ -152,7 +152,7 @@ jobs:
               -project ios/App/App.xcodeproj \
               -scheme App \
               -archivePath "$RUNNER_TEMP/App.xcarchive" \
-              -sdk iphoneos \
+              -destination "generic/platform=iOS" \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
               CODE_SIGNING_ALLOWED=NO
           fi
