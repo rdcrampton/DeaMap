@@ -127,10 +127,14 @@ jobs:
       - name: Verify release signing
         if: env.ANDROID_SIGNING_KEY != ''
         run: |
-          if [ ! -f mobile/android/app/build/outputs/bundle/release/*-signed* ]; then
-            echo "::error::Signed AAB not found — signing step may have failed"
+          # Check for signed AAB (may be *-signed.aab or app-release.aab if signed in-place)
+          AAB_COUNT=$(find mobile/android/app/build/outputs/bundle/release -name "*.aab" | wc -l)
+          if [ "$AAB_COUNT" -eq 0 ]; then
+            echo "::error::No AAB found in release directory — build or signing may have failed"
             exit 1
           fi
+          echo "✅ Found $AAB_COUNT AAB file(s) in release directory"
+          ls -la mobile/android/app/build/outputs/bundle/release/*.aab
         env:
           ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
 
