@@ -31,7 +31,15 @@ android {
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // Use release signing if keystore.properties exists (local dev),
+            // otherwise fall back to debug signing so CI can build unsigned
+            // artifacts that are later re-signed by r0adkll/sign-android-release.
+            def keystorePropsFile = rootProject.file("app/../../keystores/keystore.properties")
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

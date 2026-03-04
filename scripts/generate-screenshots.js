@@ -83,14 +83,7 @@ function drawPhone(ctx, contentDrawer) {
   // Notch
   const notchW = 200;
   const notchH = 28;
-  roundRect(
-    ctx,
-    phoneX + phoneW / 2 - notchW / 2,
-    phoneY,
-    notchW,
-    notchH,
-    14
-  );
+  roundRect(ctx, phoneX + phoneW / 2 - notchW / 2, phoneY, notchW, notchH, 14);
   ctx.fillStyle = "#1a1a1a";
   ctx.fill();
 }
@@ -399,7 +392,12 @@ function drawAddScreen(ctx, x, y, w, h) {
 
   // Form fields
   const fields = [
-    { label: "Nombre del DEA *", placeholder: "Ej: Centro de Salud...", filled: true, value: "Farmacia Lopez" },
+    {
+      label: "Nombre del DEA *",
+      placeholder: "Ej: Centro de Salud...",
+      filled: true,
+      value: "Farmacia Lopez",
+    },
     { label: "Calle", placeholder: "Nombre de la calle", filled: true, value: "Calle Mayor" },
     { label: "Numero", placeholder: "Numero", filled: true, value: "25" },
     { label: "Ciudad", placeholder: "Ciudad", filled: true, value: "Madrid" },

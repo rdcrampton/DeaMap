@@ -717,9 +717,15 @@ export default function Home() {
 
               <div className="border-t border-gray-700 pt-6 text-sm text-gray-400">
                 <div className="flex flex-wrap justify-center gap-4 mb-3">
-                  <Link href="/legal/privacidad" className="hover:text-white transition-colors">Política de Privacidad</Link>
-                  <Link href="/legal/cookies" className="hover:text-white transition-colors">Política de Cookies</Link>
-                  <Link href="/legal/condiciones" className="hover:text-white transition-colors">Condiciones de Uso</Link>
+                  <Link href="/legal/privacidad" className="hover:text-white transition-colors">
+                    Política de Privacidad
+                  </Link>
+                  <Link href="/legal/cookies" className="hover:text-white transition-colors">
+                    Política de Cookies
+                  </Link>
+                  <Link href="/legal/condiciones" className="hover:text-white transition-colors">
+                    Condiciones de Uso
+                  </Link>
                 </div>
                 <p>© 2024 DeaMap - Salvando vidas juntos</p>
               </div>

@@ -165,6 +165,4 @@ const outputPath = path.join(outputDir, "feature-graphic.png");
 const buffer = canvas.toBuffer("image/png");
 fs.writeFileSync(outputPath, buffer);
 console.log(`Feature graphic saved to: ${outputPath}`);
-console.log(
-  `Size: ${WIDTH}x${HEIGHT}px, ${(buffer.length / 1024).toFixed(1)} KB`
-);
+console.log(`Size: ${WIDTH}x${HEIGHT}px, ${(buffer.length / 1024).toFixed(1)} KB`);

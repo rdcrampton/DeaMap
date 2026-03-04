@@ -25,7 +25,9 @@ if (!fs.existsSync(outputDir)) {
   fs.mkdirSync(outputDir, { recursive: true });
 }
 
-function s(v) { return Math.round(v * SCALE); }
+function s(v) {
+  return Math.round(v * SCALE);
+}
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
