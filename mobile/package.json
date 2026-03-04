@@ -38,7 +38,7 @@
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "8.0.1",
-    "@capgo/capacitor-autofill-save-password": "^7.2.14",
+    "@capgo/capacitor-autofill-save-password": "^8.0.18",
     "@ionic/react": "^8.5.0",
     "@ionic/react-router": "^8.5.0",
     "@types/react-router": "^5.1.20",
