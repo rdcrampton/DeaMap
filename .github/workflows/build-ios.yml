@@ -43,10 +43,10 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
-
-      - name: Install iOS platform
-        run: xcodebuild -downloadPlatform iOS
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+          echo "Available iOS SDKs:"
+          xcodebuild -showsdks | grep -i ios || true
 
       - name: Install dependencies
         run: npm ci
@@ -137,7 +137,7 @@ jobs:
               -project ios/App/App.xcodeproj \
               -scheme App \
               -archivePath "$RUNNER_TEMP/App.xcarchive" \
-              -destination "generic/platform=iOS" \
+              -sdk iphoneos \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="Apple Distribution" \
@@ -145,14 +145,14 @@ jobs:
               PROVISIONING_PROFILE_SPECIFIER="" \
               PROVISIONING_PROFILE="$PROVISIONING_PROFILE_UUID" \
               OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
-              -allowProvisioningUpdates=NO
+              -allowProvisioningUpdates
           else
             echo "::warning::No signing secrets configured — building unsigned archive"
             xcodebuild archive \
               -project ios/App/App.xcodeproj \
               -scheme App \
               -archivePath "$RUNNER_TEMP/App.xcarchive" \
-              -destination "generic/platform=iOS" \
+              -sdk iphoneos \
               -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
               CODE_SIGNING_ALLOWED=NO
           fi
