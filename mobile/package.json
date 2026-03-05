@@ -25,7 +25,7 @@
     "ios:live": "npx cap run ios --livereload --external",
     "android:open": "npx cap open android",
     "ios:open": "npx cap open ios",
-    "assets:generate": "npx @capacitor/assets generate --android --pwa"
+    "assets:generate": "npx @capacitor/assets generate --android --ios --pwa"
   },
   "dependencies": {
     "@capacitor/android": "^8.1.0",
