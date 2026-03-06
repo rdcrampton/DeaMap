@@ -389,6 +389,7 @@ jobs:
             c = c.replace(
               /CODE_SIGN_STYLE = Automatic;/g,
               'CODE_SIGN_STYLE = Manual;' +
+              '\n\t\t\t\tCODE_SIGN_IDENTITY = \"Apple Distribution\";' +
               '\n\t\t\t\tDEVELOPMENT_TEAM = \"' + teamId + '\";' +
               '\n\t\t\t\tPROVISIONING_PROFILE = \"' + profileId + '\";'
             );
@@ -407,8 +408,6 @@ jobs:
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -destination "generic/platform=iOS" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             -allowProvisioningUpdates
         working-directory: mobile
