@@ -376,6 +376,27 @@ jobs:
             console.log('Updated pbxproj: MARKETING_VERSION=${{ needs.prepare.outputs.version }}, CURRENT_PROJECT_VERSION=${{ needs.prepare.outputs.build_number }}');
           "
 
+      - name: Set provisioning profile for App target
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pbx = 'ios/App/App.xcodeproj/project.pbxproj';
+            let c = fs.readFileSync(pbx, 'utf-8');
+            const teamId = process.env.IOS_TEAM_ID;
+            const profileId = process.env.PROVISIONING_PROFILE_UUID;
+            c = c.replace(
+              /CODE_SIGN_STYLE = Automatic;/g,
+              'CODE_SIGN_STYLE = Manual;' +
+              '\n\t\t\t\tDEVELOPMENT_TEAM = \"' + teamId + '\";' +
+              '\n\t\t\t\tPROVISIONING_PROFILE = \"' + profileId + '\";'
+            );
+            fs.writeFileSync(pbx, c);
+            console.log('Injected provisioning profile ' + profileId + ' for App target');
+          "
+        working-directory: mobile
+
       - name: Build and archive
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
@@ -386,7 +407,6 @@ jobs:
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -destination "generic/platform=iOS" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
-            CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
