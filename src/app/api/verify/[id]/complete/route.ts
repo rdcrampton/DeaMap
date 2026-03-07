@@ -5,15 +5,12 @@ import { prisma } from "@/lib/db";
 import { uploadToS3 } from "@/lib/s3";
 import { buildImageKey, extractExtension } from "@/lib/s3-utils";
 import { processVerificationImages, type ImageToProcess } from "@/lib/imageProcessing";
+import { recordStatusChange } from "@/lib/audit";
 import type { ProcessedImageData } from "@/types/verification";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
-
     const { id } = await params;
 
     // Find the active validation
@@ -34,6 +31,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!validation) {
       return NextResponse.json({ error: "Sesión de verificación no encontrada" }, { status: 404 });
     }
+
+    // Completing a verification IS the approval mechanism — the user went
+    // through every step (address, images, responsible, review). The result
+    // is always PUBLISHED regardless of the previous status.
+    // The status state machine applies to manual PATCH changes, not to
+    // structured verification completions.
+    const previousStatus = validation.aed.status;
 
     console.log("🔄 Iniciando procesamiento de imágenes...");
 
@@ -64,21 +68,36 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       });
     }
 
-    // Procesar todas las imágenes
-    const processedBuffers = await processVerificationImages(imagesToProcess);
+    // Procesar todas las imágenes (CPU/network — done outside transaction)
+    // Errors on individual images do NOT abort the verification.
+    const { processedImages: processedBuffers, errors: processingErrors } =
+      await processVerificationImages(imagesToProcess);
 
-    console.log(`✅ ${processedBuffers.size} imágenes procesadas`);
+    if (processingErrors.length > 0) {
+      console.warn(
+        `⚠️ ${processingErrors.length} imagen(es) con errores de procesamiento:`,
+        processingErrors
+      );
+    }
+    console.log(`✅ ${processedBuffers.size} imágenes procesadas correctamente`);
 
-    // Subir imágenes (originales y procesadas) a S3 y actualizar BD
+    // ── Upload images to S3 (network I/O — outside transaction) ──────
+    const imageUpdates: Array<{
+      imageId: string;
+      newOriginalUrl: string;
+      processedUrl: string;
+    }> = [];
+    const uploadErrors: Array<{ imageId: string; error: string }> = [];
+
     for (const [imageId, processedBuffer] of processedBuffers) {
       const imageRecord = validation.aed.images.find((img) => img.id === imageId);
       if (!imageRecord) continue;
 
-      const extension = extractExtension(imageRecord.original_url);
-
-      // 1. Re-subir imagen original con formato estructurado correcto
-      console.log(`☁️ Descargando y re-subiendo imagen original ${imageId}...`);
       try {
+        const extension = extractExtension(imageRecord.original_url);
+
+        console.log(`☁️ Descargando y re-subiendo imagen original ${imageId}...`);
+
         // Descargar imagen original
         const originalResponse = await fetch(imageRecord.original_url);
         if (!originalResponse.ok) {
@@ -87,10 +106,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const originalArrayBuffer = await originalResponse.arrayBuffer();
         const originalBuffer = Buffer.from(originalArrayBuffer);
 
-        // Generar key para imagen original con formato correcto
-        const originalKey = buildImageKey(id, imageId, "original", extension);
-
         // Subir imagen original a S3 con formato estructurado
+        const originalKey = buildImageKey(id, imageId, "original", extension);
         const newOriginalUrl = await uploadToS3({
           buffer: originalBuffer,
           filename: originalKey,
@@ -100,9 +117,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         console.log(`✅ Imagen original ${imageId} re-subida: ${newOriginalUrl}`);
 
-        // 2. Subir imagen procesada
+        // Subir imagen procesada
         const processedKey = buildImageKey(id, imageId, "processed", extension);
-
         console.log(`☁️ Subiendo imagen procesada ${imageId} a S3...`);
         const processedUrl = await uploadToS3({
           buffer: processedBuffer,
@@ -111,106 +127,146 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           prefix: id,
         });
 
-        // 3. Actualizar registro de imagen con ambas URLs y verificación
-        await prisma.aedImage.update({
+        console.log(`✅ Imagen ${imageId} subida: ${processedUrl}`);
+
+        imageUpdates.push({ imageId, newOriginalUrl, processedUrl });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        console.error(`❌ Error subiendo imagen ${imageId}: ${message}`);
+        uploadErrors.push({ imageId, error: message });
+        // Continue with remaining images
+      }
+    }
+
+    // ── Wrap all DB writes in a single transaction ───────────────────
+    const now = new Date();
+
+    const updatedValidation = await prisma.$transaction(async (tx) => {
+      // 1. Update all image records
+      for (const { imageId, newOriginalUrl, processedUrl } of imageUpdates) {
+        await tx.aedImage.update({
           where: { id: imageId },
           data: {
             original_url: newOriginalUrl,
             processed_url: processedUrl,
             is_verified: true,
-            verified_at: new Date(),
+            verified_at: now,
             verified_by: user.userId,
           },
         });
-
-        console.log(
-          `✅ Imagen ${imageId} guardada y verificada - Original: ${newOriginalUrl}, Procesada: ${processedUrl}`
-        );
-      } catch (error) {
-        console.error(`❌ Error procesando imagen ${imageId}:`, error);
-        // Continue with other images even if one fails
-        throw error; // Re-throw to rollback transaction
       }
-    }
 
-    // Update validation status to COMPLETED
-    const updatedValidation = await prisma.aedValidation.update({
-      where: { id: validation.id },
-      data: {
-        status: "COMPLETED",
-        completed_at: new Date(),
-        result: {
-          completed_by: user.userId,
-          completed_at: new Date(),
-          processed_images_count: processedBuffers.size,
-        },
-      },
-    });
-
-    // Update AED status to PUBLISHED with verification data
-    const now = new Date();
-    await prisma.aed.update({
-      where: { id },
-      data: {
-        status: "PUBLISHED",
-        published_at: validation.aed.published_at || now, // Keep existing if already published
-        last_verified_at: now,
-        verification_method: "photo_verification",
-        updated_by: user.userId,
-        updated_at: now,
-      },
-    });
-
-    // ── Create AedOrganizationVerification so it appears in admin detail ──
-    // Find the user's organization (prefer the one that has this AED assigned)
-    const userAssignment = await prisma.aedOrganizationAssignment.findFirst({
-      where: {
-        aed_id: id,
-        organization: {
-          members: { some: { user_id: user.userId } },
-        },
-      },
-      select: { organization_id: true },
-    });
-
-    // Fallback: use any organization the user belongs to
-    const orgId =
-      userAssignment?.organization_id ||
-      (
-        await prisma.organizationMember.findFirst({
-          where: { user_id: user.userId },
-          select: { organization_id: true },
-        })
-      )?.organization_id;
-
-    if (orgId) {
-      // Mark any previous verification for this AED+org as superseded
-      await prisma.aedOrganizationVerification.updateMany({
-        where: { aed_id: id, organization_id: orgId, is_current: true },
-        data: { is_current: false, superseded_at: now },
-      });
-
-      await prisma.aedOrganizationVerification.create({
+      // 2. Update validation status to COMPLETED
+      const completedValidation = await tx.aedValidation.update({
+        where: { id: validation.id },
         data: {
-          aed_id: id,
-          organization_id: orgId,
-          verification_type: "FIELD_INSPECTION",
-          verified_by: user.userId,
-          verified_at: now,
-          verified_photos: true,
-          verified_address: !!validationData?.validated_address,
-          verified_access: false,
-          verified_schedule: false,
-          verified_signage: false,
-          is_current: true,
-          notes: `Verificación fotográfica completada. ${processedBuffers.size} imagen(es) procesada(s).`,
+          status: "COMPLETED",
+          completed_at: now,
+          result: {
+            completed_by: user.userId,
+            completed_at: now,
+            processed_images_count: imageUpdates.length,
+            total_images: imagesToProcess.length,
+            ...(processingErrors.length > 0 && {
+              processing_errors: processingErrors,
+            }),
+            ...(uploadErrors.length > 0 && {
+              upload_errors: uploadErrors,
+            }),
+          },
         },
       });
+
+      // 3. Update AED status to PUBLISHED with verification data
+      await tx.aed.update({
+        where: { id },
+        data: {
+          status: "PUBLISHED",
+          published_at: validation.aed.published_at || now,
+          last_verified_at: now,
+          verification_method: "photo_verification",
+          requires_attention: false,
+          updated_by: user.userId,
+          updated_at: now,
+        },
+      });
+
+      // 4. Record status change in audit trail
+      if (previousStatus !== "PUBLISHED") {
+        await recordStatusChange(tx, {
+          aedId: id,
+          previousStatus,
+          newStatus: "PUBLISHED",
+          modifiedBy: user.userId,
+          reason: "Verificación fotográfica completada",
+          notes: `${imageUpdates.length} imagen(es) procesada(s). Dirección ${validationData?.validated_address ? "validada" : "no validada"}.`,
+        });
+      }
+
+      // 5. Create AedOrganizationVerification
+      // Find the user's organization (prefer the one that has this AED assigned)
+      const userAssignment = await tx.aedOrganizationAssignment.findFirst({
+        where: {
+          aed_id: id,
+          organization: {
+            members: { some: { user_id: user.userId } },
+          },
+        },
+        select: { organization_id: true },
+      });
+
+      // Fallback: use any organization the user belongs to
+      const orgId =
+        userAssignment?.organization_id ||
+        (
+          await tx.organizationMember.findFirst({
+            where: { user_id: user.userId },
+            select: { organization_id: true },
+          })
+        )?.organization_id;
+
+      if (orgId) {
+        // Mark previous verifications as superseded
+        await tx.aedOrganizationVerification.updateMany({
+          where: { aed_id: id, organization_id: orgId, is_current: true },
+          data: { is_current: false, superseded_at: now },
+        });
+
+        await tx.aedOrganizationVerification.create({
+          data: {
+            aed_id: id,
+            organization_id: orgId,
+            verification_type: "FIELD_INSPECTION",
+            verified_by: user.userId,
+            verified_at: now,
+            verified_photos: true,
+            verified_address: !!validationData?.validated_address,
+            verified_access: false,
+            verified_schedule: false,
+            verified_signage: false,
+            is_current: true,
+            notes: `Verificación fotográfica completada. ${imageUpdates.length} imagen(es) procesada(s).`,
+          },
+        });
+      }
+
+      return completedValidation;
+    });
+
+    const allErrors = [...processingErrors, ...uploadErrors];
+    if (allErrors.length > 0) {
+      console.warn(`⚠️ Verificación completada con ${allErrors.length} advertencia(s):`, allErrors);
+    } else {
+      console.log("🎉 Verificación completada exitosamente");
     }
 
-    console.log("🎉 Verificación completada exitosamente");
-
-    return NextResponse.json(updatedValidation);
+    return NextResponse.json({
+      ...updatedValidation,
+      // Include warnings so the client can display them
+      ...(allErrors.length > 0 && {
+        warnings: allErrors.map((e) => `Imagen ${e.imageId}: ${e.error}`),
+      }),
+    });
   } catch (error) {
     console.error("Error completing verification:", error);
     return NextResponse.json(

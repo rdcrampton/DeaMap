@@ -12,17 +12,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import type { AedWhereInput } from "@/generated/client/models/Aed";
+import type { AedOrganizationAssignmentWhereInput } from "@/generated/client/models/AedOrganizationAssignment";
+import type { AedStatus } from "@/generated/client/enums";
+import type { AssignmentType } from "@/generated/client/enums";
 import type { ApiResponse, PaginationInfo } from "@/types/data-list.types";
 import type { DeaListItem } from "@/types/dea-list.types";
 
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth(request);
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: "No autorizado" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
 
     // Parse filters
@@ -32,7 +31,8 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const search = searchParams.get("search") || undefined;
     const status = searchParams.get("status") || undefined; // Assignment status
-    const aedStatus = searchParams.get("aed_status") || undefined;
+    const rawAedStatus = searchParams.get("aed_status");
+    const aedStatus = rawAedStatus && rawAedStatus !== "all" ? rawAedStatus : undefined;
     const assignmentType = searchParams.get("assignment_type") || undefined;
 
     // Check permissions
@@ -85,11 +85,10 @@ export async function GET(request: NextRequest) {
     let totalCount: number;
 
     if (useDirectAedQuery) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const aedWhere: Record<string, any> = {};
+      const aedWhere: AedWhereInput = {};
 
       if (aedStatus) {
-        aedWhere.status = aedStatus;
+        aedWhere.status = aedStatus as AedStatus;
       }
 
       if (search) {
@@ -177,8 +176,7 @@ export async function GET(request: NextRequest) {
       });
     } else {
       // ── Organization-scoped view: query via assignments table ──
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const whereClause: Record<string, any> = {};
+      const whereClause: AedOrganizationAssignmentWhereInput = {};
 
       // Organization filter
       if (organizationId) {
@@ -196,7 +194,7 @@ export async function GET(request: NextRequest) {
 
       // Assignment type filter
       if (assignmentType) {
-        whereClause.assignment_type = assignmentType;
+        whereClause.assignment_type = assignmentType as AssignmentType;
       }
 
       // AED-related filters (nested)
@@ -219,7 +217,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (aedStatus) {
-          whereClause.aed.status = aedStatus;
+          whereClause.aed.status = aedStatus as AedStatus;
         }
       }
 

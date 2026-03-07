@@ -5,9 +5,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, AuthError } from "@/lib/auth";
+import { requireAdminOrAedPermission, AuthError } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { uploadToS3 } from "@/lib/s3";
+import { validateStatusTransition } from "@/lib/aed-status";
+import { recordStatusChange } from "@/lib/audit";
 
 /**
  * GET /api/admin/deas/[id]
@@ -16,10 +18,9 @@ import { uploadToS3 } from "@/lib/s3";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // Require ADMIN authentication
-    const user = await requireAdmin(request);
-
     const { id } = await params;
+    // Require ADMIN role or org-level can_view permission for this AED
+    const { user } = await requireAdminOrAedPermission(request, id, "can_view");
 
     // Fetch AED with ALL relationships
     const aed = await prisma.aed.findUnique({
@@ -129,19 +130,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // Get counts for summary
+    // Get counts for summary (parallel queries for performance)
+    const [statusChangesCount, fieldChangesCount, validationsCount] = await Promise.all([
+      prisma.aedStatusChange.count({ where: { aed_id: id } }),
+      prisma.aedFieldChange.count({ where: { aed_id: id } }),
+      prisma.aedValidation.count({ where: { aed_id: id } }),
+    ]);
+
     const counts = {
       images: aed.images.length,
       verified_images: aed.images.filter((img) => img.is_verified).length,
-      status_changes: await prisma.aedStatusChange.count({
-        where: { aed_id: id },
-      }),
-      field_changes: await prisma.aedFieldChange.count({
-        where: { aed_id: id },
-      }),
-      validations: await prisma.aedValidation.count({
-        where: { aed_id: id },
-      }),
+      status_changes: statusChangesCount,
+      field_changes: fieldChangesCount,
+      validations: validationsCount,
       active_assignments: aed.assignments.filter((a) => a.status === "ACTIVE").length,
       verifications: aed.org_verifications.length + aed.validations.length,
       pending_proposals: aed.change_proposals.filter((p) => p.status === "PENDING").length,
@@ -175,6 +176,37 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
   }
 }
+
+// ── AED Field Allowlist (single source of truth) ──────────────────────
+// Fields that can be updated AND tracked in the audit trail.
+// Additional admin-only fields that are updatable but NOT individually
+// tracked in field changes are listed separately below.
+const TRACKABLE_AED_FIELDS = [
+  "name",
+  "code",
+  "provisional_number",
+  "establishment_type",
+  "status",
+  "publication_mode",
+  "is_publicly_accessible",
+  "public_notes",
+  "rejection_reason",
+  "requires_attention",
+  "installation_date",
+  "latitude",
+  "longitude",
+  "coordinates_precision",
+  "source_origin",
+  "source_details",
+  "external_reference",
+  "verification_method",
+] as const;
+
+// Fields that are updatable but NOT individually tracked (bulk/metadata fields)
+const UNTRACKED_AED_FIELDS = ["internal_notes"] as const;
+
+// All fields allowed in prisma.aed.update
+const ALLOWED_AED_FIELDS: readonly string[] = [...TRACKABLE_AED_FIELDS, ...UNTRACKED_AED_FIELDS];
 
 // ── Helpers for field-change tracking ──────────────────────────────────
 
@@ -240,9 +272,8 @@ function trackNestedChanges(
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireAdmin(request);
-
     const { id } = await params;
+    const { user } = await requireAdminOrAedPermission(request, id, "can_edit");
     const body = await request.json();
 
     // Separate nested objects from top-level fields
@@ -288,24 +319,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const fieldChanges: FieldChangeRecord[] = [];
 
     // ── Track AED-level field changes ──
-    const aedFields = [
-      "name",
-      "code",
-      "provisional_number",
-      "establishment_type",
-      "status",
-      "publication_mode",
-      "is_publicly_accessible",
-      "public_notes",
-      "rejection_reason",
-      "requires_attention",
-      "installation_date",
-      "latitude",
-      "longitude",
-      "coordinates_precision",
-    ];
-
-    for (const key of aedFields) {
+    for (const key of TRACKABLE_AED_FIELDS) {
       if (key in aedUpdateFields) {
         trackChange(
           fieldChanges,
@@ -385,12 +399,64 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       });
     }
 
+    // Validate status transition before proceeding
+    if (aedUpdateFields.status && aedUpdateFields.status !== currentAed.status) {
+      try {
+        validateStatusTransition(currentAed.status, aedUpdateFields.status);
+      } catch (error) {
+        return NextResponse.json(
+          { success: false, error: error instanceof Error ? error.message : "Transición inválida" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Detect status changes for history
     const hasStatusChange = aedUpdateFields.status && aedUpdateFields.status !== currentAed.status;
     const hasImageChanges =
       (deleteImageIds && deleteImageIds.length > 0) || (addImages && addImages.length > 0);
 
-    // ── Execute all updates in a transaction ──
+    // ── Pre-process: upload images to S3 OUTSIDE the transaction ──
+    // Network I/O (S3) must not hold open a DB transaction connection.
+    const resolvedImages: Array<{ url: string; type: string; order: number }> = [];
+    if (addImages && addImages.length > 0) {
+      for (const img of addImages as Array<{ url: string; type: string; order: number }>) {
+        const validTypes = ["FRONT", "LOCATION", "ACCESS", "SIGNAGE", "CONTEXT", "PLATE"];
+        if (!validTypes.includes(img.type)) {
+          return NextResponse.json(
+            { success: false, error: `Tipo de imagen inválido: ${img.type}` },
+            { status: 400 }
+          );
+        }
+
+        let originalUrl = img.url;
+
+        if (img.url.startsWith("data:")) {
+          const matches = img.url.match(/^data:([^;]+);base64,(.+)$/);
+          if (!matches) {
+            return NextResponse.json(
+              { success: false, error: "Formato de imagen inválido" },
+              { status: 400 }
+            );
+          }
+          const contentType = matches[1];
+          const base64Data = matches[2];
+          const buffer = Buffer.from(base64Data, "base64");
+          const ext = contentType.includes("png") ? "png" : "jpg";
+
+          originalUrl = await uploadToS3({
+            buffer,
+            filename: `admin_upload.${ext}`,
+            contentType,
+            prefix: id,
+          });
+        }
+
+        resolvedImages.push({ url: originalUrl, type: img.type, order: img.order || 1 });
+      }
+    }
+
+    // ── Execute all DB writes in a transaction ──
     const result = await prisma.$transaction(async (tx) => {
       // 1. Delete images
       if (deleteImageIds && deleteImageIds.length > 0) {
@@ -402,43 +468,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         });
       }
 
-      // 2. Add new images (upload base64 to S3)
-      if (addImages && addImages.length > 0) {
-        for (const img of addImages as Array<{ url: string; type: string; order: number }>) {
-          const validTypes = ["FRONT", "LOCATION", "ACCESS", "SIGNAGE", "CONTEXT", "PLATE"];
-          if (!validTypes.includes(img.type)) {
-            throw new Error(`Tipo de imagen inválido: ${img.type}`);
-          }
-
-          let originalUrl = img.url;
-
-          // If it's a data: URL or blob, upload to S3
-          if (img.url.startsWith("data:")) {
-            const matches = img.url.match(/^data:([^;]+);base64,(.+)$/);
-            if (!matches) throw new Error("Formato de imagen inválido");
-            const contentType = matches[1];
-            const base64Data = matches[2];
-            const buffer = Buffer.from(base64Data, "base64");
-            const ext = contentType.includes("png") ? "png" : "jpg";
-
-            originalUrl = await uploadToS3({
-              buffer,
-              filename: `admin_upload.${ext}`,
-              contentType,
-              prefix: id,
-            });
-          }
-
-          await tx.aedImage.create({
-            data: {
-              aed_id: id,
-              original_url: originalUrl,
-              type: img.type as "FRONT" | "LOCATION" | "ACCESS" | "SIGNAGE" | "CONTEXT" | "PLATE",
-              order: img.order || 1,
-              created_at: new Date(),
-            },
-          });
-        }
+      // 2. Create image records (URLs already resolved from S3)
+      for (const img of resolvedImages) {
+        await tx.aedImage.create({
+          data: {
+            aed_id: id,
+            original_url: img.url,
+            type: img.type as "FRONT" | "LOCATION" | "ACCESS" | "SIGNAGE" | "CONTEXT" | "PLATE",
+            order: img.order,
+            created_at: new Date(),
+          },
+        });
       }
 
       // 3. Update location if provided
@@ -523,29 +563,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
       // 6. Build AED update data (only schema-valid fields)
       const validAedFields: Record<string, unknown> = {};
-      const allowedAedFields = [
-        "name",
-        "code",
-        "provisional_number",
-        "establishment_type",
-        "status",
-        "publication_mode",
-        "is_publicly_accessible",
-        "public_notes",
-        "internal_notes",
-        "rejection_reason",
-        "requires_attention",
-        "installation_date",
-        "latitude",
-        "longitude",
-        "coordinates_precision",
-        "source_origin",
-        "source_details",
-        "external_reference",
-        "verification_method",
-      ];
 
-      for (const key of allowedAedFields) {
+      for (const key of ALLOWED_AED_FIELDS) {
         if (key in aedUpdateFields) {
           validAedFields[key] = aedUpdateFields[key];
         }
@@ -577,14 +596,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
       // 7. Record status change in history
       if (hasStatusChange) {
-        await tx.aedStatusChange.create({
-          data: {
-            aed_id: id,
-            previous_status: currentAed.status,
-            new_status: aedUpdateFields.status,
-            reason: "Cambio desde panel de administración",
-            modified_by: user.userId,
-          },
+        await recordStatusChange(tx, {
+          aedId: id,
+          previousStatus: currentAed.status,
+          newStatus: aedUpdateFields.status,
+          modifiedBy: user.userId,
+          reason: "Cambio desde panel de administración",
         });
       }
 
@@ -617,6 +634,103 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       {
         success: false,
         error: "Failed to update AED",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/admin/deas/[id]
+ * Permanently delete an AED and all its related records.
+ * Accessible by global admins and org members with can_edit permission.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    await requireAdminOrAedPermission(request, id, "can_edit");
+
+    // Fetch AED with FK references to clean up orphans
+    const aed = await prisma.aed.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        status: true,
+        location_id: true,
+        schedule_id: true,
+        responsible_id: true,
+      },
+    });
+
+    if (!aed) {
+      return NextResponse.json({ success: false, error: "DEA no encontrado" }, { status: 404 });
+    }
+
+    // Optional reason from body
+    let reason: string | undefined;
+    try {
+      const body = await request.json();
+      reason = body?.reason;
+    } catch {
+      // No body or invalid JSON — that's fine
+    }
+
+    console.log(
+      `🗑️ Admin deleting AED ${id} (${aed.code || aed.name}). Status: ${aed.status}. Reason: ${reason || "N/A"}`
+    );
+
+    // Delete AED in a transaction. Cascade handles most relations.
+    // Then clean up orphaned location/schedule (they don't cascade).
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete the AED (cascades to images, validations, status_changes, etc.)
+      await tx.aed.delete({ where: { id } });
+
+      // 2. Clean up orphaned location (if no other AED references it)
+      if (aed.location_id) {
+        const locationRefCount = await tx.aed.count({
+          where: { location_id: aed.location_id },
+        });
+        if (locationRefCount === 0) {
+          await tx.aedLocation.delete({ where: { id: aed.location_id } });
+        }
+      }
+
+      // 3. Clean up orphaned schedule (if no other AED references it)
+      if (aed.schedule_id) {
+        const scheduleRefCount = await tx.aed.count({
+          where: { schedule_id: aed.schedule_id },
+        });
+        if (scheduleRefCount === 0) {
+          await tx.aedSchedule.delete({ where: { id: aed.schedule_id } });
+        }
+      }
+
+      // Note: responsible_id is NOT cleaned up — it may be shared across AEDs
+    });
+
+    return NextResponse.json({
+      success: true,
+      deleted: true,
+      aed: { id: aed.id, name: aed.name, code: aed.code },
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: error.statusCode }
+      );
+    }
+    console.error("Error deleting AED:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Error al eliminar DEA",
         message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

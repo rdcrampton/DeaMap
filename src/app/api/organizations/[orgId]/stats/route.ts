@@ -9,11 +9,6 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth(request);
-
-    if (!user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
     const { orgId } = await params;
 
     // Verificar que el usuario pertenece a la organización
@@ -37,7 +32,7 @@ export async function GET(
       verificationsThisMonth,
       deasByStatus,
     ] = await Promise.all([
-      // Total de DEAs asignados a la organización
+      // Total de DEAs asignados a la organización (any assignment type)
       prisma.aedOrganizationAssignment.count({
         where: {
           organization_id: orgId,
@@ -45,12 +40,11 @@ export async function GET(
         },
       }),
 
-      // DEAs verificados
+      // DEAs verificados (any assignment type)
       prisma.aedOrganizationAssignment.count({
         where: {
           organization_id: orgId,
           status: "ACTIVE",
-          assignment_type: "VERIFICATION",
           aed: {
             last_verified_at: {
               not: null,
@@ -59,13 +53,15 @@ export async function GET(
         },
       }),
 
-      // Verificaciones pendientes
+      // Verificaciones pendientes (only verifiable statuses — must match
+      // the filter in getVerifiableAedsForUser so the count is consistent
+      // with what the verification list actually shows)
       prisma.aedOrganizationAssignment.count({
         where: {
           organization_id: orgId,
           status: "ACTIVE",
-          assignment_type: "VERIFICATION",
           aed: {
+            status: { in: ["DRAFT", "PENDING_REVIEW", "PUBLISHED"] },
             OR: [
               { last_verified_at: null },
               {
@@ -110,25 +106,11 @@ export async function GET(
       }),
     ]);
 
-    // Procesar DEAs por estado
-    const deasByStatusMap = {
-      active: 0,
-      inactive: 0,
-      pending: 0,
-    };
-
+    // Build per-status counts (individual, not grouped)
+    const deasByStatusDetail: Record<string, number> = {};
     deasByStatus.forEach((item) => {
-      if (item.status === "PUBLISHED") {
-        deasByStatusMap.active += item._count;
-      } else if (item.status === "INACTIVE" || item.status === "REJECTED") {
-        deasByStatusMap.inactive += item._count;
-      } else if (item.status === "DRAFT" || item.status === "PENDING_REVIEW") {
-        deasByStatusMap.pending += item._count;
-      }
+      deasByStatusDetail[item.status] = item._count;
     });
-
-    // Add verifications pending to the pending count
-    deasByStatusMap.pending += pendingVerifications;
 
     return NextResponse.json({
       total_deas: totalDeas,
@@ -136,7 +118,7 @@ export async function GET(
       pending_verifications: pendingVerifications,
       members_count: membersCount,
       verifications_this_month: verificationsThisMonth,
-      deas_by_status: deasByStatusMap,
+      deas_by_status: deasByStatusDetail,
     });
   } catch (error) {
     console.error("Error fetching organization stats:", error);

@@ -6,13 +6,14 @@
 
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { MapPin, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { DataListFilters } from "../DataListFilters";
 import { DataListPagination } from "../DataListPagination";
 import { DeaListItem } from "./DeaListItem";
 import type { DeaListItem as DeaItem, DeasListConfig } from "@/types/dea-list.types";
-import type { ApiResponse, PermissionContext } from "@/types/data-list.types";
+import type { ApiResponse, PaginationInfo, PermissionContext } from "@/types/data-list.types";
 
 interface DeasListProps {
   organizationId?: string;
@@ -20,20 +21,47 @@ interface DeasListProps {
   adminMode?: boolean;
 }
 
-export function DeasList({ organizationId, config, adminMode = false }: DeasListProps) {
+export function DeasList(props: DeasListProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      }
+    >
+      <DeasListInner {...props} />
+    </Suspense>
+  );
+}
+
+function DeasListInner({ organizationId, config, adminMode = false }: DeasListProps) {
+  const searchParams = useSearchParams();
   const [deas, setDeas] = useState<DeaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [_permissions, _setPermissions] = useState<PermissionContext>(config.permissions);
 
+  // Initialize filter values from URL search params (e.g. ?aed_status=INACTIVE)
+  const initialFilters = useMemo(() => {
+    const filters: Record<string, string> = {};
+    config.filters?.forEach((f) => {
+      const urlValue = searchParams.get(f.key);
+      if (urlValue) {
+        filters[f.key] = urlValue;
+      }
+    });
+    return filters;
+  }, [searchParams, config.filters]);
+
   // Filter state
-  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [filterValues, setFilterValues] = useState<Record<string, string>>(initialFilters);
+  const [filtersExpanded, setFiltersExpanded] = useState(Object.keys(initialFilters).length > 0);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [currentLimit, setCurrentLimit] = useState(config.pagination?.defaultLimit || 25);
-  const [paginationInfo, setPaginationInfo] = useState<any>(null);
+  const [paginationInfo, setPaginationInfo] = useState<PaginationInfo | null>(null);
 
   // Organizations state
   const [organizations, setOrganizations] = useState<Array<{ value: string; label: string }>>([]);
@@ -61,17 +89,12 @@ export function DeasList({ organizationId, config, adminMode = false }: DeasList
       if (data.success && data.data) {
         const orgOptions = [
           { value: "", label: "Todas las organizaciones" },
-          ...data.data.map((org: any) => ({
+          ...data.data.map((org: { id: string; name: string }) => ({
             value: org.id,
             label: org.name,
           })),
         ];
         setOrganizations(orgOptions);
-
-        // Update config filter options
-        if (orgFilter && orgFilter.type === "select") {
-          orgFilter.options = orgOptions;
-        }
       }
     } catch (err) {
       console.error("Error fetching organizations:", err);
@@ -79,6 +102,14 @@ export function DeasList({ organizationId, config, adminMode = false }: DeasList
       setOrganizationsLoading(false);
     }
   }, [config.filters, organizations.length, organizationsLoading]);
+
+  // Derive filters with dynamic org options (avoids mutating config prop)
+  const resolvedFilters = useMemo(() => {
+    if (!config.filters || organizations.length === 0) return config.filters;
+    return config.filters.map((f) =>
+      f.key === "organization_id" && f.type === "select" ? { ...f, options: organizations } : f
+    );
+  }, [config.filters, organizations]);
 
   // Fetch DEAs from unified API
   const fetchDeas = useCallback(async () => {
@@ -118,13 +149,13 @@ export function DeasList({ organizationId, config, adminMode = false }: DeasList
       }
 
       setDeas(data.data || []);
-      setPaginationInfo(data.pagination);
+      setPaginationInfo(data.pagination ?? null);
 
       if (data.permissions) {
         _setPermissions(data.permissions);
       }
-    } catch (err: any) {
-      setError(err.message || "Error desconocido");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
       setDeas([]);
     } finally {
       setLoading(false);
@@ -200,7 +231,7 @@ export function DeasList({ organizationId, config, adminMode = false }: DeasList
       </div>
 
       {/* Filters Toggle Button */}
-      {config.filters && config.filters.length > 0 && (
+      {resolvedFilters && resolvedFilters.length > 0 && (
         <div className="px-4">
           <button
             onClick={() => setFiltersExpanded(!filtersExpanded)}
@@ -223,10 +254,10 @@ export function DeasList({ organizationId, config, adminMode = false }: DeasList
       )}
 
       {/* Filters (Collapsible) */}
-      {config.filters && config.filters.length > 0 && filtersExpanded && (
+      {resolvedFilters && resolvedFilters.length > 0 && filtersExpanded && (
         <div className="px-4">
           <DataListFilters
-            filters={config.filters}
+            filters={resolvedFilters}
             values={filterValues}
             onChange={handleFilterChange}
           />

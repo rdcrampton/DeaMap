@@ -1,14 +1,26 @@
 "use client";
 
-import { AlertTriangle, Filter, Loader2, Search, Shield, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckSquare,
+  Filter,
+  Loader2,
+  Search,
+  Shield,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import ConfirmDialog from "@/components/ConfirmDialog";
 import NoOrganizationMessage from "@/components/verification/NoOrganizationMessage";
 import OrganizationSelector from "@/components/verification/OrganizationSelector";
 import { useAuth } from "@/contexts/AuthContext";
+import { AED_STATUS_CONFIG } from "@/lib/aed-status-config";
 
-type FilterType = "pending" | "published_unverified" | "published_verified" | "all_published";
+type FilterType = "never_verified" | "requires_attention" | "verification_expired" | "rejected";
 
 interface FilterOption {
   value: FilterType;
@@ -65,36 +77,37 @@ interface ApiResponse {
   isAdmin: boolean;
 }
 
-const FILTER_OPTIONS: FilterOption[] = [
+const BASE_FILTER_OPTIONS: FilterOption[] = [
   {
-    value: "pending",
-    label: "Pendientes de verificar",
-    description: "DEAs en borrador o pendientes de revisión",
+    value: "never_verified",
+    label: "Nunca verificados",
+    description: "DEAs que nunca han sido verificados manualmente",
     badgeColor: "bg-yellow-100 text-yellow-800",
-    badgeText: "Pendiente",
-  },
-  {
-    value: "published_unverified",
-    label: "Publicados sin verificar",
-    description: "DEAs publicados pero sin verificación manual",
-    badgeColor: "bg-orange-100 text-orange-800",
     badgeText: "Sin verificar",
   },
   {
-    value: "published_verified",
-    label: "Publicados verificados",
-    description: "DEAs publicados y verificados manualmente",
-    badgeColor: "bg-green-100 text-green-800",
-    badgeText: "Verificado",
+    value: "requires_attention",
+    label: "Requieren atención",
+    description: "DEAs marcados como que necesitan revisión",
+    badgeColor: "bg-red-100 text-red-800",
+    badgeText: "Atención",
   },
   {
-    value: "all_published",
-    label: "Todos los publicados",
-    description: "Todos los DEAs publicados",
-    badgeColor: "bg-blue-100 text-blue-800",
-    badgeText: "Publicado",
+    value: "verification_expired",
+    label: "Verificación caducada",
+    description: "DEAs cuya verificación tiene más de 6 meses",
+    badgeColor: "bg-orange-100 text-orange-800",
+    badgeText: "Caducada",
   },
 ];
+
+const REJECTED_FILTER_OPTION: FilterOption = {
+  value: "rejected",
+  label: "Descartados",
+  description: "DEAs rechazados que se pueden re-verificar",
+  badgeColor: AED_STATUS_CONFIG.REJECTED.color,
+  badgeText: AED_STATUS_CONFIG.REJECTED.label,
+};
 
 export default function VerifyPage() {
   const { user, loading: authLoading } = useAuth();
@@ -102,13 +115,24 @@ export default function VerifyPage() {
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [userOrganizations, setUserOrganizations] = useState<UserOrganization[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<FilterType>("pending");
+  const [filterType, setFilterType] = useState<FilterType>("never_verified");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Batch selection (admin + rejected filter only)
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Admin sees the "rejected" filter; regular users don't
+  const FILTER_OPTIONS = isAdmin
+    ? [...BASE_FILTER_OPTIONS, REJECTED_FILTER_OPTION]
+    : BASE_FILTER_OPTIONS;
   const router = useRouter();
 
   useEffect(() => {
@@ -207,6 +231,7 @@ export default function VerifyPage() {
   const handleFilterChange = (newFilter: FilterType) => {
     setFilterType(newFilter);
     setAeds([]); // Clear current list
+    exitSelectionMode(); // Reset selection when changing filters
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -225,6 +250,65 @@ export default function VerifyPage() {
 
   const startVerification = (aedId: string) => {
     router.push(`/verify/${aedId}`);
+  };
+
+  // ── Batch selection helpers ──
+  const canBatchDelete = isAdmin && filterType === "rejected";
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === aeds.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(aeds.map((a) => a.id)));
+    }
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+
+    try {
+      setIsDeleting(true);
+      setShowDeleteDialog(false);
+
+      const response = await fetch("/api/admin/deas/batch", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al eliminar DEAs");
+      }
+
+      const result = await response.json();
+      console.log(`✅ ${result.deleted} DEAs eliminados`);
+
+      // Exit selection mode and refresh list
+      exitSelectionMode();
+      fetchAeds(1, selectedOrgId, filterType, searchTerm);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar DEAs");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (authLoading || loading) {
@@ -258,13 +342,34 @@ export default function VerifyPage() {
                 Selecciona un DEA para iniciar el proceso de verificación
               </p>
             </div>
-            <button
-              onClick={() => router.push("/verify/duplicates")}
-              className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-lg hover:bg-yellow-200 transition-colors font-medium"
-            >
-              <AlertTriangle className="w-5 h-5" />
-              Ver Posibles Duplicados
-            </button>
+            <div className="flex items-center gap-2">
+              {canBatchDelete &&
+                aeds.length > 0 &&
+                (selectionMode ? (
+                  <button
+                    onClick={exitSelectionMode}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    <X className="w-5 h-5" />
+                    Cancelar selección
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSelectionMode(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 border border-red-300 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    Eliminar DEAs
+                  </button>
+                ))}
+              <button
+                onClick={() => router.push("/verify/duplicates")}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-lg hover:bg-yellow-200 transition-colors font-medium"
+              >
+                <AlertTriangle className="w-5 h-5" />
+                Ver Posibles Duplicados
+              </button>
+            </div>
           </div>
 
           {/* Admin badge */}
@@ -383,6 +488,28 @@ export default function VerifyPage() {
                   }}
                 ></div>
               </div>
+
+              {/* Select all row (only in selection mode) */}
+              {selectionMode && aeds.length > 0 && (
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 font-medium"
+                  >
+                    {selectedIds.size === aeds.length ? (
+                      <CheckSquare className="w-4 h-4" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                    {selectedIds.size === aeds.length ? "Deseleccionar todos" : "Seleccionar todos"}
+                  </button>
+                  {selectedIds.size > 0 && (
+                    <span className="text-sm text-blue-600">
+                      {selectedIds.size} seleccionado{selectedIds.size !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -400,33 +527,35 @@ export default function VerifyPage() {
             <div className="text-gray-400 text-6xl mb-4">
               {searchTerm
                 ? "🔍"
-                : filterType === "pending"
-                  ? "✅"
-                  : filterType === "published_verified"
-                    ? "🎉"
-                    : "📋"}
+                : filterType === "rejected"
+                  ? "✨"
+                  : filterType === "never_verified"
+                    ? "✅"
+                    : filterType === "requires_attention"
+                      ? "👍"
+                      : "🎉"}
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               {searchTerm
                 ? "No se encontraron resultados"
-                : filterType === "pending"
-                  ? "No hay DEAs pendientes de verificar"
-                  : filterType === "published_unverified"
-                    ? "No hay DEAs publicados sin verificar"
-                    : filterType === "published_verified"
-                      ? "No hay DEAs verificados"
-                      : "No hay DEAs publicados"}
+                : filterType === "rejected"
+                  ? "No hay DEAs descartados"
+                  : filterType === "never_verified"
+                    ? "No hay DEAs sin verificar"
+                    : filterType === "requires_attention"
+                      ? "No hay DEAs que requieran atención"
+                      : "No hay DEAs con verificación caducada"}
             </h3>
             <p className="text-gray-600">
               {searchTerm
                 ? `No se encontraron DEAs que coincidan con "${searchTerm}"`
-                : filterType === "pending"
-                  ? "Todos los DEAs han sido verificados"
-                  : filterType === "published_unverified"
-                    ? "Todos los DEAs publicados ya han sido verificados manualmente"
-                    : filterType === "published_verified"
-                      ? "No hay DEAs que hayan sido verificados manualmente"
-                      : "No hay DEAs publicados en el sistema"}
+                : filterType === "rejected"
+                  ? "No hay DEAs en estado rechazado"
+                  : filterType === "never_verified"
+                    ? "Todos los DEAs han sido verificados al menos una vez"
+                    : filterType === "requires_attention"
+                      ? "No hay DEAs marcados como que necesitan revisión"
+                      : "Todas las verificaciones están al día"}
             </p>
             {searchTerm && (
               <button
@@ -442,18 +571,35 @@ export default function VerifyPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               {aeds.map((aed) => {
                 const firstImage = aed.images?.[0];
+                const isSelected = selectedIds.has(aed.id);
                 return (
                   <div
                     key={aed.id}
-                    className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                    className={`bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all ${
+                      selectionMode ? "cursor-pointer" : ""
+                    } ${isSelected ? "ring-2 ring-red-500 shadow-red-100" : ""}`}
+                    onClick={selectionMode ? () => toggleSelection(aed.id) : undefined}
                   >
                     {firstImage && (
-                      <div className="h-48 bg-gray-200 overflow-hidden">
+                      <div className="h-48 bg-gray-200 overflow-hidden relative">
                         <img
                           src={firstImage.original_url}
                           alt={`DEA ${aed.name}`}
                           className="w-full h-full object-cover"
                         />
+                        {selectionMode && (
+                          <div className="absolute top-3 left-3">
+                            <div
+                              className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
+                                isSelected
+                                  ? "bg-red-600 border-red-600 text-white"
+                                  : "bg-white/80 border-gray-400"
+                              }`}
+                            >
+                              {isSelected && <CheckSquare className="w-4 h-4" />}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -497,10 +643,27 @@ export default function VerifyPage() {
                       </div>
 
                       <button
-                        onClick={() => startVerification(aed.id)}
-                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        onClick={(e) => {
+                          if (selectionMode) {
+                            e.stopPropagation();
+                            toggleSelection(aed.id);
+                          } else {
+                            startVerification(aed.id);
+                          }
+                        }}
+                        className={`w-full py-2 px-4 rounded-lg transition-colors font-medium ${
+                          selectionMode
+                            ? isSelected
+                              ? "bg-red-100 text-red-700 hover:bg-red-200"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
+                        }`}
                       >
-                        Iniciar Verificación
+                        {selectionMode
+                          ? isSelected
+                            ? "Seleccionado"
+                            : "Seleccionar"
+                          : "Iniciar Verificación"}
                       </button>
                     </div>
                   </div>
@@ -540,6 +703,48 @@ export default function VerifyPage() {
           </>
         )}
       </div>
+
+      {/* Floating action bar for batch deletion */}
+      {selectionMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-20 p-4">
+          <div className="container mx-auto flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">
+              {selectedIds.size} DEA{selectedIds.size !== 1 ? "s" : ""} seleccionado
+              {selectedIds.size !== 1 ? "s" : ""}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={exitSelectionMode}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                {isDeleting
+                  ? "Eliminando..."
+                  : `Eliminar ${selectedIds.size} DEA${selectedIds.size !== 1 ? "s" : ""}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        title="Eliminar DEAs permanentemente"
+        message={`¿Estás seguro de que deseas eliminar ${selectedIds.size} DEA${selectedIds.size !== 1 ? "s" : ""} descartado${selectedIds.size !== 1 ? "s" : ""}? Esta acción no se puede deshacer.`}
+        confirmText={`Eliminar ${selectedIds.size} DEA${selectedIds.size !== 1 ? "s" : ""}`}
+        cancelText="Cancelar"
+        confirmColor="red"
+        onConfirm={() => handleBatchDelete()}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </div>
   );
 }

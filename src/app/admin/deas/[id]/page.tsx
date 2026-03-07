@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { ImageProcessingResult } from "@/components/dea/DeaImageProcessor";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { getStatusLabel, getStatusColor, AED_STATUS_OPTIONS } from "@/lib/aed-status-config";
 
 // Lazy-load to avoid SSR issues with canvas/leaflet
 const DeaImageProcessor = dynamic(() => import("@/components/dea/DeaImageProcessor"), {
@@ -379,6 +381,10 @@ export default function AdminDeaDetailPage() {
   });
   const [processingImageId, setProcessingImageId] = useState<string | null>(null);
 
+  // Delete state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Image upload ref
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -668,27 +674,49 @@ export default function AdminDeaDetailPage() {
     }
   };
 
+  // ── Delete ──
+  const handleDelete = async (reason?: string) => {
+    if (!data) return;
+
+    try {
+      setIsDeleting(true);
+      setShowDeleteDialog(false);
+
+      const response = await fetch(`/api/admin/deas/${params.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al eliminar DEA");
+      }
+
+      // Redirect to list after successful deletion
+      router.push("/admin/deas");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar DEA");
+      setIsDeleting(false);
+    }
+  };
+
   // ── Badge helpers ──
   const getStatusBadge = (status: string) => {
-    const badges: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
-      PUBLISHED: { label: "Publicado", color: "bg-green-100 text-green-800", icon: CheckCircle },
-      DRAFT: { label: "Borrador", color: "bg-gray-100 text-gray-800", icon: FileText },
-      PENDING_REVIEW: {
-        label: "Pendiente",
-        color: "bg-yellow-100 text-yellow-800",
-        icon: AlertCircle,
-      },
-      REJECTED: { label: "Rechazado", color: "bg-red-100 text-red-800", icon: XCircle },
-      INACTIVE: { label: "Inactivo", color: "bg-gray-100 text-gray-600", icon: XCircle },
+    const icons: Record<string, typeof CheckCircle> = {
+      PUBLISHED: CheckCircle,
+      DRAFT: FileText,
+      PENDING_REVIEW: AlertCircle,
+      REJECTED: XCircle,
+      INACTIVE: XCircle,
     };
-    const badge = badges[status] || badges.DRAFT;
-    const Icon = badge.icon;
+    const Icon = icons[status] || AlertCircle;
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${badge.color}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(status)}`}
       >
         <Icon className="w-4 h-4" />
-        {badge.label}
+        {getStatusLabel(status)}
       </span>
     );
   };
@@ -827,13 +855,23 @@ export default function AdminDeaDetailPage() {
                 <span className="text-red-600 text-sm font-medium max-w-xs truncate">{error}</span>
               )}
               {!isEditing ? (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  Editar
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowDeleteDialog(true)}
+                    disabled={isDeleting}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {isDeleting ? "Eliminando..." : "Eliminar"}
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Editar
+                  </button>
+                </>
               ) : (
                 <>
                   <button
@@ -939,13 +977,7 @@ export default function AdminDeaDetailPage() {
                   onChange={(v) => handleAedChange("status", v)}
                   isEditing={isEditing}
                   type="select"
-                  options={[
-                    { value: "DRAFT", label: "Borrador" },
-                    { value: "PENDING_REVIEW", label: "Pendiente de revisión" },
-                    { value: "PUBLISHED", label: "Publicado" },
-                    { value: "REJECTED", label: "Rechazado" },
-                    { value: "INACTIVE", label: "Inactivo" },
-                  ]}
+                  options={AED_STATUS_OPTIONS}
                   displayValue={getStatusBadge(aed.status) as unknown as string}
                 />
                 <EditableField
@@ -2029,6 +2061,21 @@ export default function AdminDeaDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        title="Eliminar DEA permanentemente"
+        message={`¿Estás seguro de que deseas eliminar "${data?.aed.name || "este DEA"}"? Esta acción no se puede deshacer. Se eliminarán todas las imágenes, verificaciones, historial y asignaciones asociadas.`}
+        confirmText="Eliminar definitivamente"
+        cancelText="Cancelar"
+        confirmColor="red"
+        requiresInput={true}
+        inputLabel="Motivo de eliminación"
+        inputPlaceholder="Ej: Duplicado, datos incorrectos, DEA no existe..."
+        onConfirm={(reason) => handleDelete(reason)}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </div>
   );
 }

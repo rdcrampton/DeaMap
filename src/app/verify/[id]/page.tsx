@@ -41,6 +41,7 @@ import type {
   ImageProcessingState,
 } from "@/types/verification";
 import { VerificationStep, VERIFICATION_STEPS_CONFIG } from "@/types/verification";
+import { regenerateProcessedImage } from "@/utils/imageRegeneration";
 
 interface VerificationData {
   aed: Aed & {
@@ -50,6 +51,7 @@ interface VerificationData {
   };
   validation: AedValidation;
   current_step: VerificationStep;
+  status_warning?: string;
 }
 
 interface VerifyPageProps {
@@ -81,17 +83,14 @@ export default function VerifyPage({ params }: VerifyPageProps) {
   const [savingStep, setSavingStep] = useState(false);
   // Lightbox for image preview in REVIEW step
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // True while regenerating processed images from stored params (after reload)
+  const [regeneratingImages, setRegeneratingImages] = useState(false);
   const router = useRouter();
   const resolvedParams = use(params);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push("/login?redirect=/verify");
-      return;
-    }
-
-    if (!authLoading && user && !user.is_verified) {
-      router.push("/");
       return;
     }
 
@@ -143,11 +142,21 @@ export default function VerifyPage({ params }: VerifyPageProps) {
     });
 
     // ── Persist to server in the background (non-blocking) ──
+    // Strip processed_url (base64 data URLs) from processed_images to keep
+    // the payload under Vercel's body-size limit. The local optimistic state
+    // keeps the full data for preview; the server only stores coordinates.
+    const serverData = { ...(stepData || {}) };
+    if (Array.isArray(serverData.processed_images)) {
+      serverData.processed_images = (serverData.processed_images as ProcessedImageData[]).map(
+        ({ processed_url: _stripped, ...rest }) => rest
+      );
+    }
+
     setSavingStep(true);
     fetch(`/api/verify/${resolvedParams.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ step, data: stepData || {} }),
+      body: JSON.stringify({ step, data: serverData }),
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -273,6 +282,54 @@ export default function VerifyPage({ params }: VerifyPageProps) {
       setShowRejectDialog(false);
     }
   };
+
+  // ── Regenerate processed image previews when entering REVIEW after reload ──
+  const currentStep = data?.current_step;
+  useEffect(() => {
+    if (currentStep !== VerificationStep.REVIEW || !data) return;
+
+    const validationData = data.validation.data as ImageProcessingState | null;
+    const validatedImages = validationData?.validated_images || [];
+    const processedImages = validationData?.processed_images || [];
+
+    // Find images that have processing params but no local preview URL
+    const missing = processedImages.filter(
+      (p) =>
+        !localImageUrls.processedUrls[p.image_id] && (p.crop_data || p.blur_areas || p.arrow_data)
+    );
+
+    if (missing.length === 0) return;
+
+    setRegeneratingImages(true);
+
+    const originalMap = Object.fromEntries(validatedImages.map((v) => [v.id, v.url]));
+
+    Promise.all(
+      missing.map(async (p) => {
+        try {
+          const url = await regenerateProcessedImage(originalMap[p.image_id], p);
+          return { imageId: p.image_id, url };
+        } catch (err) {
+          console.error(`Failed to regenerate image ${p.image_id}:`, err);
+          return null;
+        }
+      })
+    )
+      .then((results) => {
+        const successful = results.filter((r): r is { imageId: string; url: string } => r !== null);
+        if (successful.length > 0) {
+          setLocalImageUrls((prev) => ({
+            ...prev,
+            processedUrls: {
+              ...prev.processedUrls,
+              ...Object.fromEntries(successful.map((r) => [r.imageId, r.url])),
+            },
+          }));
+        }
+      })
+      .finally(() => setRegeneratingImages(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
   const getStepProgress = () => {
     if (!data) return { current: 0, total: 0, percentage: 0 };
@@ -461,9 +518,8 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   ...prev,
                   croppedImageUrl: croppedImageUrl || currentImage.url,
                 }));
-                // Only send the lightweight crop coordinates to the server
+                // Only send the new crop data — server merges with existing validation data
                 updateStep(VerificationStep.IMAGE_BLUR, {
-                  ...validationData,
                   current_crop_data: cropData,
                 });
               }}
@@ -475,15 +531,10 @@ export default function VerifyPage({ params }: VerifyPageProps) {
 
       case VerificationStep.IMAGE_BLUR: {
         // Obtener el estado de procesamiento de imágenes
-        const validationData = data.validation.data as
-          | (ImageProcessingState & {
-              current_crop_data?: CropData;
-            })
-          | null;
+        const validationData = data.validation.data as ImageProcessingState | null;
         const validatedImages = validationData?.validated_images || [];
         const currentIndex = validationData?.current_image_index || 0;
         const currentImage = validatedImages[currentIndex];
-        const currentCropData = validationData?.current_crop_data;
         // Use client-side blob: URL from crop step (never stored on server)
         const currentCroppedImageUrl = localImageUrls.croppedImageUrl;
 
@@ -513,10 +564,8 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   ...prev,
                   blurredImageUrl: blurredImageUrl || currentCroppedImageUrl || currentImage.url,
                 }));
-                // Only send lightweight blur coordinates to the server
+                // Only send the new blur data — server merges with existing validation data
                 updateStep(VerificationStep.IMAGE_ARROW, {
-                  ...validationData,
-                  current_crop_data: currentCropData,
                   current_blur_areas: blurAreas,
                 });
               }}
@@ -527,8 +576,6 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   blurredImageUrl: currentCroppedImageUrl || currentImage.url,
                 }));
                 updateStep(VerificationStep.IMAGE_ARROW, {
-                  ...validationData,
-                  current_crop_data: currentCropData,
                   current_blur_areas: [],
                 });
               }}
@@ -584,13 +631,13 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   }));
                 }
 
-                // Only send lightweight coordinates to the server (NO image data)
+                // Send coordinates + preview URL so the REVIEW step works after page reload
                 const newProcessedImage: ProcessedImageData = {
                   image_id: currentImage.id,
                   crop_data: currentCropData,
                   blur_areas: currentBlurAreas.length > 0 ? currentBlurAreas : undefined,
                   arrow_data: arrowData,
-                  // processed_url deliberately omitted — kept client-side only
+                  processed_url: processedImageUrl,
                 };
 
                 const updatedProcessedImages = [...processedImages, newProcessedImage];
@@ -683,7 +730,8 @@ export default function VerifyPage({ params }: VerifyPageProps) {
             hasCrop: !!processed?.crop_data,
             hasBlur: !!(processed?.blur_areas && processed.blur_areas.length > 0),
             hasArrow: !!processed?.arrow_data,
-            // Use client-side preview URL (data: URL kept in local state, not on server)
+            // Client-side preview: either from the live session or regenerated
+            // from stored params (crop_data + blur_areas + arrow_data) after reload.
             processedUrl: localImageUrls.processedUrls[imageId],
           };
         };
@@ -725,6 +773,14 @@ export default function VerifyPage({ params }: VerifyPageProps) {
                   {frontImages.length > 0 && ` • ${frontImages.length} frontal(es)`}
                   {interiorImages.length > 0 && ` • ${interiorImages.length} interior(es)`}
                 </p>
+
+                {/* Regeneration indicator */}
+                {regeneratingImages && (
+                  <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg mb-3">
+                    <Loader2 className="animate-spin h-4 w-4" />
+                    Regenerando previsualizaciones de imágenes procesadas...
+                  </div>
+                )}
 
                 {/* Gallery of validated images */}
                 {validatedImages.length > 0 ? (
@@ -1027,6 +1083,14 @@ export default function VerifyPage({ params }: VerifyPageProps) {
             </div>
           </div>
         </div>
+
+        {/* Status warning for non-standard AED states (e.g. REJECTED) */}
+        {data.status_warning && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+            <span className="text-amber-600 text-xl">⚠️</span>
+            <p className="text-sm text-amber-800">{data.status_warning}</p>
+          </div>
+        )}
 
         {/* DEA Information - Editable */}
         <div className="mb-6">
