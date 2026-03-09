@@ -27,6 +27,7 @@ import {
   Clock,
   Upload,
   Eye,
+  EyeOff,
   Scissors,
   Loader2,
   RefreshCw,
@@ -35,6 +36,7 @@ import dynamic from "next/dynamic";
 import type { ImageProcessingResult } from "@/components/dea/DeaImageProcessor";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { getStatusLabel, getStatusColor, AED_STATUS_OPTIONS } from "@/lib/aed-status-config";
+import { compressImageDataUrl } from "@/utils/imageCompression";
 
 // Lazy-load to avoid SSR issues with canvas/leaflet
 const DeaImageProcessor = dynamic(() => import("@/components/dea/DeaImageProcessor"), {
@@ -196,6 +198,10 @@ interface NewImage {
   type: string;
   order: number;
   file?: File;
+  /** S3 URL after pre-upload (used for server-side processing to avoid 413) */
+  s3Url?: string;
+  /** Whether the file is still being uploaded to S3 */
+  uploading?: boolean;
   /** If image was processed via crop/blur/arrow pipeline */
   processingResult?: ImageProcessingResult;
   /** Preview URL after processing (from ArrowPlacer) */
@@ -216,6 +222,17 @@ interface ImageProcessorState {
   /** Image type */
   imageType: string;
 }
+
+// ── Constants ──────────────────────────────────────────────────────────
+
+const imageTypeOptions = [
+  { value: "FRONT", label: "Frontal" },
+  { value: "LOCATION", label: "Ubicación" },
+  { value: "ACCESS", label: "Acceso" },
+  { value: "SIGNAGE", label: "Señalización" },
+  { value: "CONTEXT", label: "Contexto" },
+  { value: "PLATE", label: "Placa" },
+];
 
 // ── Reusable UI Components ─────────────────────────────────────────────
 
@@ -368,7 +385,12 @@ export default function AdminDeaDetailPage() {
   const [newImages, setNewImages] = useState<NewImage[]>([]);
 
   // Lightbox
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxState, setLightboxState] = useState<{
+    url: string;
+    originalUrl?: string;
+    processedUrl?: string;
+    showingOriginal: boolean;
+  } | null>(null);
 
   // Image processor modal
   const [imageProcessor, setImageProcessor] = useState<ImageProcessorState>({
@@ -387,6 +409,30 @@ export default function AdminDeaDetailPage() {
 
   // Image upload ref
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-open processor for the next unprocessed new image
+  useEffect(() => {
+    if (imageProcessor.isOpen) return;
+    if (newImages.length === 0) return;
+
+    const firstUnprocessedIndex = newImages.findIndex((img) => !img.processingResult);
+    if (firstUnprocessedIndex === -1) return;
+
+    const timer = setTimeout(() => {
+      const img = newImages[firstUnprocessedIndex];
+      if (!img || img.processingResult) return;
+      setImageProcessor({
+        isOpen: true,
+        imageUrl: img.url,
+        imageId: null,
+        label: `Nueva imagen (${imageTypeOptions.find((o) => o.value === img.type)?.label || img.type})`,
+        newImageIndex: firstUnprocessedIndex,
+        imageType: img.type,
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [newImages, imageProcessor.isOpen]);
 
   // ── Data fetching ──
   const fetchData = useCallback(async () => {
@@ -456,16 +502,72 @@ export default function AdminDeaDetailPage() {
     if (!files) return;
     Array.from(files).forEach((file) => {
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
+        const rawDataUrl = reader.result as string;
+
+        // Compress image client-side (1920x1920 max, JPEG 0.85, <2MB) to avoid 413 on Vercel
+        let dataUrl: string;
+        try {
+          dataUrl = await compressImageDataUrl(rawDataUrl, {
+            maxWidth: 1920,
+            maxHeight: 1920,
+            quality: 0.85,
+            maxSizeMB: 3,
+          });
+        } catch {
+          dataUrl = rawDataUrl; // Fallback to original if compression fails
+        }
+
         setNewImages((prev) => [
           ...prev,
           {
-            url: reader.result as string,
+            url: dataUrl,
             type: "FRONT",
             order: (data?.aed.images.length || 0) + prev.length + 1,
             file,
+            uploading: true,
           },
         ]);
+
+        // Upload compressed image to S3 in the background
+        // Convert data URL to Blob for FormData upload
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+        const compressedFile = new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
+          type: "image/jpeg",
+        });
+
+        const formData = new FormData();
+        formData.append("file", compressedFile);
+        formData.append("prefix", `dea-upload-${params.id}`);
+        fetch("/api/upload", { method: "POST", body: formData })
+          .then((res) => res.json())
+          .then((result) => {
+            if (result.success && result.url) {
+              setNewImages((prev) =>
+                prev.map((img) =>
+                  img.url === dataUrl && img.uploading
+                    ? { ...img, s3Url: result.url, uploading: false }
+                    : img
+                )
+              );
+            } else {
+              setNewImages((prev) =>
+                prev.map((img) =>
+                  img.url === dataUrl && img.uploading ? { ...img, uploading: false } : img
+                )
+              );
+              setError("Error al subir imagen a S3");
+            }
+          })
+          .catch(() => {
+            setNewImages((prev) =>
+              prev.map((img) =>
+                img.url === dataUrl && img.uploading ? { ...img, uploading: false } : img
+              )
+            );
+            setError("Error al subir imagen a S3");
+          });
       };
       reader.readAsDataURL(file);
     });
@@ -564,6 +666,14 @@ export default function AdminDeaDetailPage() {
   };
 
   const handleProcessingCancel = () => {
+    // If cancelling a new image that hasn't been processed yet, remove it (processing is mandatory)
+    if (
+      imageProcessor.newImageIndex !== null &&
+      newImages[imageProcessor.newImageIndex] &&
+      !newImages[imageProcessor.newImageIndex].processingResult
+    ) {
+      setNewImages((prev) => prev.filter((_, i) => i !== imageProcessor.newImageIndex));
+    }
     setImageProcessor((prev) => ({ ...prev, isOpen: false }));
   };
 
@@ -613,16 +723,12 @@ export default function AdminDeaDetailPage() {
         payload.deleteImageIds = imagesToDelete;
       }
 
-      // New images: split into processed (go via process-image API) and unprocessed (go via PATCH)
+      // All new images must be processed (crop/blur/arrow)
       const processedNewImages = newImages.filter((img) => img.processingResult);
-      const unprocessedNewImages = newImages.filter((img) => !img.processingResult);
-
-      if (unprocessedNewImages.length > 0) {
-        payload.addImages = unprocessedNewImages.map((img) => ({
-          url: img.url,
-          type: img.type,
-          order: img.order,
-        }));
+      if (processedNewImages.length !== newImages.length) {
+        setError("Todas las imágenes nuevas deben ser procesadas antes de guardar.");
+        setIsSaving(false);
+        return;
       }
 
       // 1. Save general fields via PATCH
@@ -641,11 +747,14 @@ export default function AdminDeaDetailPage() {
       // 2. Process new images that went through crop/blur/arrow pipeline
       for (const img of processedNewImages) {
         const procResult = img.processingResult!;
+        // Use S3 URL (pre-uploaded) to avoid 413 on large base64 payloads.
+        // Fall back to data URL only for very small images where S3 upload may not have completed.
+        const imagePayload = img.s3Url ? { newImageUrl: img.s3Url } : { newImageDataUrl: img.url };
         const procResponse = await fetch(`/api/admin/deas/${params.id}/process-image`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            newImageDataUrl: img.url,
+            ...imagePayload,
             imageType: img.type,
             cropData: procResult.cropData,
             blurAreas: procResult.blurAreas,
@@ -779,6 +888,9 @@ export default function AdminDeaDetailPage() {
     imagesToDelete.length > 0 ||
     newImages.length > 0;
 
+  const hasUnprocessedImages = newImages.some((img) => !img.processingResult);
+  const hasUploadingImages = newImages.some((img) => img.uploading);
+
   const tabs = [
     { id: "general", label: "General", icon: FileText },
     {
@@ -789,15 +901,6 @@ export default function AdminDeaDetailPage() {
     { id: "verifications", label: `Verificaciones (${counts.verifications})`, icon: CheckCircle },
     { id: "assignments", label: `Asignaciones (${counts.active_assignments})`, icon: Users },
     { id: "history", label: "Histórico", icon: Activity },
-  ];
-
-  const imageTypeOptions = [
-    { value: "FRONT", label: "Frontal" },
-    { value: "LOCATION", label: "Ubicación" },
-    { value: "ACCESS", label: "Acceso" },
-    { value: "SIGNAGE", label: "Señalización" },
-    { value: "CONTEXT", label: "Contexto" },
-    { value: "PLATE", label: "Placa" },
   ];
 
   return (
@@ -814,22 +917,50 @@ export default function AdminDeaDetailPage() {
       )}
 
       {/* Lightbox */}
-      {lightboxUrl && (
+      {lightboxState && (
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => setLightboxState(null)}
         >
           <img
-            src={lightboxUrl}
+            src={lightboxState.url}
             alt="Preview"
             className="max-w-full max-h-full object-contain rounded-lg"
           />
           <button
-            onClick={() => setLightboxUrl(null)}
+            onClick={() => setLightboxState(null)}
             className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2"
           >
             <X className="w-6 h-6" />
           </button>
+          {/* Toggle between processed/original */}
+          {lightboxState.processedUrl && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxState((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        url: prev.showingOriginal ? prev.processedUrl! : prev.originalUrl!,
+                        showingOriginal: !prev.showingOriginal,
+                      }
+                    : null
+                );
+              }}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/20 hover:bg-white/40 text-white rounded-full px-4 py-2 flex items-center gap-2 text-sm backdrop-blur-sm"
+            >
+              {lightboxState.showingOriginal ? (
+                <>
+                  <Eye className="w-4 h-4" /> Ver procesada
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-4 h-4" /> Ver original
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -883,8 +1014,15 @@ export default function AdminDeaDetailPage() {
                   </button>
                   <button
                     onClick={handleSave}
-                    disabled={isSaving || !hasChanges}
+                    disabled={isSaving || !hasChanges || hasUnprocessedImages || hasUploadingImages}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={
+                      hasUploadingImages
+                        ? "Esperando a que las imágenes terminen de subirse"
+                        : hasUnprocessedImages
+                          ? "Todas las imágenes nuevas deben ser procesadas antes de guardar"
+                          : undefined
+                    }
                   >
                     <Save className="w-4 h-4" />
                     {isSaving ? "Guardando..." : "Guardar"}
@@ -1611,7 +1749,12 @@ export default function AdminDeaDetailPage() {
                         onClick={() =>
                           !markedForDeletion &&
                           !isProcessing &&
-                          setLightboxUrl(image.processed_url || image.original_url)
+                          setLightboxState({
+                            url: image.processed_url || image.original_url,
+                            originalUrl: image.original_url,
+                            processedUrl: image.processed_url || undefined,
+                            showingOriginal: false,
+                          })
                         }
                       >
                         <img
@@ -1640,13 +1783,35 @@ export default function AdminDeaDetailPage() {
                         <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                           <button
                             onClick={() =>
-                              setLightboxUrl(image.processed_url || image.original_url)
+                              setLightboxState({
+                                url: image.processed_url || image.original_url,
+                                originalUrl: image.original_url,
+                                processedUrl: image.processed_url || undefined,
+                                showingOriginal: false,
+                              })
                             }
                             className="bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5"
                             title="Ver imagen"
                           >
                             <Eye className="w-3 h-3" />
                           </button>
+                          {image.processed_url && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLightboxState({
+                                  url: image.original_url,
+                                  originalUrl: image.original_url,
+                                  processedUrl: image.processed_url || undefined,
+                                  showingOriginal: true,
+                                });
+                              }}
+                              className="bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5"
+                              title="Ver original"
+                            >
+                              <EyeOff className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -1672,6 +1837,22 @@ export default function AdminDeaDetailPage() {
                               >
                                 <Scissors className="w-3 h-3" />
                               </button>
+                              {image.processed_url && (
+                                <button
+                                  onClick={() =>
+                                    setLightboxState({
+                                      url: image.original_url,
+                                      originalUrl: image.original_url,
+                                      processedUrl: image.processed_url || undefined,
+                                      showingOriginal: true,
+                                    })
+                                  }
+                                  className="bg-gray-600 hover:bg-gray-700 text-white rounded-full p-1.5 shadow-lg"
+                                  title="Ver original"
+                                >
+                                  <EyeOff className="w-3 h-3" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => setImagesToDelete((prev) => [...prev, image.id])}
                                 className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg"
@@ -1711,11 +1892,20 @@ export default function AdminDeaDetailPage() {
                 {/* New images (pending upload) */}
                 {newImages.map((img, idx) => (
                   <div key={`new-${idx}`} className="relative group">
+                    {/* Upload overlay */}
+                    {img.uploading && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 rounded-lg">
+                        <div className="text-center">
+                          <Loader2 className="w-6 h-6 text-blue-600 animate-spin mx-auto" />
+                          <p className="text-xs text-gray-600 mt-1">Subiendo...</p>
+                        </div>
+                      </div>
+                    )}
                     <img
                       src={img.processedPreviewUrl || img.url}
                       alt="Nueva imagen"
                       className={`w-full h-40 object-cover rounded-lg border-2 ${
-                        img.processingResult ? "border-green-400" : "border-blue-300"
+                        img.processingResult ? "border-green-400" : "border-amber-400"
                       }`}
                     />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-900/70 to-transparent rounded-b-lg p-2">
@@ -1737,8 +1927,8 @@ export default function AdminDeaDetailPage() {
                           <CheckCircle className="w-3 h-3" /> Procesada
                         </span>
                       ) : (
-                        <span className="bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
-                          Nueva
+                        <span className="bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                          <AlertCircle className="w-3 h-3" /> Pendiente
                         </span>
                       )}
                     </div>
@@ -1779,6 +1969,17 @@ export default function AdminDeaDetailPage() {
                     <span className="text-sm text-gray-500 mt-1">Añadir imagen</span>
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Warning: unprocessed images */}
+            {hasUnprocessedImages && (
+              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                <p className="text-sm text-amber-800">
+                  Todas las imágenes nuevas deben ser procesadas (recortar, difuminar, flecha) antes
+                  de poder guardar.
+                </p>
               </div>
             )}
           </div>
