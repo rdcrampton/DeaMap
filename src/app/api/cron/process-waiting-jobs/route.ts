@@ -4,8 +4,9 @@
  * This endpoint is called by Vercel Cron (every minute) to automatically
  * continue processing batch jobs that are in WAITING status.
  *
- * Soporta dos motores:
+ * Soporta tres motores:
  * - engine=bulkimport -> @batchactions/import via BulkImportService
+ * - engine=externalsync -> @batchactions/core via ExternalSyncService
  * - legacy (sin engine) -> BatchJobOrchestrator (procesador existente)
  *
  * Flow:
@@ -23,9 +24,12 @@ import { prisma } from "@/lib/db";
 import { PrismaBatchJobRepository } from "@/batch/infrastructure";
 import { BatchJobOrchestrator } from "@/batch/application";
 import { initializeProcessors } from "@/batch/application/processors";
-import { PrismaDataSourceRepository } from "@/import/infrastructure/repositories/PrismaDataSourceRepository";
-import { getBulkImportService } from "@/import/infrastructure/factories/createBulkImportService";
-import type { ImportContext } from "@/import/infrastructure/state/PrismaStateStore";
+import {
+  getBulkImportService,
+  getExternalSyncService,
+} from "@/import/infrastructure/factories/createBulkImportService";
+import type { ImportContext } from "@/import/application/services/BulkImportService";
+import type { SyncContext } from "@/import/application/services/ExternalSyncService";
 import {
   VERCEL_CRON_MAX_DURATION_MS,
   CRON_SAFETY_TIMEOUT_MS,
@@ -50,8 +54,7 @@ function getLegacyOrchestrator(): BatchJobOrchestrator {
   if (!_orchestrator) {
     const repository = getLegacyRepository();
     if (!_processorsInitialized) {
-      const dataSourceRepository = new PrismaDataSourceRepository(prisma);
-      initializeProcessors(prisma, dataSourceRepository);
+      initializeProcessors(prisma);
       _processorsInitialized = true;
     }
     _orchestrator = new BatchJobOrchestrator(repository);
@@ -174,11 +177,11 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
         const wasPending = job.status === "PENDING" || job.status === "QUEUED";
         const wasInterrupted = job.status === "INTERRUPTED" || job.status === "PAUSED";
 
-        // 1. For WAITING jobs, try to acquire lock atomically
-        //    For PENDING/INTERRUPTED jobs, start/continue them directly
+        // 1. For all non-PENDING jobs, try to acquire lock atomically
+        //    This prevents concurrent processing of the same job by multiple cron instances
         let lockAcquired = true;
 
-        if (!wasPending && !wasInterrupted) {
+        if (!wasPending) {
           lockAcquired = await repository.tryAcquireJobLock(job.id);
 
           if (!lockAcquired) {
@@ -212,6 +215,17 @@ async function processWaitingJobs(request: NextRequest): Promise<NextResponse> {
             job.id,
             job.metadata,
             job.createdBy,
+            job.organizationId,
+            wasPending,
+            wasInterrupted
+          );
+          results.push({ ...jobResult, jobName: job.name, engine });
+        } else if (engine === "externalsync") {
+          // @batchactions/core engine for external sync
+          const jobResult = await processExternalSyncJob(
+            job.id,
+            job.metadata,
+            job.progress.totalRecords,
             wasPending,
             wasInterrupted
           );
@@ -334,6 +348,7 @@ async function processBulkImportJob(
   jobId: string,
   metadata: Record<string, unknown>,
   createdBy: string,
+  organizationId: string | undefined,
   wasPending: boolean,
   wasInterrupted: boolean
 ): Promise<{
@@ -361,9 +376,68 @@ async function processBulkImportJob(
     userId: createdBy,
     fileName: importContext.fileName,
     delimiter: importContext.delimiter,
+    mappings: importContext.mappings,
     sharePointAuth: importContext.sharePointAuth,
     maxDurationMs: VERCEL_CRON_MAX_DURATION_MS,
     skipDuplicates: importContext.skipDuplicates,
+    assignmentType: importContext.assignmentType,
+    organizationId,
+  });
+
+  const hasMore = !result.chunk.done;
+
+  return {
+    jobId,
+    success: true,
+    status: hasMore ? "WAITING" : "COMPLETED",
+    processedRecords: result.progress.processedRecords,
+    totalRecords: result.progress.totalRecords,
+    percentage: result.progress.percentage,
+    hasMore,
+    lockAcquired: true,
+    wasPending,
+    wasInterrupted,
+  };
+}
+
+// ============================================================
+// ExternalSync engine handler
+// ============================================================
+
+/**
+ * Procesa un job con @batchactions/core via ExternalSyncService.
+ * Extrae sync_context del metadata y llama a resumeSync().
+ */
+async function processExternalSyncJob(
+  jobId: string,
+  metadata: Record<string, unknown>,
+  sourceTotalRecords: number,
+  wasPending: boolean,
+  wasInterrupted: boolean
+): Promise<{
+  jobId: string;
+  success: boolean;
+  status: string;
+  processedRecords: number;
+  totalRecords: number;
+  percentage: number;
+  hasMore: boolean;
+  lockAcquired: boolean;
+  wasPending: boolean;
+  wasInterrupted: boolean;
+}> {
+  const syncContext = metadata.sync_context as SyncContext | undefined;
+
+  if (!syncContext?.dataSourceId) {
+    throw new Error(`ExternalSync job ${jobId} missing sync_context.dataSourceId in metadata`);
+  }
+
+  const service = getExternalSyncService();
+  const result = await service.resumeSync({
+    jobId,
+    syncContext,
+    maxDurationMs: VERCEL_CRON_MAX_DURATION_MS,
+    sourceTotalRecords,
   });
 
   const hasMore = !result.chunk.done;

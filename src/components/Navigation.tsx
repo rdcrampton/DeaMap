@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   Settings,
   Building2,
+  FileUp,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -69,6 +70,12 @@ export default function Navigation() {
     { href: "/", label: "DEAs", icon: Home, visible: true },
     { href: "/dea/new-simple", label: "Agregar DEA", icon: PlusCircle, visible: true },
     {
+      href: "/admin/imports",
+      label: "Importar",
+      icon: FileUp,
+      visible: user?.permissions?.canImportAeds || false,
+    },
+    {
       href: selectedOrganization ? `/org/${selectedOrganization.id}` : "/org",
       label: "Mi Organización",
       icon: Building2,
@@ -99,37 +106,38 @@ export default function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-14">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2 group" onClick={trackLogoClick}>
-            <div className="relative h-8 w-8 sm:h-10 sm:w-10 transition-all duration-300 group-hover:scale-110">
-              <Image
-                src="/favicon.svg"
-                alt="DeaMap Logo"
-                fill
-                className="object-contain"
-                priority
-              />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-base sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                deamap.es
-              </span>
-              <a
-                href="https://www.globalemergency.online/proyectos/deamap"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[9px] sm:text-[10px] text-gray-500 hover:text-gray-700 transition-colors -mt-0.5"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleExternalLinkClick(
-                    "https://www.globalemergency.online/proyectos/deamap",
-                    "Global Emergency (logo)"
-                  );
-                }}
-              >
-                by Global Emergency
-              </a>
-            </div>
-          </Link>
+          <div className="flex items-center space-x-2 group">
+            <Link href="/" className="flex items-center space-x-2" onClick={trackLogoClick}>
+              <div className="relative h-8 w-8 sm:h-10 sm:w-10 transition-all duration-300 group-hover:scale-110">
+                <Image
+                  src="/favicon.svg"
+                  alt="DeaMap Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-base sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  deamap.es
+                </span>
+              </div>
+            </Link>
+            <a
+              href="https://www.globalemergency.online/proyectos/deamap"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[9px] sm:text-[10px] text-gray-500 hover:text-gray-700 transition-colors self-end -mb-0.5"
+              onClick={() => {
+                handleExternalLinkClick(
+                  "https://www.globalemergency.online/proyectos/deamap",
+                  "Global Emergency (logo)"
+                );
+              }}
+            >
+              by Global Emergency
+            </a>
+          </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex md:items-center md:space-x-1">

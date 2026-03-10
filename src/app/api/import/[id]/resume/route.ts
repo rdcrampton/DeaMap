@@ -13,7 +13,8 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { UserRole } from "@/generated/client/enums";
 import { getBulkImportService } from "@/import/infrastructure/factories/createBulkImportService";
-import type { ImportContext } from "@/import/infrastructure/state/PrismaStateStore";
+import type { ImportContext } from "@/import/application/services/BulkImportService";
+import { VERCEL_API_MAX_DURATION_MS } from "@/import/constants";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -25,12 +26,7 @@ interface RouteParams {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    // Verify authentication
     const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ success: false, error: "No autenticado" }, { status: 401 });
-    }
-
     const { id } = await params;
 
     console.log(`📥 [Import Resume] Resuming import ${id} by user ${user.userId}`);
@@ -38,19 +34,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Leer metadata del job para determinar el motor
     const job = await prisma.batchJob.findUnique({
       where: { id },
-      select: { metadata: true, created_by: true, status: true },
+      select: { metadata: true, created_by: true, status: true, organization_id: true },
     });
 
     if (!job) {
       return NextResponse.json({ success: false, error: `Job ${id} not found` }, { status: 404 });
     }
 
-    // Verificar que el usuario es dueño del job o admin
+    // Verificar que el usuario es dueño del job, admin, o miembro de la org del job
     if (job.created_by !== user.userId && user.role !== UserRole.ADMIN) {
-      return NextResponse.json(
-        { success: false, error: "No autorizado para reanudar este job" },
-        { status: 403 }
-      );
+      let hasOrgAccess = false;
+      if (job.organization_id) {
+        const membership = await prisma.organizationMember.findUnique({
+          where: {
+            organization_id_user_id: {
+              organization_id: job.organization_id,
+              user_id: user.userId,
+            },
+          },
+          select: { can_edit: true },
+        });
+        hasOrgAccess = !!membership?.can_edit;
+      }
+      if (!hasOrgAccess) {
+        return NextResponse.json(
+          { success: false, error: "No autorizado para reanudar este job" },
+          { status: 403 }
+        );
+      }
     }
 
     const metadata = (job.metadata || {}) as Record<string, unknown>;
@@ -75,9 +86,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         userId: job.created_by,
         fileName: importContext.fileName,
         delimiter: importContext.delimiter,
+        mappings: importContext.mappings,
         sharePointAuth: importContext.sharePointAuth,
-        maxDurationMs: 80_000,
+        maxDurationMs: VERCEL_API_MAX_DURATION_MS,
         skipDuplicates: importContext.skipDuplicates,
+        assignmentType: importContext.assignmentType,
+        organizationId: job.organization_id ?? undefined,
       });
 
       const hasMore = !result.chunk.done;
@@ -112,12 +126,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       await import("@/batch/application/orchestrator/BatchJobOrchestrator");
     const { ContinueBatchJobUseCase } = await import("@/batch/application/use-cases");
     const { initializeProcessors } = await import("@/batch/application/processors");
-    const { PrismaDataSourceRepository } =
-      await import("@/import/infrastructure/repositories/PrismaDataSourceRepository");
 
     const repository = new PrismaBatchJobRepository(prisma);
-    const dataSourceRepository = new PrismaDataSourceRepository(prisma);
-    initializeProcessors(prisma, dataSourceRepository);
+    initializeProcessors(prisma);
 
     const orchestrator = new BatchJobOrchestrator(repository);
     const useCase = new ContinueBatchJobUseCase(orchestrator);
