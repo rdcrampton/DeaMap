@@ -56,17 +56,25 @@ function getClusterIcon(count: number): L.DivIcon {
   const displayCount =
     count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k` : String(count);
 
+  const clusterLabel = `Grupo de ${count} desfibriladores. Haz clic para ampliar.`;
+
   const icon = L.divIcon({
     className: "custom-cluster-marker",
     html: `
-      <div style="
-        width: ${size}px;
-        height: ${size}px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-      ">
+      <div
+        role="button"
+        tabindex="0"
+        aria-label="${clusterLabel}"
+        title="${clusterLabel}"
+        style="
+          width: ${size}px;
+          height: ${size}px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        "
+      >
         <div style="
           position: absolute;
           width: 100%;
@@ -76,7 +84,7 @@ function getClusterIcon(count: number): L.DivIcon {
           border: 3px solid white;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
           opacity: 0.9;
-        "></div>
+        " aria-hidden="true"></div>
         <div style="
           position: relative;
           z-index: 1;
@@ -84,7 +92,7 @@ function getClusterIcon(count: number): L.DivIcon {
           font-weight: bold;
           font-size: ${Math.max(12, size / 3)}px;
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-        ">${displayCount}</div>
+        " aria-hidden="true">${displayCount}</div>
       </div>
     `,
     iconSize: [size, size],

@@ -31,35 +31,64 @@ interface MapViewProps {
 // CACHED ICONS - Created once, reused forever
 // ============================================
 
-const aedIcon = L.divIcon({
-  className: "custom-marker",
-  html: `
-    <div style="
-      background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
-      width: 32px;
-      height: 32px;
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      border: 3px solid white;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    ">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(45deg);">
-        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
-      </svg>
-    </div>
-  `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
+/**
+ * Creates an AED marker icon with an accessible title.
+ * Each marker gets a unique title describing its location.
+ */
+function createAedIcon(name: string): L.DivIcon {
+  return L.divIcon({
+    className: "custom-marker",
+    html: `
+      <div
+        role="button"
+        tabindex="0"
+        aria-label="DEA: ${name}"
+        title="DEA: ${name}"
+        style="
+          background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+          width: 32px;
+          height: 32px;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          border: 3px solid white;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        "
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(45deg);" aria-hidden="true">
+          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+        </svg>
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -32],
+  });
+}
+
+// Cache for AED icons keyed by name to avoid recreating identical icons
+const aedIconCache = new Map<string, L.DivIcon>();
+
+function getAedIcon(name: string): L.DivIcon {
+  const cached = aedIconCache.get(name);
+  if (cached) return cached;
+  const icon = createAedIcon(name);
+  aedIconCache.set(name, icon);
+  return icon;
+}
 
 const searchLocationIcon = L.divIcon({
   className: "search-location-marker",
   html: `
-    <div style="position: relative; width: 48px; height: 48px;">
+    <div
+      role="button"
+      tabindex="0"
+      aria-label="Tu ubicación de búsqueda. Arrastra para ajustar."
+      title="Tu ubicación de búsqueda"
+      style="position: relative; width: 48px; height: 48px;"
+    >
       <div style="
         position: absolute; top: 50%; left: 50%;
         transform: translate(-50%, -50%);
@@ -67,7 +96,7 @@ const searchLocationIcon = L.divIcon({
         background: rgba(220, 38, 38, 0.3);
         border-radius: 50%;
         animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-      "></div>
+      " aria-hidden="true"></div>
       <div style="
         position: absolute; top: 50%; left: 50%;
         background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
@@ -78,7 +107,7 @@ const searchLocationIcon = L.divIcon({
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
         display: flex; align-items: center; justify-content: center;
       ">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="white" style="transform: rotate(45deg);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="white" style="transform: rotate(45deg);" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
           <circle cx="12" cy="12" r="3" fill="#DC2626" />
         </svg>
@@ -224,7 +253,11 @@ export default function MapView({
   );
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden shadow-xl">
+    <div
+      className="relative w-full h-full rounded-xl overflow-hidden shadow-xl"
+      role="region"
+      aria-label="Mapa interactivo de desfibriladores (DEA)"
+    >
       <MapContainer
         center={[40.4168, -3.7038]}
         zoom={12}
@@ -263,6 +296,7 @@ export default function MapView({
           <Marker
             position={[searchLocation.lat, searchLocation.lng]}
             icon={searchLocationIcon}
+            alt="Tu ubicación de búsqueda"
             zIndexOffset={1000}
             draggable={true}
             eventHandlers={{
@@ -335,7 +369,8 @@ export default function MapView({
             <Marker
               key={aed.id}
               position={[aed.latitude, aed.longitude]}
-              icon={aedIcon}
+              icon={getAedIcon(aed.name)}
+              alt={`DEA: ${aed.name}`}
               eventHandlers={{
                 click: () => handleMarkerClick(aed),
               }}
@@ -358,6 +393,7 @@ export default function MapView({
                     <button
                       onClick={() => handleMarkerClick(aed)}
                       className="w-full mt-3 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all"
+                      aria-label={`Ver detalles de ${aed.name}`}
                     >
                       Ver detalles
                     </button>
@@ -371,16 +407,23 @@ export default function MapView({
 
       {/* Loading indicator */}
       {loading && (
-        <div className="absolute top-4 left-4 z-[1000] bg-white rounded-lg shadow-lg px-4 py-2 flex items-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+        <div
+          className="absolute top-4 left-4 z-[1000] bg-white rounded-lg shadow-lg px-4 py-2 flex items-center gap-2"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600" aria-hidden="true" />
           <span className="text-sm font-medium text-gray-700">Cargando DEAs...</span>
         </div>
       )}
 
       {/* Error indicator */}
       {error && (
-        <div className="absolute top-4 left-4 z-[1000] bg-red-50 border border-red-200 rounded-lg shadow-lg px-4 py-2 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-600" />
+        <div
+          className="absolute top-4 left-4 z-[1000] bg-red-50 border border-red-200 rounded-lg shadow-lg px-4 py-2 flex items-center gap-2"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 text-red-600" aria-hidden="true" />
           <span className="text-sm font-medium text-red-700">{error}</span>
         </div>
       )}
