@@ -128,16 +128,23 @@ const searchLocationIcon = L.divIcon({
 // Client-side spiderfy cluster icon (for overlapping markers at same location)
 const spiderfyIconCreateFunction = (cluster: { getChildCount: () => number }) => {
   const count = cluster.getChildCount();
+  const spiderfyLabel = `Grupo de ${count} desfibriladores superpuestos. Haz clic para separar.`;
   return L.divIcon({
-    html: `<div style="
-      background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-      width: 34px; height: 34px;
-      border-radius: 50%;
-      border: 3px solid white;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      display: flex; align-items: center; justify-content: center;
-      color: white; font-weight: bold; font-size: 13px;
-    ">${count}</div>`,
+    html: `<div
+      role="button"
+      tabindex="0"
+      aria-label="${spiderfyLabel}"
+      title="${spiderfyLabel}"
+      style="
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-weight: bold; font-size: 13px;
+      "
+    ><span aria-hidden="true">${count}</span></div>`,
     className: "client-marker-cluster",
     iconSize: L.point(34, 34, true),
   });
