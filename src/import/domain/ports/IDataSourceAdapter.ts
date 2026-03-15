@@ -53,11 +53,48 @@ export interface DataSourceConfig {
   apiEndpoint?: string;
   authToken?: string;
   headers?: Record<string, string>;
+  method?: "GET" | "POST"; // default GET
+  requestBody?: unknown; // Para POST APIs (ej: Overpass)
+
+  // Paginación configurable (REST_API)
+  pagination?: {
+    strategy: "offset" | "page" | "cursor" | "none";
+    // Nombres de parámetros configurables
+    limitParam?: string; // default: 'limit'
+    limitValue?: number; // default: 100
+    offsetParam?: string; // default: 'offset' (strategy=offset)
+    pageParam?: string; // default: 'page' (strategy=page)
+    cursorParam?: string; // default: 'cursor' (strategy=cursor)
+    // Dónde encontrar el cursor del siguiente resultado
+    cursorResponsePath?: string; // ej: 'next_cursor', 'meta.next'
+    // Cómo saber si hay más páginas
+    totalCountPath?: string; // ej: 'total', 'meta.total_count'
+    hasMorePath?: string; // ej: 'has_more', 'meta.has_next'
+  };
+
+  // Dónde están los registros en la respuesta JSON
+  responseDataPath?: string; // ej: 'results', 'data.records', 'elements'
+
+  // ============================================
+  // Para archivos CSV remotos
+  // ============================================
+  csvDelimiter?: string; // default: ',' — usar ';' para ficheros europeos/LATAM
+  encoding?: string; // default: 'utf-8' — usar 'latin1' para fuentes con ISO-8859-1
 
   // ============================================
   // Común para APIs y JSON
   // ============================================
   fieldMappings?: Record<string, string>; // Campo API → Campo sistema
+
+  // Campo de la fuente que identifica de forma única cada registro.
+  // Se usa como externalId para deduplicación y como código del AED.
+  // Si no se especifica, se auto-detecta buscando campos comunes (id, codigo_dea, etc.).
+  externalIdField?: string;
+
+  // ============================================
+  // Transformadores de campos (opcional)
+  // ============================================
+  fieldTransformers?: Record<string, string | string[]>; // Campo fuente → transformer(s) a aplicar
 }
 
 /**
@@ -72,7 +109,8 @@ export interface ExternalDataSourceConfig {
 
   // Scope regional
   sourceOrigin: string; // EXTERNAL_API, HEALTH_API, etc.
-  regionCode: string; // "MAD", "CAT", "AND", etc.
+  countryCode: string; // ISO 3166-1 alpha-2: "ES", "FR", "IT", etc.
+  regionCode: string; // ISO 3166-2: "ES-MD", "ES-CT", "FR-IDF", etc.
 
   // Matching
   matchingStrategy: MatchingStrategy;

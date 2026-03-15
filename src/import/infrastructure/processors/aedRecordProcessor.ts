@@ -1,21 +1,22 @@
 ﻿/**
- * AED Record Processor â€” @batchactions/import RecordProcessorFn
+ * AED Record Processor — @batchactions/import RecordProcessorFn
  *
- * FunciÃ³n callback que procesa un registro validado y crea las entidades
- * AED en la base de datos dentro de una transacciÃ³n Prisma:
+ * Función callback que procesa un registro validado y crea las entidades
+ * AED en la base de datos dentro de una transacción Prisma:
  *
  * 1. AedLocation  (siempre se crea)
- * 2. AedSchedule  (condicional â€” si hay datos de horario)
- * 3. AedResponsible (condicional â€” si hay datos del responsable)
- * 4. Aed (transacciÃ³n atÃ³mica con relaciones)
+ * 2. AedSchedule  (condicional — si hay datos de horario)
+ * 3. AedResponsible (condicional — si hay datos del responsable)
+ * 4. Aed (transacción atómica con relaciones)
  *
- * Las imÃ¡genes se procesan en el hook afterProcess, no aquÃ­.
+ * Las imágenes se procesan en el hook afterProcess, no aquí.
  * El UUID del AED se pre-genera en beforeProcess (campo _aedId).
  */
 
 import type { ParsedRecord, ProcessingContext } from "@batchactions/import";
 import type { PrismaClient } from "@/generated/client/client";
 import { randomUUID } from "crypto";
+import { createOrUpdateDevice } from "./deviceHelpers";
 
 // ============================================================
 // Tipos
@@ -40,12 +41,24 @@ export interface AedRecordProcessorOptions {
 
 /**
  * Parsea un valor string como booleano.
- * Reconoce formatos espaÃ±ol e inglÃ©s.
+ * Reconoce formatos español e inglés.
  */
 function parseBoolean(value: unknown): boolean {
   if (!value) return false;
   const str = String(value).toLowerCase().trim();
-  return ["true", "1", "sÃ­", "si", "yes", "y", "s", "verdadero"].includes(str);
+  return ["true", "1", "sí", "si", "yes", "y", "s", "verdadero", "t", "oui"].includes(str);
+}
+
+/**
+ * Parsea un booleano que puede ser null (campo opcional, no default false).
+ */
+function parseBooleanOrNull(value: unknown): boolean | null {
+  if (value === null || value === undefined) return null;
+  const str = String(value).toLowerCase().trim();
+  if (!str) return null;
+  if (["true", "1", "sí", "si", "yes", "y", "s", "t", "oui"].includes(str)) return true;
+  if (["false", "0", "no", "n", "f", "non"].includes(str)) return false;
+  return null;
 }
 
 /**
@@ -58,7 +71,7 @@ function toStringOrNull(value: unknown): string | null {
 }
 
 /**
- * Parsea coordenada: normaliza coma a punto y convierte a nÃºmero.
+ * Parsea coordenada: normaliza coma a punto y convierte a número.
  */
 function parseCoordinate(value: unknown): number | undefined {
   if (value === null || value === undefined) return undefined;
@@ -81,6 +94,8 @@ function hasScheduleData(data: Record<string, unknown>): boolean {
     data.sundayClosing ||
     data.has24hSurveillance ||
     data.hasRestrictedAccess ||
+    data.accessRestriction ||
+    data.isPmrAccessible ||
     data.scheduleDescription
   );
 }
@@ -106,7 +121,7 @@ function hasResponsibleData(data: Record<string, unknown>): boolean {
 // ============================================================
 
 /**
- * Crea la funciÃ³n processor para @batchactions/import que maneja la creaciÃ³n
+ * Crea la función processor para @batchactions/import que maneja la creación
  * de entidades AED en la base de datos.
  *
  * @example
@@ -175,7 +190,9 @@ export function createAedRecordProcessor(
             sunday_opening: toStringOrNull(data.sundayOpening),
             sunday_closing: toStringOrNull(data.sundayClosing),
             has_24h_surveillance: parseBoolean(data.has24hSurveillance),
-            has_restricted_access: parseBoolean(data.hasRestrictedAccess),
+            has_restricted_access:
+              parseBoolean(data.hasRestrictedAccess) || parseBoolean(data.accessRestriction),
+            is_pmr_accessible: parseBooleanOrNull(data.isPmrAccessible),
             description: toStringOrNull(data.scheduleDescription),
             notes: toStringOrNull(data.scheduleNotes),
           },
@@ -243,6 +260,11 @@ export function createAedRecordProcessor(
           status: "DRAFT",
         },
       });
+
+      // ========================================
+      // 4b. CREATE DEVICE (conditional)
+      // ========================================
+      await createOrUpdateDevice(tx, aedId, data);
 
       // ========================================
       // 5. CREATE ORG ASSIGNMENT (conditional)

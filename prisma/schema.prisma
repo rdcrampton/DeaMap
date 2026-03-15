@@ -30,6 +30,7 @@ model Aed {
   source_details     String?
   batch_job_id       String?      @db.Uuid
   external_reference String?
+  country_code       String       @default("ES") @db.VarChar(2)
 
   // Notes (SIMPLIFIED - v2)
   public_notes       String? // Public information visible to all users
@@ -87,6 +88,8 @@ model Aed {
   ownership_claims    AedOwnershipClaim[]
   field_changes       AedFieldChange[]
   external_identifiers AedExternalIdentifier[]
+  devices              AedDevice[]
+  access_points        AedAccessPoint[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -101,6 +104,8 @@ model Aed {
   @@index([sequence])
   @@index([source_origin])
   @@index([batch_job_id])
+  @@index([country_code], map: "idx_aeds_country_code")
+  @@index([country_code, status], map: "idx_aeds_country_status")
   @@index([requires_attention])
   @@index([owner_user_id])
   @@index([data_source_id])
@@ -246,9 +251,10 @@ model ExternalDataSource {
   default_status             AedStatus @default(PUBLISHED)
   default_requires_attention Boolean   @default(true)
 
-  // Scope
+  // Scope (nullable = wider scope: null country = global, null region = entire country)
   source_origin SourceOrigin
-  region_code   String // "MAD", "CAT", "AND", etc.
+  country_code  String?  @db.VarChar(2) // ISO 3166-1 alpha-2: "ES", "FR". Null = global/multi-country
+  region_code   String? // ISO 3166-2: "ES-MD", "ES-CT". Null = entire country or global
 
   // Relations
   managed_aeds         Aed[]                    @relation("AedDataSource")
@@ -264,6 +270,7 @@ model ExternalDataSource {
   @@index([sync_frequency])
   @@index([next_scheduled_sync_at])
   @@index([region_code])
+  @@index([country_code], map: "idx_external_data_sources_country")
   @@map("external_data_sources")
 }
 
@@ -277,7 +284,7 @@ model ExternalDataSource {
 model AedExternalIdentifier {
   id                     String   @id @default(uuid()) @db.Uuid
   aed_id                 String   @db.Uuid
-  data_source_id         String   @db.Uuid
+  data_source_id         String?  @db.Uuid
   external_identifier    String
 
   // Lifecycle tracking
@@ -288,7 +295,7 @@ model AedExternalIdentifier {
 
   // Relations
   aed         Aed                @relation(fields: [aed_id], references: [id], onDelete: Cascade)
-  data_source ExternalDataSource @relation("DataSourceIdentifiers", fields: [data_source_id], references: [id], onDelete: Cascade)
+  data_source ExternalDataSource? @relation("DataSourceIdentifiers", fields: [data_source_id], references: [id], onDelete: SetNull)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -366,8 +373,9 @@ model AedLocation {
 model AedSchedule {
   id                    String  @id @default(uuid()) @db.Uuid
   description           String?
-  has_24h_surveillance  Boolean @default(false)
-  has_restricted_access Boolean @default(false)
+  has_24h_surveillance     Boolean @default(false)
+  has_restricted_access    Boolean @default(false)
+  is_pmr_accessible        Boolean? // Accessible for persons with reduced mobility (PMR)
 
   // Structured schedules (HH:MM format)
   weekday_opening  String?
@@ -425,6 +433,120 @@ model AedResponsible {
 }
 
 // ============================================
+// DEVICE - Physical defibrillator device information
+// A location (Aed) can have different devices over time.
+// Only one device per Aed should have is_current = true.
+// ============================================
+model AedDevice {
+  id     String @id @default(uuid()) @db.Uuid
+  aed_id String @db.Uuid
+
+  // Device identification
+  brand         String? // "HEARTSINE", "PHILIPS", "ZOLL"
+  model         String? // "SAMARITAN PAD 300P", "HeartStart FRx"
+  serial_number String? // Unique serial number
+
+  // Dates
+  manufacturing_date    DateTime? // When the device was manufactured
+  installation_date     DateTime? // When installed at this location
+  expiration_date       DateTime? // Pad/battery expiry or device end-of-life
+  warranty_end_date     DateTime? // Warranty expiration
+  last_maintenance_date DateTime? // Last maintenance/inspection date
+
+  // Status
+  is_current Boolean @default(true) // Only one device per Aed should be is_current=true
+  is_mobile  Boolean @default(false) // Mobile unit (ambulance, vehicle) — may not be at fixed location
+  notes      String?                 // Free-text notes about this device
+
+  // Relation
+  aed Aed @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([aed_id, is_current])
+  @@index([serial_number])
+  @@map("aed_devices")
+}
+
+// ============================================
+// ACCESS POINTS - How to reach each AED
+// Curator-managed data, NOT from external imports.
+// Each AED can have 0..N access points with structured
+// emergency-oriented information (restrictions, routes, contacts).
+// ============================================
+model AedAccessPoint {
+  id     String @id @default(uuid()) @db.Uuid
+  aed_id String @db.Uuid
+
+  // --- Location of the access point ---
+  latitude  Float
+  longitude Float
+
+  // --- Classification ---
+  type       AccessPointType // PEDESTRIAN, VEHICLE, EMERGENCY, WHEELCHAIR, UNIVERSAL
+  label      String?         // "Recepción planta 12", "Parking subterráneo"
+  is_primary Boolean         @default(false)
+
+  // --- Access restrictions (structured for emergency use) ---
+  restriction_type AccessRestrictionType @default(NONE)
+  unlock_code      String?    // Public/emergency access code (e.g., "1234")
+  contact_phone    String?    // Direct phone to request access
+  contact_name     String?    // "Vigilante de seguridad", "Recepción"
+
+  // --- Availability ---
+  available_24h  Boolean @default(true)
+  schedule_notes String?  // "L-V 8:00-20:00" (free text until schedule model is linked)
+
+  // --- Indoor route from access point to the AED ---
+  floor_difference  Int?     // Floors to go up(+) or down(-) from this access
+  has_elevator      Boolean?
+  estimated_minutes Int?     // Walking minutes from access point to the AED
+  indoor_steps      Json?    // Ordered steps: ["Enter main door", "Turn left", "Red cabinet"]
+
+  // --- Emergency ---
+  emergency_phone         String?
+  can_deliver_to_entrance Boolean @default(false) // Staff can bring the AED to this entrance
+
+  // --- Traceability ---
+  created_by  String   @db.Uuid
+  verified    Boolean  @default(false)
+  verified_by String?  @db.Uuid
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // --- Relations ---
+  aed    Aed        @relation(fields: [aed_id], references: [id], onDelete: Cascade)
+  images AedImage[]
+
+  @@index([aed_id])
+  @@index([latitude, longitude])
+  @@map("aed_access_points")
+}
+
+enum AccessPointType {
+  PEDESTRIAN // On foot
+  VEHICLE    // By car/motorcycle
+  EMERGENCY  // Emergency services access (ambulance, fire truck)
+  WHEELCHAIR // Wheelchair / reduced mobility accessible
+  UNIVERSAL  // Any mode of access
+
+  @@map("access_point_type")
+}
+
+enum AccessRestrictionType {
+  NONE           // Free access
+  CODE           // Numeric/alphanumeric code
+  KEY            // Physical key
+  CARD           // Access card/badge
+  INTERCOM       // Door intercom/buzzer
+  SECURITY_GUARD // Security guard must open
+  LOCKED_HOURS   // Locked outside business hours
+
+  @@map("access_restriction_type")
+}
+
+// ============================================
 // IMAGES - Image management
 // ============================================
 model AedImage {
@@ -451,6 +573,10 @@ model AedImage {
   verified_by      String?
   rejection_reason String?
 
+  // Optional link to a specific access point (for ACCESS/LOCATION type images)
+  access_point_id String?         @db.Uuid
+  access_point    AedAccessPoint? @relation(fields: [access_point_id], references: [id], onDelete: SetNull)
+
   aed     Aed           @relation(fields: [aed_id], references: [id], onDelete: Cascade)
   markers ImageMarker[]
 
@@ -459,6 +585,7 @@ model AedImage {
   @@index([aed_id, type, order])
   @@index([is_verified])
   @@index([file_hash])
+  @@index([access_point_id])
   @@map("aed_images")
 }
 
@@ -1376,4 +1503,18 @@ model BatchactionsBatch {
   @@unique([jobId, batchIndex])
   @@index([jobId, status])
   @@map("batchactions_batches")
+}
+
+// ============================================
+// SYNC NDJSON CACHE - Compressed data between chunks
+// Avoids re-downloading all records from external APIs on every resume
+// ============================================
+model SyncNdjsonCache {
+  job_id          String   @id @db.VarChar(36)
+  compressed_data Bytes
+  original_size   Int      @default(0)
+  record_count    Int      @default(0)
+  created_at      DateTime @default(now())
+
+  @@map("sync_ndjson_cache")
 }

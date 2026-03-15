@@ -5,6 +5,13 @@ import { prisma } from "@/lib/db";
 import { filterAedByPublicationMode } from "@/lib/publication-filter";
 import type { AedFullData } from "@/lib/publication-filter";
 import { validateStatusTransition } from "@/lib/aed-status";
+import { recordStatusChange } from "@/lib/audit";
+
+interface AedImageInput {
+  type: string;
+  original_url: string;
+  order: number;
+}
 
 /**
  * GET /api/aeds/[id]
@@ -25,6 +32,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         location: true,
         responsible: true,
         schedule: true,
+        devices: {
+          where: { is_current: true },
+          take: 1,
+        },
         images: {
           where: {
             is_verified: true,
@@ -32,6 +43,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           orderBy: {
             order: "asc",
           },
+        },
+        access_points: {
+          include: {
+            images: {
+              where: { is_verified: true },
+              select: {
+                id: true,
+                type: true,
+                original_url: true,
+                thumbnail_url: true,
+                order: true,
+              },
+              orderBy: { order: "asc" },
+            },
+          },
+          orderBy: [{ is_primary: "desc" }, { created_at: "asc" }],
         },
       },
     });
@@ -178,7 +205,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         // Agregar nuevas imágenes si se especificaron
         if (addImages && addImages.length > 0) {
           // Validar que todas las imágenes tengan tipo asignado
-          const imagesWithoutType = addImages.filter((img: any) => !img.type);
+          const imagesWithoutType = addImages.filter((img: AedImageInput) => !img.type);
           if (imagesWithoutType.length > 0) {
             throw new Error(
               "Todas las imágenes deben tener un tipo asignado. Por favor, selecciona el tipo para cada imagen."
@@ -187,7 +214,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
           // Validar que los tipos sean válidos según el enum
           const validTypes = ["FRONT", "LOCATION", "ACCESS", "SIGNAGE", "CONTEXT", "PLATE"];
-          const invalidImages = addImages.filter((img: any) => !validTypes.includes(img.type));
+          const invalidImages = addImages.filter(
+            (img: AedImageInput) => !validTypes.includes(img.type)
+          );
           if (invalidImages.length > 0) {
             throw new Error(
               `Tipo de imagen inválido. Los tipos válidos son: ${validTypes.join(", ")}`
@@ -195,7 +224,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           }
 
           await tx.aedImage.createMany({
-            data: addImages.map((img: any) => ({
+            data: addImages.map((img: AedImageInput) => ({
               aed_id: id,
               original_url: img.original_url,
               type: img.type,
@@ -220,15 +249,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
         // Registrar cambio de estado en el historial si aplica
         if (hasStatusChange) {
-          await tx.aedStatusChange.create({
-            data: {
-              aed_id: id,
-              previous_status: currentAed.status,
-              new_status: updateFields.status,
-              reason: updateFields.status_metadata?.reason || rejection_reason || null,
-              notes: updateFields.status_metadata?.details || null,
-              modified_by: user.userId,
-            },
+          await recordStatusChange(tx, {
+            aedId: id,
+            previousStatus: currentAed.status,
+            newStatus: updateFields.status,
+            reason: updateFields.status_metadata?.reason || rejection_reason || "Status change",
+            notes: updateFields.status_metadata?.details,
+            modifiedBy: user.userId,
           });
         }
 
