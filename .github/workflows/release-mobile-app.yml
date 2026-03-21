@@ -5,10 +5,6 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to release (e.g., 1.0.0)"
-        required: true
-        type: string
       deploy_android:
         description: "Deploy to Google Play Store"
         required: false
@@ -54,6 +50,9 @@ jobs:
       build_number: ${{ steps.version.outputs.build_number }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Get version
         id: version
         run: |
@@ -62,7 +61,9 @@ jobs:
             VERSION="${{ github.event.release.tag_name }}"
             VERSION="${VERSION#*@}"
           else
-            VERSION="${{ github.event.inputs.version }}"
+            # Always read from mobile/version.json — single source of truth
+            VERSION=$(node -p "require('./mobile/version.json').version")
+            echo "Read version from mobile/version.json: $VERSION"
           fi
 
           # Validate version format (x.y.z)
@@ -94,10 +95,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -127,23 +128,23 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -193,7 +194,7 @@ jobs:
           ./gradlew bundleRelease
 
       - name: Upload Release Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-release-android-${{ needs.prepare.outputs.version }}
           path: |
@@ -229,10 +230,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -264,10 +265,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -300,7 +301,7 @@ jobs:
         working-directory: mobile
 
       - name: Cache SPM packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/spm-cache
           key: ${{ runner.os }}-spm-${{ hashFiles('mobile/ios/App/CapApp-SPM/Package.swift') }}
@@ -441,7 +442,7 @@ jobs:
           echo "ipa_name=${IPA_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-release-ios-${{ needs.prepare.outputs.version }}
           path: ${{ steps.ipa_info.outputs.ipa_path }}
@@ -485,7 +486,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -517,16 +518,19 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Download Android artifacts
         if: needs.build-android.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: app-release-android-${{ needs.prepare.outputs.version }}
           path: ./android
 
       - name: Download iOS artifacts
         if: needs.build-ios.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: app-release-ios-${{ needs.prepare.outputs.version }}
           path: ./ios
