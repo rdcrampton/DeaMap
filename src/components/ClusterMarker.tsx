@@ -56,25 +56,17 @@ function getClusterIcon(count: number): L.DivIcon {
   const displayCount =
     count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k` : String(count);
 
-  const clusterLabel = `Grupo de ${count} desfibriladores. Haz clic para ampliar.`;
-
   const icon = L.divIcon({
     className: "custom-cluster-marker",
     html: `
-      <div
-        role="button"
-        tabindex="0"
-        aria-label="${clusterLabel}"
-        title="${clusterLabel}"
-        style="
-          width: ${size}px;
-          height: ${size}px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        "
-      >
+      <div style="
+        width: ${size}px;
+        height: ${size}px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      ">
         <div style="
           position: absolute;
           width: 100%;
@@ -92,7 +84,7 @@ function getClusterIcon(count: number): L.DivIcon {
           font-weight: bold;
           font-size: ${Math.max(12, size / 3)}px;
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-        " aria-hidden="true">${displayCount}</div>
+        ">${displayCount}</div>
       </div>
     `,
     iconSize: [size, size],
@@ -111,6 +103,8 @@ export function ClusterMarker({ cluster, onClusterClick }: ClusterMarkerProps) {
     <Marker
       position={[cluster.center.lat, cluster.center.lng]}
       icon={getClusterIcon(cluster.count)}
+      alt={`Grupo de ${cluster.count} desfibriladores`}
+      title={`${cluster.count} desfibriladores — clic para ampliar`}
       eventHandlers={{
         click: () => onClusterClick?.(cluster),
       }}

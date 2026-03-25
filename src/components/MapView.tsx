@@ -31,64 +31,35 @@ interface MapViewProps {
 // CACHED ICONS - Created once, reused forever
 // ============================================
 
-/**
- * Creates an AED marker icon with an accessible title.
- * Each marker gets a unique title describing its location.
- */
-function createAedIcon(name: string): L.DivIcon {
-  return L.divIcon({
-    className: "custom-marker",
-    html: `
-      <div
-        role="button"
-        tabindex="0"
-        aria-label="DEA: ${name}"
-        title="DEA: ${name}"
-        style="
-          background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
-          width: 32px;
-          height: 32px;
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          border: 3px solid white;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        "
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(45deg);" aria-hidden="true">
-          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
-        </svg>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  });
-}
-
-// Cache for AED icons keyed by name to avoid recreating identical icons
-const aedIconCache = new Map<string, L.DivIcon>();
-
-function getAedIcon(name: string): L.DivIcon {
-  const cached = aedIconCache.get(name);
-  if (cached) return cached;
-  const icon = createAedIcon(name);
-  aedIconCache.set(name, icon);
-  return icon;
-}
+const aedIcon = L.divIcon({
+  className: "custom-marker",
+  html: `
+    <div style="
+      background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 3px solid white;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(45deg);" aria-hidden="true">
+        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+      </svg>
+    </div>
+  `,
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+});
 
 const searchLocationIcon = L.divIcon({
   className: "search-location-marker",
   html: `
-    <div
-      role="button"
-      tabindex="0"
-      aria-label="Tu ubicación de búsqueda. Arrastra para ajustar."
-      title="Tu ubicación de búsqueda"
-      style="position: relative; width: 48px; height: 48px;"
-    >
+    <div style="position: relative; width: 48px; height: 48px;">
       <div style="
         position: absolute; top: 50%; left: 50%;
         transform: translate(-50%, -50%);
@@ -131,8 +102,6 @@ const spiderfyIconCreateFunction = (cluster: { getChildCount: () => number }) =>
   const spiderfyLabel = `Grupo de ${count} desfibriladores superpuestos. Haz clic para separar.`;
   return L.divIcon({
     html: `<div
-      role="button"
-      tabindex="0"
       aria-label="${spiderfyLabel}"
       title="${spiderfyLabel}"
       style="
@@ -304,6 +273,7 @@ export default function MapView({
             position={[searchLocation.lat, searchLocation.lng]}
             icon={searchLocationIcon}
             alt="Tu ubicación de búsqueda"
+            title="Tu ubicación de búsqueda — arrastra para ajustar"
             zIndexOffset={1000}
             draggable={true}
             eventHandlers={{
@@ -376,8 +346,9 @@ export default function MapView({
             <Marker
               key={aed.id}
               position={[aed.latitude, aed.longitude]}
-              icon={getAedIcon(aed.name)}
+              icon={aedIcon}
               alt={`DEA: ${aed.name}`}
+              title={aed.name}
               eventHandlers={{
                 click: () => handleMarkerClick(aed),
               }}
@@ -390,7 +361,10 @@ export default function MapView({
 
                     <div className="space-y-2 text-sm">
                       <div className="flex items-start gap-2">
-                        <MapPin className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                        <MapPin
+                          className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5"
+                          aria-hidden="true"
+                        />
                         <div>
                           <p className="text-gray-700">{aed.establishment_type}</p>
                         </div>
@@ -411,6 +385,11 @@ export default function MapView({
           ))}
         </MarkerClusterGroup>
       </MapContainer>
+
+      {/* Screen reader announcement for loaded AED count */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {!loading && aeds.length > 0 && `${aeds.length} desfibriladores encontrados en esta zona`}
+      </div>
 
       {/* Loading indicator */}
       {loading && (
