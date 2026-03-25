@@ -18,31 +18,31 @@
   animation: slide-up 0.3s ease-out;
 }
 
-/* Respect user motion preferences for vestibular/motion sensitivity */
-@media (prefers-reduced-motion: reduce) {
-  .animate-slide-up,
-  .animate-spin,
-  .animate-pulse,
-  .animate-bounce {
-    animation: none !important;
+/* Modal animations */
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
   }
-
-  * {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+  to {
+    opacity: 1;
   }
 }
 
-/* Visually hidden but accessible to screen readers */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
+@keyframes modal-slide-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-modal-backdrop {
+  animation: modal-fade-in 0.3s ease-out;
+}
+
+.animate-modal-content {
+  animation: modal-slide-up 0.3s ease-out;
 }

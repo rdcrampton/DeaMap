@@ -42,6 +42,14 @@ interface CreateAedRequest {
   provisional_number?: number;
   source_details?: string;
   internal_notes?: string;
+  origin_observations?: string;
+
+  // Images (optional, URLs from S3 upload)
+  images?: Array<{
+    original_url: string;
+    type: "FRONT" | "LOCATION" | "ACCESS" | "SIGNAGE" | "CONTEXT" | "PLATE";
+    order?: number;
+  }>;
 
   // Location data (optional)
   location?: {
@@ -49,6 +57,7 @@ interface CreateAedRequest {
     street_name?: string;
     street_number?: string;
     postal_code?: string;
+    city_name?: string;
     district_id?: number;
     neighborhood_id?: number;
     floor?: string;
@@ -155,6 +164,10 @@ export async function GET(request: NextRequest) {
               has_24h_surveillance: true,
               weekday_opening: true,
               weekday_closing: true,
+              saturday_opening: true,
+              saturday_closing: true,
+              sunday_opening: true,
+              sunday_closing: true,
             },
           },
           responsible: {
@@ -288,6 +301,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate images if provided
+    const VALID_IMAGE_TYPES = new Set([
+      "FRONT",
+      "LOCATION",
+      "ACCESS",
+      "SIGNAGE",
+      "CONTEXT",
+      "PLATE",
+    ]);
+    const MAX_IMAGES = 10;
+
+    if (body.images) {
+      if (!Array.isArray(body.images) || body.images.length > MAX_IMAGES) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid images",
+            message: `images must be an array with at most ${MAX_IMAGES} entries`,
+          },
+          { status: 400 }
+        );
+      }
+
+      for (const img of body.images) {
+        if (!img.original_url || typeof img.original_url !== "string") {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invalid image",
+              message: "Each image must have an original_url",
+            },
+            { status: 400 }
+          );
+        }
+        if (!VALID_IMAGE_TYPES.has(img.type)) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invalid image type",
+              message: `Image type must be one of: ${[...VALID_IMAGE_TYPES].join(", ")}`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // ========================================
     // Duplicate detection (identity + fuzzy/spatial scoring)
     // Resilient: failure does NOT block AED creation
@@ -356,13 +416,20 @@ export async function POST(request: NextRequest) {
       ];
     }
 
-    // Build internal_notes: user notes + duplicate detection notes
+    // Build internal_notes: user notes + origin observations + duplicate detection notes
     const internalNotes: Array<Record<string, unknown>> = [];
     if (body.internal_notes) {
       internalNotes.push({
         text: body.internal_notes,
         date: new Date().toISOString(),
         type: "creation",
+      });
+    }
+    if (body.origin_observations) {
+      internalNotes.push({
+        text: body.origin_observations,
+        date: new Date().toISOString(),
+        type: "origin_observations",
       });
     }
     if (duplicateNotes) {
@@ -403,6 +470,7 @@ export async function POST(request: NextRequest) {
           street_name: body.location?.street_name,
           street_number: body.location?.street_number,
           postal_code: body.location?.postal_code,
+          city_name: body.location?.city_name,
           floor: body.location?.floor,
           location_details: body.location?.location_details,
           access_instructions: body.location?.access_instructions,
@@ -466,6 +534,18 @@ export async function POST(request: NextRequest) {
           schedule: true,
         },
       });
+
+      // Create images if provided
+      if (body.images && body.images.length > 0) {
+        await tx.aedImage.createMany({
+          data: body.images.map((img, index) => ({
+            aed_id: newAed.id,
+            original_url: img.original_url,
+            type: img.type,
+            order: img.order ?? index + 1,
+          })),
+        });
+      }
 
       // Record status change via shared audit helper
       await recordStatusChange(tx, {

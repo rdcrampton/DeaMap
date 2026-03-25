@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 
@@ -76,7 +76,6 @@ jobs:
         run: |
           echo "🚀 Triggering release workflow for v${{ steps.mobile-tag.outputs.version }}"
           gh workflow run release-mobile-app.yml \
-            -f version=${{ steps.mobile-tag.outputs.version }} \
             -f deploy_android=true \
             -f deploy_ios=true \
             -f android_track=internal
