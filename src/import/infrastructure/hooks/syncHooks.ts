@@ -53,6 +53,25 @@ function generateSyntheticExternalId(
 }
 
 // ============================================================
+// Distance check
+// ============================================================
+
+/** Haversine distance in meters between two lat/lng points */
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6_371_000; // Earth radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Max distance (meters) to accept an external_reference match without flagging */
+const MAX_EXTREF_DISTANCE_M = 500;
+
+// ============================================================
 // Types
 // ============================================================
 
@@ -335,11 +354,42 @@ export function createSyncHooks(options: SyncHooksOptions): SyncHooksResult {
       }
 
       // Strategy 1: by external reference (includes synthetic IDs)
+      // Safety: if coordinates are far apart (>500m), the source likely reused the
+      // code for a different record → don't auto-merge, flag for review instead.
       if (externalId) {
-        existingAed = cache.findByExternalRef(externalId);
-        if (existingAed)
-          (existingAed as ExistingAedRow & { _matchReason?: string })._matchReason =
-            "external_reference";
+        const extRefMatch = cache.findByExternalRef(externalId);
+        if (extRefMatch) {
+          const matchLat =
+            typeof extRefMatch.latitude === "number"
+              ? extRefMatch.latitude
+              : parseFloat(String(extRefMatch.latitude));
+          const matchLng =
+            typeof extRefMatch.longitude === "number"
+              ? extRefMatch.longitude
+              : parseFloat(String(extRefMatch.longitude));
+          const canCheckDistance = hasCoords && !isNaN(matchLat) && !isNaN(matchLng);
+          const distance = canCheckDistance ? haversineMeters(lat, lng, matchLat, matchLng) : 0;
+
+          if (canCheckDistance && distance > MAX_EXTREF_DISTANCE_M) {
+            // Same external_reference but different location → source reused the code
+            console.log(
+              `[SyncHooks] EXTREF MISMATCH: "${record.name}" (${externalId}) matched "${extRefMatch.name}" ` +
+                `but ${Math.round(distance)}m apart — flagging, not merging`
+            );
+            return {
+              ...record,
+              _suspectedDuplicate: {
+                matchedAedId: extRefMatch.id,
+                matchedAedName: extRefMatch.name,
+                matchReason: "extref_distance_mismatch",
+              },
+            };
+          } else {
+            existingAed = extRefMatch;
+            (existingAed as ExistingAedRow & { _matchReason?: string })._matchReason =
+              "external_reference";
+          }
+        }
       }
 
       // Strategy 2 & 3: coordinate / duplicate-detector matching
